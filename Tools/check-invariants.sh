@@ -123,8 +123,15 @@ for manifest in $manifest_hits; do
     done
 done
 
+# A Core checkout is used here for comparison only, never to build from. The
+# build boundary stays exactly as docs/core-dependency.md states it:
+# Tools/prepare-core.sh and its report. AXOLOTY_CORE_COMPARE_DIR is the
+# explicit opt-in for a reviewer or an agent that already has a checkout to
+# hand and wants the strongest available copied-source signal.
 core_dir=''
-if [ -n "${AXOLOTY_SOURCE_DIR:-}" ] && [ -d "${AXOLOTY_SOURCE_DIR}" ]; then
+if [ -n "${AXOLOTY_CORE_COMPARE_DIR:-}" ] && [ -d "${AXOLOTY_CORE_COMPARE_DIR}" ]; then
+    core_dir="$AXOLOTY_CORE_COMPARE_DIR"
+elif [ -n "${AXOLOTY_SOURCE_DIR:-}" ] && [ -d "${AXOLOTY_SOURCE_DIR}" ]; then
     core_dir="$AXOLOTY_SOURCE_DIR"
 elif [ -d .axoloty/core ]; then
     core_dir="$(find .axoloty/core -maxdepth 1 -mindepth 1 -type d | head -1)"
@@ -141,7 +148,7 @@ if [ -n "$core_dir" ] && [ -d "$core_dir/Packages" ]; then
         pass core-copy 'no tracked Swift filename collides with portable Core source'
     fi
 else
-    skip core-copy 'no Core checkout reachable, so the filename comparison did not run (name and manifest rules still applied)'
+    skip core-copy 'no Core checkout reachable, so the filename comparison did not run (set AXOLOTY_CORE_COMPARE_DIR to a checkout to enable it; name and manifest rules still applied)'
 fi
 
 [ "$copy_violation" -eq 0 ] && pass core-copy 'no module-named directory and no local Core target declaration'

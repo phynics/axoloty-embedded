@@ -58,6 +58,18 @@ did not run a tier, write that you did not run it, and say why.
 8. no literal Wi-Fi or broker credential is tracked;
 9. every evidence record is well formed.
 
+Rule 2 has three independent signals, and the strongest one needs a Core
+checkout to compare against. Enable it when you have one:
+
+```bash
+AXOLOTY_CORE_COMPARE_DIR=/absolute/path/to/axoloty Tools/verify.sh --tier repo
+```
+
+That variable is for comparison only. It never becomes a build input: the build
+boundary is `Tools/prepare-core.sh` and its report, and nothing else. Without
+it, the rule still checks module-named directories and local target
+declarations, and reports that the filename comparison did not run.
+
 When an invariant changes, change the rule in the same commit. A rule that no
 longer matches the invariant is worse than no rule.
 
