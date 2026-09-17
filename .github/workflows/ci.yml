@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  repo:
+    name: Repository invariants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The hardware-free gate. It needs no toolchain, so it is the one check
+      # that is always required and always fast.
+      - name: Check invariants
+        run: Tools/verify.sh --tier repo --require repo
+
+      - name: Check scripts
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck Tools/*.sh Profiles/*/*.sh 2>/dev/null || shellcheck Tools/*.sh
+
+  core:
+    name: Locked Core preparation
+    runs-on: ubuntu-latest
+    needs: repo
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '6.1'
+
+      # CI sets CI, so prepare-core.sh is strict by default: a dirty or
+      # off-lock Core checkout is an error here, never a warning.
+      - name: Prepare Core at the locked revision
+        run: Tools/verify.sh --tier core --require core
+
+      - name: Publish the preparation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-preparation
+          path: .axoloty/core-preparation.json
+          if-no-files-found: warn
+
+  build:
+    name: Firmware build
+    runs-on: ubuntu-latest
+    needs: core
+    # No profile declares a build until the firmware migration (#1) lands.
+    # Until then this job would report UNAVAILABLE, which is honest but not
+    # worth a runner. Delete this condition in the same PR that adds the first
+    # profile build.sh.
+    if: ${{ hashFiles('Profiles/*/build.sh') != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build every profile
+        run: Tools/verify.sh --tier build --require build
+
+# The device tier is deliberately absent. Qualification needs a board, runs on
+# a bench, and is recorded as an evidence record under docs/evidence/. CI never
+# claims a device result it did not observe.
