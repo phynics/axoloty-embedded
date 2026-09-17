@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "profile": "esp32c6-mqtt",
+  "check": "embedded-swift-smoke-v2",
+  "status": "unexecuted",
+  "recordedAt": "2026-09-17",
+  "reason": "No physical ESP32-C6 board, serial port, ESP-IDF toolchain, or MQTT broker was available in this environment, so the 312-case smoke protocol could not be flashed or run."
+}
