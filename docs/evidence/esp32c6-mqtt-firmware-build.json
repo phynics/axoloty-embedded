@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "profile": "esp32c6-mqtt",
+  "check": "firmware-build",
+  "status": "unexecuted",
+  "recordedAt": "2026-09-17",
+  "reason": "No ESP-IDF toolchain, Swift compiler, ESP32-C6 RISC-V toolchain, or MQTT broker was available in this environment, so the locked-Core firmware build could not be produced or observed."
+}
