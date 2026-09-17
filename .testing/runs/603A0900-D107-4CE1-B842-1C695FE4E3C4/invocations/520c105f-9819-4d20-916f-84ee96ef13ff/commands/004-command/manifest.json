@@ -1,0 +1,23 @@
+{
+  "artifactFiles" : [
+    "manifest.json",
+    "verifier.log",
+    "metadata.json",
+    "stdout.txt",
+    "stderr.txt",
+    "result.json"
+  ],
+  "deadline" : "2026-09-17T19:52:25Z",
+  "elapsedSeconds" : 33.076686024665833,
+  "endedAt" : "2026-09-17T18:52:58Z",
+  "exitCode" : 0,
+  "invocationId" : "520c105f-9819-4d20-916f-84ee96ef13ff",
+  "lastTest" : null,
+  "node" : null,
+  "outcome" : "passed",
+  "outputBytes" : 4444,
+  "runId" : "603A0900-D107-4CE1-B842-1C695FE4E3C4",
+  "stage" : "command",
+  "startedAt" : "2026-09-17T18:52:25Z",
+  "status" : "passed"
+}

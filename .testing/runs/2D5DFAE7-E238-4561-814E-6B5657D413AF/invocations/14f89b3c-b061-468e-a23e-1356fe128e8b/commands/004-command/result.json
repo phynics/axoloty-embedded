@@ -1,0 +1,10 @@
+{
+  "artifactPath" : "\/Volumes\/Development\/axoloty-embedded\/.testing\/runs\/2D5DFAE7-E238-4561-814E-6B5657D413AF\/invocations\/14f89b3c-b061-468e-a23e-1356fe128e8b\/commands\/004-command",
+  "elapsedSeconds" : 10.748538970947266,
+  "escalatedToKill" : false,
+  "exitCode" : 1,
+  "lastTest" : null,
+  "outcome" : "failed",
+  "outputBytes" : 47004,
+  "timedOut" : false
+}

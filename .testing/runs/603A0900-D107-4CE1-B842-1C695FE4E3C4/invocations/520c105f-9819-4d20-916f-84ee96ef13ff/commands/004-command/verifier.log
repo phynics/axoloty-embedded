@@ -1,0 +1,121 @@
+[progress]
+heartbeat node=command stage=command elapsed=0.0s last-test=none output-bytes=0
+heartbeat node=command stage=command elapsed=5.0s last-test=none output-bytes=<redacted>682
+heartbeat node=command stage=command elapsed=<redacted>0.0s last-test=none output-bytes=<redacted>890
+heartbeat node=command stage=command elapsed=<redacted>5.0s last-test=none output-bytes=238<redacted>
+heartbeat node=command stage=command elapsed=20.0s last-test=none output-bytes=2597
+heartbeat node=command stage=command elapsed=25.0s last-test=none output-bytes=3409
+heartbeat node=command stage=command elapsed=30.0s last-test=none output-bytes=4<redacted><redacted>3
+[stdout]
+Building for debugging...
+[Computing dependencies]
+[Pre-planning <redacted> / 742]
+[Planning deferred tasks]
+[<redacted>52 / 35<redacted>]
+[<redacted>62 / 37<redacted>] _JSONCore
+[<redacted>7<redacted> / 379] SwiftSyntax602
+[<redacted>87 / 392] SwiftSyntax60<redacted>
+[223 / 392] _JSONCore
+[227 / 392]
+[234 / 392] SwiftSyntax509
+[250 / 394]
+[259 / 403] AxolotyWire
+[268 / 404]
+[276 / 437]
+[282 / 437]
+[287 / 437] AxolotyObjectModel
+[294 / 437] AxolotyProtocol
+[298 / 438]
+[306 / 447] AxolotyWire
+[309 / 447] AxolotyProtocol
+[3<redacted>3 / 447] AxolotyProtocol
+[3<redacted>8 / 447] AxolotyObjectModel
+[326 / 447] SwiftSyntax
+[328 / 447] SwiftSyntax
+[330 / 447] AxolotyProtocol
+[33<redacted> / 447] SwiftSyntax
+[340 / 450] SwiftDiagnostics
+[344 / 466] SwiftBasicFormat
+[346 / 475] SwiftDiagnostics
+[354 / 475] SwiftDiagnostics
+[36<redacted> / 475] SwiftParser
+[362 / 475] SwiftParser
+[365 / 475] SwiftParser
+[37<redacted> / 475] SwiftParser
+[372 / 475] SwiftDiagnostics
+[374 / 475] SwiftOperators
+[377 / 475] SwiftDiagnostics
+[378 / 475] SwiftDiagnostics
+[382 / 475] SwiftParserDiagnostics
+[386 / 477] SwiftOperators
+[386 / 477]
+[386 / 477] SwiftParserDiagnostics
+[392 / 495] SwiftOperators
+[392 / 495] SwiftParserDiagnostics
+[404 / 495] SwiftOperators
+[4<redacted>2 / 495] SwiftOperators
+[4<redacted>3 / 495] SwiftOperators
+[4<redacted>6 / 495] SwiftOperators
+[4<redacted>9 / 496]
+[4<redacted>9 / 496] SwiftOperators
+[420 / 496] SwiftSyntaxBuilder
+[425 / 5<redacted>4]
+[427 / 5<redacted>4]
+[429 / 5<redacted>4]
+[437 / 5<redacted>4] SwiftSyntaxBuilder
+[438 / 5<redacted>4] SwiftSyntaxBuilder
+[440 / 5<redacted>4] SwiftSyntaxBuilder
+[446 / 5<redacted>5] SwiftSyntaxBuilder
+[446 / 5<redacted>5] SwiftIfConfig
+[453 / 524] SwiftSyntaxBuilder
+[455 / 524] SwiftIfConfig
+[456 / 524] SwiftIfConfig
+[463 / 525] SwiftIfConfig
+[463 / 525] SwiftSyntaxMacros
+[470 / 534] SwiftSyntaxMacros
+[479 / 534] SwiftSyntaxMacros
+[480 / 535] SwiftSyntaxMacros
+[48<redacted> / 535] SwiftSyntaxMacroExpansion
+[488 / 544] SwiftSyntaxMacroExpansion
+[489 / 544] SwiftSyntaxMacroExpansion
+[497 / 545] SwiftSyntaxMacroExpansion
+[503 / 554] SwiftCompilerPluginMessageHandling
+[504 / 554] SwiftSyntaxMacroExpansion
+[507 / 554] SwiftCompilerPluginMessageHandling
+[5<redacted>4 / 555] SwiftCompilerPluginMessageHandling
+[5<redacted>6 / 557] SwiftCompilerPlugin
+[523 / 557] SwiftCompilerPluginMessageHandling
+[524 / 557] SwiftSyntax
+[526 / 557] SwiftSyntax
+[533 / 557] SwiftIfConfig
+[545 / 558] AxolotyStaticRuntimeMacrosImplementation
+[549 / 56<redacted>] AxolotyStaticRuntimeMacrosImplementation
+[55<redacted> / 56<redacted>] AxolotyStaticRuntimeMacrosImplementation
+[554 / 562] AxolotyStaticRuntime
+[559 / 567] AxolotyStaticRuntime
+Build complete! (25,54 sec)
+[stderr]
+Fetching https://github.com/apple/swift-collections.git from cache
+Fetching https://github.com/phynics/swift-json.git from cache
+Fetching https://github.com/apple/swift-atomics.git from cache
+Fetching https://github.com/swiftlang/swift-syntax.git from cache
+Fetching https://github.com/apple/swift-system.git from cache
+Fetching https://github.com/apple/swift-nio.git from cache
+Fetched https://github.com/apple/swift-atomics.git from cache (0.03s)
+Fetched https://github.com/apple/swift-collections.git from cache (0.03s)
+Fetched https://github.com/phynics/swift-json.git from cache (0.04s)
+Fetched https://github.com/apple/swift-nio.git from cache (0.04s)
+Fetched https://github.com/apple/swift-system.git from cache (0.04s)
+Fetched https://github.com/swiftlang/swift-syntax.git from cache (0.08s)
+Creating working copy for https://github.com/apple/swift-system.git
+Creating working copy for https://github.com/swiftlang/swift-syntax.git
+Creating working copy for https://github.com/phynics/swift-json.git
+Creating working copy for https://github.com/apple/swift-nio.git
+Creating working copy for https://github.com/apple/swift-atomics.git
+Creating working copy for https://github.com/apple/swift-collections.git
+Working copy of https://github.com/phynics/swift-json.git resolved at 2.5.3
+Working copy of https://github.com/apple/swift-atomics.git resolved at <redacted>.3.<redacted>
+Working copy of https://github.com/apple/swift-system.git resolved at <redacted>.8.<redacted>
+Working copy of https://github.com/apple/swift-nio.git resolved at 2.<redacted>0<redacted>.3
+Working copy of https://github.com/apple/swift-collections.git resolved at <redacted>.6.0
+Working copy of https://github.com/swiftlang/swift-syntax.git resolved at 603.0.0

@@ -1,0 +1,6 @@
+[progress]
+heartbeat node=command stage=command elapsed=0.0s last-test=none output-bytes=0
+[stdout]
+/private/tmp/claude-50<redacted>/-Volumes-Development-Axoloty/d<redacted>88<redacted>65e-5fa4-4ac2-bb40-a8abdf49c2<redacted>7/scratchpad/emb-fetch/core/7d0a65287d35af57<redacted>db88e6<redacted>6d0b5cbb3c9f8625
+[stderr]
+

@@ -1,0 +1,14 @@
+Building for debugging...
+[Computing dependencies]
+[Pre-planning <redacted> / 742]
+[Planning deferred tasks]
+[<redacted>52 / 35<redacted>]
+[<redacted>62 / 372] _JSONCore
+[<redacted>83 / 379] SwiftSyntax60<redacted>
+[2<redacted>9 / 392] SwiftSyntax603
+[223 / 392] _JSONCore
+[229 / 392] SwiftSyntax602
+[23<redacted> / 392]
+[249 / 394] SwiftSyntax600
+[256 / 403] AxolotyWire
+[257 / 403] SwiftSyntax602
