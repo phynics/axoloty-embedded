@@ -67,6 +67,27 @@ Inventing a device name, a checksum, or a pass count is the one thing that
 cannot be repaired later, because every downstream release manifest inherits
 it. Never write a number you did not read off a run.
 
+## Every field is computed, never a constant
+
+A field in an evidence record states the result of a check. It is written by
+the code that ran the check, from what that run observed.
+
+Writing a literal `"passed"` for a check that no longer runs is the same
+failure as inventing a checksum, and it is harder to see, because the record
+looks complete and the build still goes green. It happened once already: a
+firmware validate wrapper dropped a content scan during a refactor but kept
+emitting `"privateReferenceScan": "passed"` beside the scan it had removed.
+
+Two rules follow:
+
+- If a check moved, the record must cite where it now runs, and that place must
+  actually fail the build when the check fails.
+- If a check was deleted, the field goes with it. A record with one fewer field
+  is honest. A record with a field nothing computes is not.
+
+When a check becomes a rule in `Tools/check-invariants.sh`, an evidence record
+may cite it by name, because `Tools/verify.sh --tier repo` fails closed on it.
+
 ## Provenance for imported evidence
 
 Evidence imported from `phynics/axoloty` keeps its origin, because filtered Git

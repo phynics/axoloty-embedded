@@ -300,6 +300,33 @@ PY
 fi
 
 # ---------------------------------------------------------------------------
+# 7b. No private Core reference.
+# ---------------------------------------------------------------------------
+# The pre-split firmware validate wrapper ran this as a ripgrep content scan
+# and failed closed on a match. It is a rule here instead of a build-time scan
+# so that it runs on every checkout, with or without a toolchain, and so that
+# no evidence record can claim it passed without it having run.
+#
+# Firmware must never name Core's package layout, its build directory, its
+# private support tests, or the pre-split resolver scripts. Those are the exact
+# couplings the split had to disprove.
+
+private_tokens='Packages/|/\.build/|Tests/Support|resolve-embedded-core|prepare-embedded-core'
+private_bad=0
+# Prose and harness logs are excluded: docs must be able to quote an original
+# Axoloty path when recording provenance, and .testing/ holds captured tool
+# output rather than firmware source. Every firmware file stays in the scan.
+for file in $(tracked '*' | grep -vE '^(\.testing/|docs/|\.github/|README\.md|AGENTS\.md|[A-Za-z]+/AGENTS\.md|Tools/check-invariants\.sh)'); do
+    [ -f "$file" ] || continue
+    hits="$(grep -nE "$private_tokens" "$file" 2>/dev/null | head -2 || true)"
+    if [ -n "$hits" ]; then
+        fail private-reference "$file names Core's private layout: $(echo "$hits" | head -1 | cut -c1-110)"
+        private_bad=1
+    fi
+done
+[ "$private_bad" -eq 0 ] && pass private-reference 'no tracked firmware file names Core package layout, .build, private support tests, or a pre-split resolver'
+
+# ---------------------------------------------------------------------------
 # 8. No committed credentials.
 # ---------------------------------------------------------------------------
 # Device paths, credentials, reachability, and live timing belong in operator

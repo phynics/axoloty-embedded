@@ -55,6 +55,8 @@ did not run a tier, write that you did not run it, and say why.
 6. nothing discovers Core by parent path or reads a Core `.build` directory;
 7. every profile selects exactly one application, platform, and transport, and
    claims the locked Core revision;
+7b. no firmware file names Core's package layout, its `.build`, its private
+   support tests, or a pre-split resolver script;
 8. no literal Wi-Fi or broker credential is tracked;
 9. every evidence record is well formed.
 
