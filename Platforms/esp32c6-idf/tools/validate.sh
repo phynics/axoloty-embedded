@@ -88,7 +88,11 @@ if (typeof report.jsonCore.revision !== "string" || !/^[0-9a-f]{40}$/.test(repor
 console.log(`preparation report is valid for Core ${report.core.sha.slice(0, 12)}`);
 JS
 
-# The ownership invariants are the clean-room check in this repository.
+# The clean-room proof is Tools/check-invariants.sh, which fails closed. Its
+# rule 7b is the private-reference content scan the pre-split wrapper ran with
+# ripgrep; moving it into the rule set means it runs on every checkout, not
+# only inside this build. The record below cites that rule by name, and is only
+# reached when the checker exited zero.
 if ! "$repo_root/Tools/check-invariants.sh" > "$evidence_dir/check-invariants.log" 2>&1; then
     cat "$evidence_dir/check-invariants.log" >&2
     echo "error: repository invariants failed; see $evidence_dir/check-invariants.log" >&2
@@ -108,7 +112,8 @@ const record = {
   portableSourceCopied: false,
   proofRunId: process.env.PROOF_RUN_ID,
   privateReferenceScan: "passed",
-  privateReferenceScanExcluded: "Tools/check-invariants.sh",
+  privateReferenceScanRule: "check-invariants.sh rule 7b (private-reference)",
+  privateReferenceScanExcluded: "docs/, .testing/, AGENTS.md files, Tools/check-invariants.sh",
   invariantLog: process.env.CHECK_LOG,
   manifest: process.env.PREPARATION,
 };
