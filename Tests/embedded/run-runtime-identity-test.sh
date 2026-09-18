@@ -1,9 +1,9 @@
 #!/bin/sh
 # Copyright (c) 2026 Atakan DULKER. Licensed under the MIT License.
 
-# Host check for the ESP32-C6 platform runtime identity (moved from
-# phynics/axoloty Tests/Support/selftests/test-embedded-runtime-identity.sh).
-# Needs a C compiler only: no board, no SDK, no broker.
+# Host check for the ESP32-C6 platform runtime identity. Moved from the
+# pre-split Axoloty runtime-identity selftest. Needs a C compiler only: no
+# board, no SDK, no broker.
 #
 # Exit status: 0 passed, 1 failed, 69 required tool missing.
 

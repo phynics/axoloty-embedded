@@ -2,10 +2,9 @@
 # Copyright (c) 2026 Atakan DULKER. Licensed under the MIT License.
 
 # Regression check for the Embedded Swift UnicodeDataTables/.got.plt linker
-# integration (moved from phynics/axoloty
-# Tests/Support/checks/check-embedded-swift-linker.sh). Builds the profile
-# firmware with AXOLOTY_SWIFT_UNICODE_LINKER_PROBE=ON and inspects the linked
-# image. Needs the ESP-IDF toolchain, no board.
+# integration. Moved from the pre-split Axoloty Swift linker probe check.
+# Builds the profile firmware with AXOLOTY_SWIFT_UNICODE_LINKER_PROBE=ON and
+# inspects the linked image. Needs the ESP-IDF toolchain, no board.
 #
 # Exit status: 0 passed, 1 failed, 69 required tool missing.
 

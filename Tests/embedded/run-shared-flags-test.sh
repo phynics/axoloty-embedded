@@ -1,9 +1,9 @@
 #!/bin/sh
 # Copyright (c) 2026 Atakan DULKER. Licensed under the MIT License.
 
-# Host check for the ESP32-C6 platform shared flags (split out of
-# phynics/axoloty Tests/Support/selftests/test-embedded-mqtt-client.sh).
-# Needs a C compiler and pthreads only: no board, no SDK, no broker.
+# Host check for the ESP32-C6 platform shared flags. Split out of the pre-split
+# Axoloty MQTT client selftest. Needs a C compiler and pthreads only: no board,
+# no SDK, no broker.
 #
 # Exit status: 0 passed, 1 failed, 69 required tool missing.
 

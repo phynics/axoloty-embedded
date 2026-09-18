@@ -1,10 +1,10 @@
 #!/bin/sh
 # Copyright (c) 2026 Atakan DULKER. Licensed under the MIT License.
 
-# Host check for the MQTT transport seam (moved from phynics/axoloty
-# Tests/Support/embedded/embedded-mqtt-host-test.sh). Compiles the real
-# EmbeddedMQTTClient overlay, the real event validator, the real runtime
-# identity, and a host-only C HAL. No board, no SDK, no broker.
+# Host check for the MQTT transport seam. Moved from the pre-split Axoloty MQTT
+# host test. Compiles the real EmbeddedMQTTClient overlay, the real event
+# validator, the real runtime identity, and a host-only C HAL. No board, no SDK,
+# no broker.
 #
 # The test proves operation order and the 256/2048 bounds before the HAL is
 # entered. It does not compile or link ESP-IDF and cannot be used by the

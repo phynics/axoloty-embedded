@@ -1,11 +1,10 @@
 #!/bin/sh
 # Copyright (c) 2026 Atakan DULKER. Licensed under the MIT License.
 
-# Verify the profile firmware is bit-for-bit reproducible (moved from
-# phynics/axoloty Tests/Support/embedded/embedded-swift-reproducible-build.sh).
-# Builds the profile twice from clean proof roots, records the SHA-256 of
-# axoloty-swift.bin, and fails when the two hashes differ. Needs the ESP-IDF
-# toolchain, no board.
+# Verify the profile firmware is bit-for-bit reproducible. Moved from the
+# pre-split Axoloty Swift reproducible-build check. Builds the profile twice
+# from clean proof roots, records the SHA-256 of axoloty-swift.bin, and fails
+# when the two hashes differ. Needs the ESP-IDF toolchain, no board.
 #
 # Exit status: 0 passed, 1 failed, 69 required tool missing.
 
