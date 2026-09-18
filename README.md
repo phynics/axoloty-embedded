@@ -14,7 +14,7 @@ stays Embedded-Swift compatible. The split is tracked by
 
 ## Ownership boundary
 
-| Here | In Axoloty |
+| Here | In [Axoloty](https://github.com/phynics/axoloty) |
 |---|---|
 | Firmware applications | `AxolotyWire`, `AxolotyObjectModel`, `AxolotyProtocol`, `AxolotyCoatyModels`, `AxolotyStaticRuntime` |
 | Board and SDK integration (ESP-IDF today) | Portable protocol semantics and wire format |
@@ -72,7 +72,12 @@ checkout is an error rather than a warning.
 
 ## Related
 
+- [`phynics/axoloty`](https://github.com/phynics/axoloty) — Core: the portable
+  packages this firmware compiles, their documentation, and the
+  Embedded-Swift compatibility gates
 - [Axoloty embedded consumer contract](https://github.com/phynics/axoloty/blob/main/docs/embedded-consumer-contract.md)
+- [Axoloty README](https://github.com/phynics/axoloty/blob/main/README.md) and
+  [ARCHITECTURE.md](https://github.com/phynics/axoloty/blob/main/ARCHITECTURE.md)
 - [Epic #845](https://github.com/phynics/axoloty/issues/845) — the split
 - [Epic #796](https://github.com/phynics/axoloty/issues/796) — Zenoh; the
   embedded implementation lands here, host and shared work stays in Axoloty
