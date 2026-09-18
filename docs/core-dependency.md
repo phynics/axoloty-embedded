@@ -50,7 +50,8 @@ systems consume that report and nothing else from Core.
 
 Linux through Axoloty's pinned container is the reference host, and required
 Core CI uses it. macOS is supported for preparation from Axoloty 0.8.1, which
-fixed the Apple platform floor and the macro executable name.
+fixed the Apple platform floor and the macro executable name, and 0.8.2, which
+fixed preparation from a working directory under `/tmp`.
 
 Preparation is not the firmware build. Building and flashing firmware needs
 ESP-IDF, which runs in the container.
