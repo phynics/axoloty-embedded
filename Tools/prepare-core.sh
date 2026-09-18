@@ -134,10 +134,27 @@ tooling_build="$scratch/core-tooling-build"
 report="$scratch/core-preparation.json"
 mkdir -p "$tools_scratch" "$tooling_build"
 
+# A scratch tree created by another user aborts SwiftPM with "attempt to write
+# a readonly database" from inside llbuild, which names neither the path nor
+# the cause. Check writability while we can still explain it.
+for scratch_dir in "$tools_scratch" "$tooling_build"; do
+    [ -w "$scratch_dir" ] ||
+        die "scratch directory is not writable by $(id -un 2>/dev/null || id -u): $scratch_dir. A previous run under a different user probably owns it; remove it or set AXOLOTY_SCRATCH to a fresh path. See docs/container-builds.md"
+done
+
 if [ -n "$preview_revision" ]; then
     echo "prepare-core: preparing Axoloty preview candidate $expected_revision through the supported consumer contract"
 else
-    echo "prepare-core: preparing Axoloty $core_version through the supported consumer contract"
+    # Axoloty's tooling selects its execution context from AXOLOTY_DEVCONTAINER.
+# Unset, it chooses the host path on Linux and its internal git calls never
+# run, so preparation fails with "AXOLOTY_SOURCE_DIR must be the canonical Git
+# checkout root" no matter how canonical the checkout is. Detect that here,
+# because the message the tool produces points at the wrong thing entirely.
+if [ -z "${AXOLOTY_DEVCONTAINER:-}" ] && [ ! -d /System ]; then
+    die "AXOLOTY_DEVCONTAINER=1 is required on Linux; the Core tool otherwise selects its host execution path and reports a misleading canonical-checkout error. See docs/container-builds.md"
+fi
+
+echo "prepare-core: preparing Axoloty $core_version through the supported consumer contract"
 fi
 AXOLOTY_SOURCE_DIR="$core_dir" swift run \
     --package-path "$core_dir/Tools" \

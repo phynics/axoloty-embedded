@@ -69,6 +69,13 @@ fi
 # shellcheck source=/dev/null
 . "$idf_path/export.sh" >/dev/null 2>&1
 
+# ESP-IDF expands component requirements in a separate CMake sub-invocation
+# that does not inherit -D cache variables. axoloty-source.cmake is included
+# during that pass, so the report must also be in the environment or the pass
+# fails with "AXOLOTY_PREPARATION_REPORT is required" before any target builds.
+export AXOLOTY_PREPARATION_REPORT="$report"
+
+
 : > "$evidence_dir/build.log"
 cd "$build_project_dir"
 if [ ! -f "$build_dir/CMakeCache.txt" ] ||

@@ -84,6 +84,27 @@ AXOLOTY_STRICT_CORE=1 Tools/prepare-core.sh            # as CI runs it
 Strict mode is the default under CI and refuses a dirty or off-lock Core
 checkout. Never disable it to make a release build pass.
 
+## Building without a host toolchain
+
+`swift`, `cmake`, and `idf.py` are usually absent from the host. **That does
+not make a build unverifiable — check `docker images` first.** The pinned
+`axoloty-dev` image carries Swift and ESP-IDF, and a firmware image can be
+built from it. Only flashing needs hardware.
+
+Never tell anyone, or record in an evidence record, that a build could not be
+attempted without checking for the container first.
+
+The working invocation and the five blockers that stop a first attempt are in
+[docs/container-builds.md](docs/container-builds.md). The two that recur:
+
+- `AXOLOTY_DEVCONTAINER=1` is mandatory on Linux. Without it the Core tool
+  takes its host path and reports a misleading canonical-checkout error.
+- **ESP-IDF's requirements pass does not inherit `-D` cache variables.** Any
+  value a component `CMakeLists.txt` needs must be exported into the
+  environment and read with an `ENV{}` fallback, then validated with a
+  `FATAL_ERROR` that names the variable. `-D` alone silently yields an empty
+  value that fails two layers later with an unrelated message.
+
 See [docs/workflow.md](docs/workflow.md) and [docs/evidence.md](docs/evidence.md).
 
 ## Directory guides

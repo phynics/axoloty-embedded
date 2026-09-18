@@ -24,6 +24,21 @@ Never search a parent directory, never read Axoloty's root `.build`, and never
 read anything under Axoloty's `Tests/`. The build consumes
 `core-preparation.json` and nothing else from Core.
 
+## Build-system rule that bites
+
+ESP-IDF expands component requirements in a **separate CMake sub-invocation**
+that does not inherit `-D` cache variables from the `idf.py` command line. A
+component `CMakeLists.txt` that reads `${SOMETHING}` will see it empty there.
+
+Export the value into the environment and read it with an `ENV{}` fallback,
+then fail with a `FATAL_ERROR` naming the variable. `cmake/axoloty-source.cmake`
+is the pattern to copy.
+
+An empty path does not fail where it is set; it fails later as a missing file,
+and the error names the file. Two instances of exactly this cost real time on
+the first build of this firmware. See
+[docs/container-builds.md](../docs/container-builds.md).
+
 ## Credentials
 
 Wi-Fi credentials, broker addresses, device paths, and live timing are operator

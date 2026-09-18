@@ -15,6 +15,28 @@ option(AXOLOTY_SWIFT_UNICODE_LINKER_PROBE
     OFF
 )
 
+# ESP-IDF expands component requirements in a separate CMake sub-invocation
+# that does not inherit -D cache variables, and this file is included during
+# that pass. Fall back to the environment, exactly as axoloty-source.cmake
+# does for the preparation report. Without this the axis paths are empty,
+# which surfaces much later as a corpus generator failure rather than as a
+# missing selection.
+foreach(AXOLOTY_AXIS_VARIABLE AXOLOTY_APPLICATION_DIR AXOLOTY_TRANSPORT_DIR)
+    if(NOT DEFINED ${AXOLOTY_AXIS_VARIABLE} OR "${${AXOLOTY_AXIS_VARIABLE}}" STREQUAL "")
+        if(DEFINED ENV{${AXOLOTY_AXIS_VARIABLE}} AND NOT "$ENV{${AXOLOTY_AXIS_VARIABLE}}" STREQUAL "")
+            set(${AXOLOTY_AXIS_VARIABLE} "$ENV{${AXOLOTY_AXIS_VARIABLE}}")
+        endif()
+    endif()
+    if(NOT DEFINED ${AXOLOTY_AXIS_VARIABLE} OR "${${AXOLOTY_AXIS_VARIABLE}}" STREQUAL "")
+        message(FATAL_ERROR
+            "${AXOLOTY_AXIS_VARIABLE} is required; the profile selects it. Pass it with -D and export it, or run the build through Profiles/<name>/build.sh"
+        )
+    endif()
+    if(NOT IS_DIRECTORY "${${AXOLOTY_AXIS_VARIABLE}}")
+        message(FATAL_ERROR "${AXOLOTY_AXIS_VARIABLE} is not a directory: ${${AXOLOTY_AXIS_VARIABLE}}")
+    endif()
+endforeach()
+
 set(AXOLOTY_APPLICATION_MAIN_DIR "${AXOLOTY_APPLICATION_DIR}/main")
 set(AXOLOTY_TRANSPORT_MAIN_DIR "${AXOLOTY_TRANSPORT_DIR}/main")
 
