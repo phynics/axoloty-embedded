@@ -19,7 +19,10 @@ struct DeviceSmokeSeam {
     var nowMicroseconds: @convention(c) () -> Int64
     /// Yields for `ticks` scheduler ticks.
     var delay: @convention(c) (UInt32) -> Void
-    /// Restarts the device.
+    /// Restarts the device. The platform implementation never returns.
+    ///
+    /// Call ``DeviceSmokeSeam/restartDevice()`` rather than this pointer, so
+    /// the compiler knows control ends.
     var restart: @convention(c) () -> Void
 
     /// Free internal heap bytes.
@@ -57,6 +60,24 @@ struct DeviceSmokeSeam {
     var agentTest: @convention(c) (UInt32, UnsafePointer<UInt8>, Int32) -> UInt32
     /// Copies the operator-configured device display name into caller storage.
     var deviceDisplayName: @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32
+}
+
+extension DeviceSmokeSeam {
+    /// Restarts the device and never returns.
+    ///
+    /// The platform implementation is a `noreturn` SDK call, but a
+    /// `@convention(c)` pointer cannot be declared `Never`-returning, so that
+    /// property is lost at the seam. Without it every caller looks like it
+    /// falls through and the compiler rejects the missing return.
+    ///
+    /// This restores it once, here, instead of an unreachable `return` at each
+    /// call site. The trap is genuinely unreachable; it exists so the function
+    /// can be typed `Never`, and it fails loudly rather than continuing with a
+    /// device that was supposed to have reset.
+    func restartDevice() -> Never {
+        restart()
+        fatalError("platform restart returned")
+    }
 }
 
 /// The seam supplied by the running profile before the application starts.

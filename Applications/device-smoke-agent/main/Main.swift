@@ -689,7 +689,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     seam.print("}\n")
 
     seam.delay(1000)
-    seam.restart()
+    seam.restartDevice()
 }
 
 /// Runs the device smoke application with the profile-supplied seam.
