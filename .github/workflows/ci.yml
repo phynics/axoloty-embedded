@@ -55,19 +55,30 @@ jobs:
           if-no-files-found: warn
 
   build:
-    name: Firmware build
+    name: Firmware host checks and image
     runs-on: ubuntu-latest
-    needs: core
-    # No profile declares a build until the firmware migration (#1) lands.
-    # Until then this job would report UNAVAILABLE, which is honest but not
-    # worth a runner. Delete this condition in the same PR that adds the first
-    # profile build.sh.
-    if: ${{ hashFiles('Profiles/*/build.sh') != '' }}
+    needs: repo
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build every profile
-        run: Tools/verify.sh --tier build --require build
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '6.1'
+
+      # The build tier runs the hardware-free host firmware checks (runtime
+      # identity, shared flags, and the MQTT transport seam) and then attempts
+      # each profile image build. This runner has no pinned ESP-IDF + Swift
+      # image, so the image build reports UNAVAILABLE, which is honest and is
+      # never a pass. The tier is deliberately not required: requiring it would
+      # demand a toolchain CI does not have.
+      - name: Host firmware checks and profile image
+        run: Tools/verify.sh --tier build
+
+      # The broker tier needs a reachable MQTT broker but no board. This
+      # workflow has none, so it reports UNAVAILABLE rather than a result. A
+      # broker-only check would run here once one is owned.
+      - name: Broker-only checks
+        run: Tools/verify.sh --tier broker
 
 # The device tier is deliberately absent. Qualification needs a board, runs on
 # a bench, and is recorded as an evidence record under docs/evidence/. CI never

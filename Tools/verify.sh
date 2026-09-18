@@ -7,7 +7,9 @@
 #
 #   repo    invariants and repository shape     needs nothing
 #   core    locked Core preparation             needs swift and network
-#   build   firmware image build per profile    needs the platform toolchain
+#   build   host firmware checks and the         needs a host compiler; the
+#           firmware image build per profile    image part needs ESP-IDF
+#   broker  broker-only checks                  needs a reachable MQTT broker
 #   device  flash, monitor, and smoke           needs a physical board
 #
 # A tier whose capability is absent reports UNAVAILABLE with the reason and is
@@ -37,7 +39,7 @@ while [ $# -gt 0 ]; do
         --tier) requested_tier="${2:-}"; shift 2 || exit 3 ;;
         --require) required_tiers="$required_tiers ${2:-}"; shift 2 || exit 3 ;;
         --profile) profile_filter="${2:-}"; shift 2 || exit 3 ;;
-        -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "verify: unknown argument: $1" >&2; exit 3 ;;
     esac
 done
@@ -106,6 +108,10 @@ fi
 # ---------------------------------------------------------------------------
 # build
 # ---------------------------------------------------------------------------
+# Two kinds of firmware check live here. Host checks compile the real firmware
+# sources with a host compiler and need no board, SDK, or broker. Image checks
+# need the platform toolchain and produce the firmware image. A check that
+# needs a board is never here; it is in `device`.
 
 profiles() {
     local found
@@ -118,7 +124,33 @@ profiles() {
     fi
 }
 
+# Run a check script. Exit 69 from the script means its capability is absent.
+# This script does not run under `set -e`, so a failing check is captured here
+# instead of aborting the run before the summary.
+check_script() {
+    local label="$1" reason="$2"
+    shift 2
+    printf '\n== build: %s\n' "$label"
+    "$@"
+    local status=$?
+    case "$status" in
+        0) record PASS "build:$label" 'passed' ;;
+        69) unavailable "build:$label" "$reason" ;;
+        *) record FAIL "build:$label" 'check failed'; failed=1 ;;
+    esac
+}
+
 if wanted build; then
+    check_script runtime-identity \
+        'no host C compiler is available for the runtime identity check' \
+        Tests/embedded/run-runtime-identity-test.sh
+    check_script shared-flags \
+        'no host C compiler is available for the shared flags check' \
+        Tests/embedded/run-shared-flags-test.sh
+    check_script mqtt-host-seam \
+        'swiftc or a host C compiler is not available for the MQTT seam check' \
+        Tests/embedded/run-mqtt-host-test.sh
+
     available_profiles="$(profiles)"
     if [ -z "$available_profiles" ]; then
         unavailable build 'no profile declares a build yet'
@@ -138,7 +170,46 @@ if wanted build; then
                 record FAIL "build:$profile" 'the profile declares no executable build.sh'
                 failed=1
             fi
+            check_script "reproducible-build:$profile" \
+                'idf.py is required to rebuild the firmware' \
+                Tests/embedded/check-reproducible-build.sh "$profile"
+            check_script "swift-linker:$profile" \
+                'idf.py is required to link the firmware' \
+                Tests/embedded/check-swift-linker.sh "$profile"
         done
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# broker
+# ---------------------------------------------------------------------------
+# A broker-only check needs a reachable MQTT broker but no board. Most
+# checkouts have no broker, so the capability is explicit and its absence is
+# reported as UNAVAILABLE, never treated as a pass. Checks that need a broker
+# *and* a board are device checks and belong to the `device` tier.
+
+if wanted broker; then
+    broker_host=${AXOLOTY_MQTT_HOST:-}
+    broker_port=${AXOLOTY_MQTT_PORT:-1883}
+    if [ -z "$broker_host" ]; then
+        unavailable broker 'AXOLOTY_MQTT_HOST is unset, so no MQTT broker is configured for this run'
+    elif ! (exec 3<>"/dev/tcp/$broker_host/$broker_port") 2>/dev/null; then
+        unavailable broker "no MQTT broker is reachable at $broker_host:$broker_port"
+    else
+        broker_checks="$(find Tests/embedded/broker -maxdepth 1 -type f -name '*.sh' 2>/dev/null | sort)"
+        if [ -z "$broker_checks" ]; then
+            record SKIP broker 'a broker is reachable, but no broker-only check is owned yet; see docs/check-inventory.md'
+        else
+            for broker_check in $broker_checks; do
+                printf '\n== broker: %s\n' "$broker_check"
+                if "$broker_check"; then
+                    record PASS "broker:$(basename "$broker_check")" 'passed'
+                else
+                    record FAIL "broker:$(basename "$broker_check")" 'check failed'
+                    failed=1
+                fi
+            done
+        fi
     fi
 fi
 

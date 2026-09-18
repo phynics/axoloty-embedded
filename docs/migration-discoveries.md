@@ -71,6 +71,88 @@ become their own issues.
   generated code stays application-neutral, but the generator's broader
   coupling to the platform was not redesigned.
 
+## Issue #2 — embedded test ownership (`axoloty-embedded#2`)
+
+Findings from classifying and moving the embedded checks. None is fixed here;
+the maintainer decides which become their own issues. The full disposition table
+is [check-inventory.md](./check-inventory.md).
+
+### 7. The role-config build lifecycle did not move with the firmware
+
+- **Files:** `Tests/Support/embedded/embedded-{network,agent,host,coatyjs,last-will,broker-restart}-test.sh`
+  in `phynics/axoloty`, `generate-embedded-network-config.mjs`
+- **What I saw:** the pre-split device and broker harnesses wrote
+  `axoloty_network_config.h` into the single `Embedded/swift` build tree
+  *between* `idf.py set-target` and `idf.py build`, then built role-specific
+  images. #1 migrated the firmware into a profile/platform composition whose
+  `Platforms/esp32c6-idf/tools/build.sh` has no scenario/role-config injection
+  point: it validates Core, copies the platform to a proof root, configures,
+  and builds in one invocation.
+- **Why out of scope:** adding an injection point is a firmware build-lifecycle
+  change, which is a redesign, not a check move. The harnesses are therefore
+  **unmigrated** and named `MOVE` in the inventory. The firmware support they
+  exercise (`CarrierNetworkProbe`, the `network_bootstrap.c` scenario bits)
+  did move with #1.
+
+### 8. No committed historical embedded device evidence exists
+
+- **Files:** `phynics/axoloty` `.gitignore` (`.testing/`), `docs/embedded-toolchain.md`
+- **What I saw:** the pre-split documentation refers to reviewed physical
+  evidence, but those runs lived in `.testing/embedded/`, which is
+  git-ignored. No machine-readable device evidence record was ever committed.
+- **Consequence:** there is no record whose original status could be preserved
+  under the `importedFrom` shape in `docs/evidence.md`. The embedded
+  documentation was imported with provenance; the evidence itself was not
+  recoverable. A device claim can only come from a new run here.
+
+### 9. `Tests/Support` is ambiguous between the two repositories
+
+- **File:** `Tools/check-invariants.sh` rule 7b (`private_tokens`)
+- **What I saw:** the invariant that forbids firmware from naming Core's
+  private tree matches the literal token `Tests/Support`. The pre-split
+  harnesses had exactly that path, so importing them unchanged tripped the
+  rule. It is impossible for a grep to tell "Core's `Tests/Support`" from "our
+  `Tests/Support`".
+- **What I did instead of changing the invariant:** the imported harness lives
+  at `Tests/embedded/`, which keeps the rule meaningful and unchanged. If a
+  future maintainer wants the old path, the rule needs a deliberate refinement
+  rather than a loophole.
+
+### 10. CI has no pinned ESP-IDF + Swift image
+
+- **File:** `.github/workflows/ci.yml`
+- **What I saw:** the `build` job cannot produce a firmware image on
+  `ubuntu-latest`: the pinned `axoloty-dev` image (Swift 6.3, ESP-IDF v5.4,
+  RISC-V GCC, `idf_swift`) is not published to a registry this workflow can
+  pull. The previous `--require build` would have failed CI for a capability CI
+  does not have.
+- **What I did:** the job now runs `Tools/verify.sh --tier build` without
+  `--require`, so the host firmware checks run and the image build reports
+  `UNAVAILABLE`. Publishing the pinned image (or a CI build of it) is a separate
+  decision.
+
+### 11. The Axoloty copies of the embedded docs and checks still exist
+
+- **Files:** `phynics/axoloty` `Makefile`, `Tests/Support/embedded/*`,
+  `Tests/Support/checks/check-embedded-*`, `docs/embedded-toolchain.md`
+- **What I saw:** `phynics/axoloty` is read-only for this task, so the checks
+  and documentation that are marked `MOVE` or `SUPERSEDE/DELETE` still exist
+  there. The imported copy of `docs/embedded-toolchain.md` now describes this
+  repository, but Axoloty's copy still describes the pre-split workflow and
+  its `AGENTS.md` still lists `Embedded` as Core-owned.
+- **Why out of scope:** deleting from Axoloty must happen in an Axoloty PR, by
+  the maintainer, once this ownership change is accepted.
+
+### 12. Two imported host tests needed include-path changes
+
+- **Files:** `Tests/embedded/shared-flags-test.c`, `Tests/embedded/mqtt-host-hal.c`
+- **What I saw:** both included firmware headers by the pre-split relative path
+  `../../../Embedded/swift/main/...`. The firmware now lives under
+  `Platforms/esp32c6-idf/main` and `Transports/mqtt-espidf/main`.
+- **What I did:** changed the includes to bare header names and pass `-I` to
+  the two firmware directories. This is a path adaptation the check
+  demonstrably requires; the test logic is unchanged.
+
 ## Provenance
 
 Filtered Git history is not preserved across the split, so the exact source
