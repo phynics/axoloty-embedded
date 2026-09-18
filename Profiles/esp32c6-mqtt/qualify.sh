@@ -28,6 +28,14 @@ if [ -z "${AXOLOTY_DEVICE_PORT:-}" ]; then
     exit 64
 fi
 
+# Qualification is a compatibility claim for the locked Core. A preview builds
+# an off-lock Axoloty candidate, so its smoke run is a build result, not a
+# qualification, and this guard keeps it out of docs/evidence/.
+if [ -n "${AXOLOTY_PREVIEW_CORE_REVISION:-}" ]; then
+    echo "error: refusing to qualify a compatibility preview; a preview is not a compatibility claim" >&2
+    exit 64
+fi
+
 export AXOLOTY_APPLICATION_DIR="$repo_root/Applications/$application"
 export AXOLOTY_TRANSPORT_DIR="$repo_root/Transports/$transport"
 export AXOLOTY_CORPUS_MANIFEST="$AXOLOTY_APPLICATION_DIR/fixtures/manifest.json"

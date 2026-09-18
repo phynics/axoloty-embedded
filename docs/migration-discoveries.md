@@ -152,6 +152,53 @@ is [check-inventory.md](./check-inventory.md).
 - **What I did:** changed the includes to bare header names and pass `-I` to
   the two firmware directories. This is a path adaptation the check
   demonstrably requires; the test logic is unchanged.
+## Issue #3: firmware release provenance
+
+Found while defining the release manifest and compatibility lifecycle. Each is
+outside the manifest format; none is fixed here.
+
+## 12. The evidence `device` field holds a serial port, not a board
+
+- **File:** `Platforms/esp32c6-idf/tools/write-device-manifest.mjs`, called from
+  `Platforms/esp32c6-idf/tools/flash.sh`
+- **What I saw:** `docs/evidence.md` documents `device` as a board, with the
+  example `"device": "ESP32-C6-DevKitC-1 v1.2"`. The code records the serial
+  port path instead: `flash.sh` passes `${EMBEDDED_DEVICE:-/dev/ttyACM0}` as the
+  `device` argument, and `write-device-manifest.mjs` copies it verbatim into
+  both `device-manifest.json` and the qualification record. The pre-split code
+  in `phynics/axoloty` did the same, so the schema example and the producer have
+  disagreed since the migration source.
+- **Why out of scope:** changing what `device` means is an evidence-schema
+  change. The release manifest therefore takes `board` from the profile's
+  declared target instead of the evidence record, and records the tested unit
+  separately. Reconcile the documentation or the producer in its own issue.
+
+## 13. The MQTT transport backend has no version of its own
+
+- **File:** `Platforms/esp32c6-idf/dependencies.lock`
+- **What I saw:** the transport is ESP-IDF's bundled `mqtt` component, which is
+  not a managed component and carries no independent version. The only pinned
+  version near it is the ESP-IDF SDK (`idf: 5.4.0`). The release manifest
+  records the SDK version as the transport backend version and cites this lock.
+  A transport with its own library (for example `zenoh-pico` under #4) has no
+  place in this platform dependency lock to declare its version.
+- **Why out of scope:** giving each transport an independently pinned backend
+  version is a dependency-management change, not a manifest-format change. The
+  manifest records what exists today and names its source.
+
+## 14. The Core preparation report does not carry the Axoloty version
+
+- **File:** `Tools/prepare-core.sh`, `docs/core-dependency.md`
+- **What I saw:** the preparation report carries the Core commit SHA, dirty
+  state, and contract hash, but not `core.version`. A release can take the
+  version from the lock because the lock is authoritative for a release. A
+  compatibility preview is off-lock by design, so there is no version to name:
+  the preview manifest leaves `axoloty.version` null. Reading the Core
+  checkout's `VERSION` file directly is not allowed, because Core is reached
+  only through the preparation report, and taking an operator-supplied version
+  would put an unobserved value in the record.
+- **Why out of scope:** adding a version field to the report is an Axoloty
+  contract change. The preview path stays honest about what it does not know.
 
 ## Provenance
 

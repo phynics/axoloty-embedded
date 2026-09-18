@@ -16,9 +16,15 @@ under this directory belongs in one of the other three axes.
   "application": "<a directory name under Applications/>",
   "platform": "<a directory name under Platforms/>",
   "transport": "<a directory name under Transports/>",
+  "board": "<the physical board the profile targets>",
   "core": { "revision": "<the 40-character SHA from axoloty-core.lock.json>" }
 }
 ```
+
+`board` is the declared target board, not a claim that a unit from that board
+family was tested. The qualification evidence names the unit that was actually
+used. The release manifest records `board` from here and the tested unit
+separately. See [docs/releases.md](../docs/releases.md).
 
 `transport` is one string. Not a list, not an object.
 `Tools/check-invariants.sh` fails on a profile that selects more than one,

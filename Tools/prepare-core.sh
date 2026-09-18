@@ -9,8 +9,14 @@
 # Environment:
 #   AXOLOTY_SOURCE_DIR   Absolute path to a local Axoloty checkout (optional).
 #   AXOLOTY_SCRATCH      Scratch root. Default: <repo>/.axoloty
-#   AXOLOTY_STRICT_CORE  1 requires the locked revision and a clean checkout.
+#   AXOLOTY_STRICT_CORE  1 requires the selected revision and a clean checkout.
 #                        Defaults to 1 when CI is set, otherwise 0.
+#   AXOLOTY_PREVIEW_CORE_REVISION  A 40-character Axoloty candidate SHA to
+#                        prepare instead of the lock. This is the explicit
+#                        compatibility-preview mode: it still requires a clean
+#                        checkout, but it is deliberately off-lock and its
+#                        result is never a compatibility claim. Never set this
+#                        for a release or for ordinary CI.
 #
 # Writes <scratch>/core-preparation.json and prints its path.
 
@@ -55,6 +61,22 @@ case "$core_revision" in
     *) die "lock revision must be a lowercase hexadecimal SHA" ;;
 esac
 
+preview_revision="${AXOLOTY_PREVIEW_CORE_REVISION:-}"
+if [ -n "$preview_revision" ]; then
+    case "$preview_revision" in
+        [0-9a-f]*) ;;
+        *) die "AXOLOTY_PREVIEW_CORE_REVISION must be a lowercase hexadecimal SHA" ;;
+    esac
+    [ "${#preview_revision}" -eq 40 ] ||
+        die "AXOLOTY_PREVIEW_CORE_REVISION must be a full 40-character SHA"
+    [ "$preview_revision" != "$core_revision" ] ||
+        die "AXOLOTY_PREVIEW_CORE_REVISION equals the locked revision; preview mode is only for an off-lock candidate"
+    expected_revision="$preview_revision"
+    echo "prepare-core: PREVIEW mode: preparing Axoloty candidate $preview_revision (lock is $core_revision); this is not a compatibility claim" >&2
+else
+    expected_revision="$core_revision"
+fi
+
 mkdir -p "$scratch"
 
 checkout_revision() {
@@ -85,24 +107,24 @@ if [ -n "${AXOLOTY_SOURCE_DIR:-}" ]; then
 
     if [ "$strict" = "1" ]; then
         [ "$dirty" = false ] || die "AXOLOTY_SOURCE_DIR is dirty and strict mode is on: $core_dir"
-        [ "$selected_revision" = "$core_revision" ] || die "AXOLOTY_SOURCE_DIR is at $selected_revision but the lock requires $core_revision"
+        [ "$selected_revision" = "$expected_revision" ] || die "AXOLOTY_SOURCE_DIR is at $selected_revision but the required revision is $expected_revision"
     else
         [ "$dirty" = false ] || echo "prepare-core: warning: local Core checkout is dirty" >&2
-        [ "$selected_revision" = "$core_revision" ] || echo "prepare-core: warning: local Core is at $selected_revision, lock requires $core_revision" >&2
+        [ "$selected_revision" = "$expected_revision" ] || echo "prepare-core: warning: local Core is at $selected_revision, required revision is $expected_revision" >&2
     fi
     echo "prepare-core: using local Core $core_dir at $selected_revision (dirty=$dirty)"
 else
-    core_dir="$scratch/core/$core_revision"
+    core_dir="$scratch/core/$expected_revision"
     if [ ! -d "$core_dir/.git" ]; then
         mkdir -p "$core_dir"
         git -C "$core_dir" init -q
         git -C "$core_dir" remote add origin "$core_url" 2>/dev/null || true
         # GitHub serves an exact commit, so no full history is fetched.
-        git -C "$core_dir" fetch -q --depth 1 origin "$core_revision"
+        git -C "$core_dir" fetch -q --depth 1 origin "$expected_revision"
         git -C "$core_dir" checkout -q --detach FETCH_HEAD
     fi
     selected_revision="$(checkout_revision "$core_dir")"
-    [ "$selected_revision" = "$core_revision" ] || die "fetched Core is at $selected_revision, expected $core_revision"
+    [ "$selected_revision" = "$expected_revision" ] || die "fetched Core is at $selected_revision, expected $expected_revision"
     dirty=false
     echo "prepare-core: using fetched Core $core_dir at $selected_revision"
 fi
@@ -112,7 +134,11 @@ tooling_build="$scratch/core-tooling-build"
 report="$scratch/core-preparation.json"
 mkdir -p "$tools_scratch" "$tooling_build"
 
-echo "prepare-core: preparing Axoloty $core_version through the supported consumer contract"
+if [ -n "$preview_revision" ]; then
+    echo "prepare-core: preparing Axoloty preview candidate $expected_revision through the supported consumer contract"
+else
+    echo "prepare-core: preparing Axoloty $core_version through the supported consumer contract"
+fi
 AXOLOTY_SOURCE_DIR="$core_dir" swift run \
     --package-path "$core_dir/Tools" \
     --scratch-path "$tooling_build" \
@@ -122,7 +148,7 @@ AXOLOTY_SOURCE_DIR="$core_dir" swift run \
 
 [ -f "$report" ] || die "preparation report was not written: $report"
 
-python3 - "$report" "$core_revision" "$strict" <<'PY'
+python3 - "$report" "$expected_revision" "$strict" <<'PY'
 import json, sys
 report_path, expected_revision, strict = sys.argv[1], sys.argv[2], sys.argv[3]
 with open(report_path) as handle:
@@ -134,7 +160,7 @@ if report.get("status") != "prepared":
 core = report["core"]
 if strict == "1":
     if core["sha"] != expected_revision:
-        sys.exit("prepare-core: preparation reports %s, lock requires %s" % (core["sha"], expected_revision))
+        sys.exit("prepare-core: preparation reports %s, required revision is %s" % (core["sha"], expected_revision))
     if core["dirty"]:
         sys.exit("prepare-core: preparation reports a dirty Core checkout")
 print("prepare-core: Core %s (dirty=%s), contract %s"

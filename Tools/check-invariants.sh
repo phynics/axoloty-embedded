@@ -409,6 +409,62 @@ PY
 fi
 
 # ---------------------------------------------------------------------------
+# 10. A release manifest is a certificate, and VERSION names the cycle.
+# ---------------------------------------------------------------------------
+# See docs/releases.md. A release manifest is a compatibility claim for one
+# profile at one exact Axoloty revision. It is produced by the build, and this
+# rule re-checks it against the lock, VERSION, the profile, and docs/evidence
+# on every checkout. A preview manifest is never a certificate and is never
+# tracked here. A rule, not a prose promise, so the format cannot rot silently.
+
+version_value=''
+if [ ! -f VERSION ]; then
+    fail release 'VERSION is missing; the embedded version has no source'
+else
+    version_value="$(cat VERSION)"
+    version_report="$(python3 - VERSION <<'PY'
+import json, re, sys
+version_text = open(sys.argv[1]).read().strip()
+match = re.fullmatch(r"(\d+\.\d+\.\d+)-embedded\.([1-9]\d*)", version_text)
+if not match:
+    print("ERR VERSION is not <base>-embedded.<revision>: %r" % version_text)
+    raise SystemExit(0)
+try:
+    with open("axoloty-core.lock.json") as handle:
+        lock_version = json.load(handle).get("core", {}).get("version")
+except (OSError, ValueError):
+    lock_version = None
+if lock_version is None:
+    print("ERR could not read the lock version to check VERSION")
+elif match.group(1) != lock_version:
+    print("ERR VERSION base %s does not match the lock version %s" % (match.group(1), lock_version))
+PY
+)"
+    version_bad=0
+    while IFS= read -r line; do
+        case "$line" in
+            ERR*) fail release "${line#ERR }"; version_bad=1 ;;
+        esac
+    done <<< "$version_report"
+    [ "$version_bad" -eq 0 ] && pass release "VERSION ${version_value} tracks the locked Axoloty version"
+fi
+
+manifest_files="$(tracked 'releases/*/*.json' || true)"
+if [ -z "$manifest_files" ]; then
+    skip release 'no tracked release manifest exists yet'
+else
+    for manifest in $manifest_files; do
+        if manifest_report="$(python3 Tools/validate-release-manifest.py "$repo_root" "$manifest" --require-qualified 2>&1)"; then
+            pass release "$manifest is a valid, qualified profile certificate"
+        else
+            while IFS= read -r line; do
+                [ -n "$line" ] && fail release "${line#VIOLATION \[release-manifest\] }"
+            done <<< "$manifest_report"
+        fi
+    done
+fi
+
+# ---------------------------------------------------------------------------
 
 printf '\ncheck-invariants: %d passed, %d skipped, %d violation(s)\n' "$checked" "$skipped" "$violations"
 [ "$violations" -eq 0 ] || exit 1
