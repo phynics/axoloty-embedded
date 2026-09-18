@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  repo:
+    name: Repository invariants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The hardware-free gate. It needs no toolchain, so it is the one check
+      # that is always required and always fast.
+      - name: Check invariants
+        run: Tools/verify.sh --tier repo --require repo
+
+      - name: Check scripts
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck Tools/*.sh Profiles/*/*.sh 2>/dev/null || shellcheck Tools/*.sh
+
+  core:
+    name: Locked Core preparation
+    runs-on: ubuntu-latest
+    needs: repo
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '6.1'
+
+      # CI sets CI, so prepare-core.sh is strict by default: a dirty or
+      # off-lock Core checkout is an error here, never a warning.
+      - name: Prepare Core at the locked revision
+        run: Tools/verify.sh --tier core --require core
+
+      - name: Publish the preparation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-preparation
+          path: .axoloty/core-preparation.json
+          if-no-files-found: warn
+
+  build:
+    name: Firmware host checks and image
+    runs-on: ubuntu-latest
+    needs: repo
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '6.1'
+
+      # The build tier runs the hardware-free host firmware checks (runtime
+      # identity, shared flags, and the MQTT transport seam) and then attempts
+      # each profile image build. This runner has no pinned ESP-IDF + Swift
+      # image, so the image build reports UNAVAILABLE, which is honest and is
+      # never a pass. The tier is deliberately not required: requiring it would
+      # demand a toolchain CI does not have.
+      - name: Host firmware checks and profile image
+        run: Tools/verify.sh --tier build
+
+      # The broker tier needs a reachable MQTT broker but no board. This
+      # workflow has none, so it reports UNAVAILABLE rather than a result. A
+      # broker-only check would run here once one is owned.
+      - name: Broker-only checks
+        run: Tools/verify.sh --tier broker
+
+# The device tier is deliberately absent. Qualification needs a board, runs on
+# a bench, and is recorded as an evidence record under docs/evidence/. CI never
+# claims a device result it did not observe.
