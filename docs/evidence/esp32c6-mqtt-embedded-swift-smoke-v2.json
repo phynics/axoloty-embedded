@@ -4,5 +4,6 @@
   "check": "embedded-swift-smoke-v2",
   "status": "unexecuted",
   "recordedAt": "2026-09-17",
-  "reason": "No physical ESP32-C6 board, serial port, ESP-IDF toolchain, or MQTT broker was available in this environment, so the 312-case smoke protocol could not be flashed or run."
+  "reason": "No physical ESP32-C6 board, serial port, ESP-IDF toolchain, or MQTT broker was available in this environment, so the 312-case smoke protocol could not be flashed or run. Axoloty 0.8.1 started a new compatibility cycle on 39e1ec0662f6; this profile has no device evidence for it.",
+  "coreRevision": "39e1ec0662f65f853c7439ca7d636fd579cc4c05"
 }

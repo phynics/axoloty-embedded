@@ -4,5 +4,6 @@
   "check": "firmware-build",
   "status": "unexecuted",
   "recordedAt": "2026-09-17",
-  "reason": "No ESP-IDF toolchain, Swift compiler, ESP32-C6 RISC-V toolchain, or MQTT broker was available in this environment, so the locked-Core firmware build could not be produced or observed."
+  "reason": "No ESP-IDF toolchain, Swift compiler, ESP32-C6 RISC-V toolchain, or MQTT broker was available in this environment, so the locked-Core firmware build could not be produced or observed. Axoloty 0.8.1 started a new compatibility cycle on 39e1ec0662f6; this profile has no device evidence for it.",
+  "coreRevision": "39e1ec0662f65f853c7439ca7d636fd579cc4c05"
 }
