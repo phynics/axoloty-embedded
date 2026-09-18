@@ -79,8 +79,15 @@ wanted() {
 
 if wanted repo; then
     printf '\n== repo: repository invariants\n'
-    if bash Tools/check-invariants.sh; then
-        record PASS repo 'invariants hold'
+    repo_failed=0
+    bash Tools/check-invariants.sh || repo_failed=1
+    # The smoke case set is pinned separately: a validator that expects fewer
+    # cases still reports a clean pass on a board, so nothing downstream can
+    # catch it shrinking.
+    printf '\n== repo: smoke case coverage\n'
+    bash Tools/check-smoke-coverage.sh || repo_failed=1
+    if [ "$repo_failed" -eq 0 ]; then
+        record PASS repo 'invariants hold and the smoke case set matches its baseline'
     else
         record FAIL repo 'see the violations above'
         failed=1

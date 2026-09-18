@@ -52,6 +52,26 @@ pins that set by count and digest, so a future change cannot shrink it quietly.
 A board cannot catch that kind of loss: a board only runs what it is asked to
 run, and a validator that asks for less still reports a clean pass.
 
+## The "312 cases" figure does not match the validator
+
+Issue #1's pass bar, `docs/embedded-consumer-contract.md`, and the 0.8.0 release
+notes all say the smoke run passes **312 deterministic cases**. The validator
+does not count to 312 anywhere.
+
+`Platforms/esp32c6-idf/tools/validate-smoke.mjs` decides a pass by matching
+observed case IDs against `expectedSmokeTests` (22) and `expectedVectorTests`
+(56): **78 unique case IDs**. The literal `312` appears in prose only, never in
+the harness, and the pre-split validator counted the same 78.
+
+So this is not a migration defect — the count is unchanged by the move. It is a
+pre-existing mismatch between the documented bar and the enforced one. It
+matters at sign-off: a hardware run that satisfies the validator proves 78 case
+IDs, and recording that as "312/312 passed" would be a claim nothing checked.
+
+Reconcile before anyone signs off a device run: either the prose counts
+something else the validator does not enforce (records or stages rather than
+case IDs), or one of the two numbers is wrong. Do not assume which.
+
 ## What is still unproven
 
 Proving the corpus and the case set is not proving the firmware. These need a
