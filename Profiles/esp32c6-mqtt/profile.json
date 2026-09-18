@@ -3,5 +3,6 @@
   "application": "device-smoke-agent",
   "platform": "esp32c6-idf",
   "transport": "mqtt-espidf",
+  "board": "ESP32-C6-DevKitC-1",
   "core": { "revision": "7d0a65287d35af571db88e616d0b5cbb3c9f8625" }
 }

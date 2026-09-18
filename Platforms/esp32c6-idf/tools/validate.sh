@@ -50,6 +50,8 @@ mkdir -p "$evidence_dir"
 # The single supported preparation entry point. It writes
 # <scratch>/core-preparation.json and prints the path.
 AXOLOTY_SOURCE_DIR=${AXOLOTY_SOURCE_DIR:-} AXOLOTY_SCRATCH="$scratch" \
+    AXOLOTY_STRICT_CORE=${AXOLOTY_STRICT_CORE:-} \
+    AXOLOTY_PREVIEW_CORE_REVISION=${AXOLOTY_PREVIEW_CORE_REVISION:-} \
     "$repo_root/Tools/prepare-core.sh" > "$evidence_dir/consumer-preparation.stdout"
 cp "$source_report" "$preparation"
 

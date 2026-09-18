@@ -46,7 +46,8 @@ mkdir -p "$build_dir" "$evidence_dir" "$proof_root"
 # A retried build must not inherit a prior artifact, provenance record, or
 # generated ESP-IDF project. Clearing them prevents a failed retry from being
 # mistaken for a successful build.
-rm -f "$evidence_dir/build-provenance.json" "$evidence_dir/axoloty-swift.bin"
+rm -f "$evidence_dir/build-provenance.json" "$evidence_dir/axoloty-swift.bin" \
+    "$evidence_dir/release-manifest.json"
 rm -rf "$build_project_dir"
 mkdir -p "$build_project_dir"
 rm -f "$build_dir/flash_args" "$build_dir/axoloty-swift.bin"
@@ -105,6 +106,16 @@ cp "$artifact" "$evidence_dir/axoloty-swift.bin"
 node "$script_dir/write-provenance.mjs" \
     "$report" "$artifact" "$evidence_dir/build-provenance.json" \
     "$repo_root" "$build_dir" "$clean_room"
+
+if [ -z "${AXOLOTY_PROFILE_DIR:-}" ]; then
+    echo "error: AXOLOTY_PROFILE_DIR must name the selected profile; build through Profiles/<name>/build.sh" >&2
+    exit 64
+fi
+# The release manifest is produced by the build, from the same report and
+# provenance the build just wrote. The release path re-runs this after
+# qualification so the manifest also carries the device evidence.
+"$script_dir/write-release-manifest.sh" "$AXOLOTY_PROFILE_DIR"
+
 echo "Firmware build passed"
 echo "  artifact: $artifact"
 echo "  provenance: $evidence_dir/build-provenance.json"
