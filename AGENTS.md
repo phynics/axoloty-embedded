@@ -1,5 +1,18 @@
 # axoloty-embedded instructions
 
+## Related repositories
+
+[`phynics/axoloty`](https://github.com/phynics/axoloty) is Core. It owns the
+portable wire, object model, protocol, Coaty models, and static runtime, the
+[embedded consumer contract](https://github.com/phynics/axoloty/blob/main/docs/embedded-consumer-contract.md)
+this repository consumes, and the hardware-free gates that prove those
+packages stay Embedded-Swift compatible. Its
+[`AGENTS.md`](https://github.com/phynics/axoloty/blob/main/AGENTS.md) governs
+changes there.
+
+This repository owns concrete firmware. The split is tracked by
+[phynics/axoloty#845](https://github.com/phynics/axoloty/issues/845).
+
 ## Jurisdiction
 
 This guide applies to the whole repository. It is the contributor policy for
@@ -11,9 +24,9 @@ governs the Core checkout and does not apply to files here.
 This repository owns applications, platform and SDK integration, embedded
 transport backends, profiles, device qualification, and firmware releases.
 
-Axoloty owns the portable wire, object model, protocol, Coaty models, and
-static runtime, plus the Embedded-Swift compatibility contract and its
-hardware-free gates.
+[Axoloty](https://github.com/phynics/axoloty) owns the portable wire, object
+model, protocol, Coaty models, and static runtime, plus the Embedded-Swift
+compatibility contract and its hardware-free gates.
 
 A change that alters protocol semantics, wire format, or portable runtime
 behavior belongs in `phynics/axoloty`, not here. Open it there and raise the
