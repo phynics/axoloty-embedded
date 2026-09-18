@@ -1,0 +1,10 @@
+{
+  "name": "esp32c6-zenoh",
+  "application": "device-smoke-agent",
+  "platform": "esp32c6-idf",
+  "transport": "zenoh-pico",
+  "board": "ESP32-C6-DevKitC-1",
+  "core": {
+    "revision": "39e1ec0662f65f853c7439ca7d636fd579cc4c05"
+  }
+}

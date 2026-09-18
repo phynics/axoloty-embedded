@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "profile": "esp32c6-zenoh",
+  "check": "embedded-zenoh-smoke",
+  "status": "unexecuted",
+  "recordedAt": "2026-09-18",
+  "coreRevision": "39e1ec0662f65f853c7439ca7d636fd579cc4c05",
+  "reason": "No physical ESP32-C6 board, serial port, ESP-IDF toolchain, or reachable Zenoh router was available in this environment. The device smoke protocol and the Zenoh network scenario are owned by the proposed qualification issue; no Zenoh firmware image exists yet. This record carries the gate forward until a board and the zenoh-pico backend exist."
+}

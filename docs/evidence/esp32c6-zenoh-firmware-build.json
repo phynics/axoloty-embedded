@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "profile": "esp32c6-zenoh",
+  "check": "firmware-build",
+  "status": "unexecuted",
+  "recordedAt": "2026-09-18",
+  "coreRevision": "39e1ec0662f65f853c7439ca7d636fd579cc4c05",
+  "reason": "No ESP-IDF toolchain, Swift compiler, RISC-V toolchain, or zenoh-pico checkout was available in this environment, so the esp32c6-zenoh firmware image could not be built or observed. The platform main component now selects transport sources declaratively, but the zenoh-pico backend implementing the axoloty_zenoh_* carrier seam and the application's carrier-probe seam are not implemented yet, so a linkable image does not exist."
+}

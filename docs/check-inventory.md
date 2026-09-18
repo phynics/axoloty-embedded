@@ -166,3 +166,33 @@ committed, so there is no record whose original status could be preserved under
 `importedFrom`. The embedded *documentation* is imported with provenance; the
 absence of an importable evidence record is recorded in
 [migration-discoveries.md](./migration-discoveries.md).
+
+## 6. Embedded Zenoh (issue #4)
+
+Source: the Zenoh tickets re-scoped by [axoloty#853], under epic
+[axoloty#796]. These are new embedded-owned checks, not file moves; the
+already-landed skeleton and the proposed replacement issues are named per row.
+The classification rule in section 0 is unchanged: a check that needs a board,
+a broker, or proves firmware-image behavior is ours; a portable Core property
+stays in Axoloty.
+
+| Check | Where defined today | What it proves | Disposition | Where it lands | Confidence |
+|---|---|---|---|---|---|
+| `zenoh-host-seam` | New in this repository (`Transports/zenoh-pico/main/EmbeddedZenohClient.swift` + `Tests/embedded/zenoh-host-test.swift`) | The bounded client enforces operation order and the 256/2048 bounds before the carrier C seam | **Landed** (tier `build`). Landed shape; the run is `unexecuted` here because no host compiler is available | `Tests/embedded/run-zenoh-host-test.sh` | certain on shape; run unexecuted |
+| zenoh-pico compile and C-only pub/sub | Axoloty #797, embedded half | The pinned `zenoh-pico 1.10.0` compiles for `esp32c6` and a C-only round trip runs | MOVE TO AXOLOTY-EMBEDDED | Proposed **ZP-1**; tiers `build` + `device` | certain on disposition |
+| zenoh-pico backend conformance | Axoloty #805, embedded half | The pico backend satisfies the same facade suite as `zenoh-c`, with divergence documented | MOVE TO AXOLOTY-EMBEDDED | Proposed **ZP-2**; tiers `build` + `device` | certain |
+| pinned zenoh-pico ESP-IDF component | Axoloty #813 | A pinned `zenoh-pico` builds through `idf.py` with only the required features | MOVE TO AXOLOTY-EMBEDDED | `Platforms/esp32c6-idf/components/zenoh_pico/` (pin and unverified wrapper landed), completed by **ZP-3** | certain |
+| zenoh-pico backend of the facade | Axoloty #814 | The pico backend implements the `axoloty_zenoh_*` carrier seam | MOVE TO AXOLOTY-EMBEDDED | `Transports/zenoh-pico/` carrier seam (skeleton) + **ZP-4** | certain |
+| `EmbeddedZenohClient` | Axoloty #815 | open/subscribe/publish/poll/unsubscribe/close in the `EmbeddedMQTTClient` style | MOVE TO AXOLOTY-EMBEDDED | `Transports/zenoh-pico/main/EmbeddedZenohClient.swift` (skeleton landed) + **ZP-5** | certain |
+| static runtime integration | Axoloty #816 | MQTT Embedded and Zenoh Embedded invoke identical `AxolotyProtocol` code paths | MOVE TO AXOLOTY-EMBEDDED | Proposed **ZP-6**; tier `device` | certain |
+| embedded route subscriptions | Axoloty #817 | The two bounded route shapes install over Zenoh and match the host | MOVE TO AXOLOTY-EMBEDDED | Proposed **ZP-7**; tier `device` | certain |
+| ESP32-C6 Zenoh hardware qualification | Axoloty #818 | Boot/session/pub-sub/reconnect/saturation/resource gate with enforced thresholds | MOVE TO AXOLOTY-EMBEDDED | Proposed **ZP-8**; tier `device` | certain |
+
+Not done here, named rather than stubbed: the pico backend, the completed
+component wrapper, the application carrier seam, embedded route wiring, and any
+device or resource run. The exact proposed issue titles and bodies are in
+[proposed-issues.md](./proposed-issues.md). The pin and its source are in
+[zenoh-embedded.md](./zenoh-embedded.md).
+
+[axoloty#853]: https://github.com/phynics/axoloty/issues/853
+[axoloty#796]: https://github.com/phynics/axoloty/issues/796
