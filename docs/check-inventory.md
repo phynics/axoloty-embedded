@@ -51,7 +51,7 @@ Source: `phynics/axoloty` `Makefile` targets and the scripts they invoke.
 | `embedded-device-info` | `Tests/Support/embedded/embedded-device-info.sh` | Chip model, MAC, flash size, toolchain versions, and serial identity are recorded | MOVE TO AXOLOTY-EMBEDDED | **Landed** as a diagnostic: `Tests/embedded/run-device-info-test.sh` records the unit through `Platforms/esp32c6-idf/tools/write-device-manifest.mjs`, and the raw log carries the flash id and toolchain versions. It writes no evidence record because it drives no protocol and cannot fail | certain |
 | `embedded-device-smoke` | `Makefile` → `Tests/Support/embedded/embedded-device-smoke.sh` | The legacy C smoke image boots and prints `AXOLOTY_SMOKE_OK` | SUPERSEDE/DELETE | Superseded by the Embedded Swift smoke (`embedded-swift-flash` / `qualify.sh`); the C `Embedded/main` app is not part of the migrated product | certain |
 | `embedded-reproducible-build` | `Makefile` → `Tests/Support/embedded/embedded-reproducible-build.sh` | The C smoke `axoloty-smoke.bin` rebuilds bit-identically | SUPERSEDE/DELETE | Superseded by `embedded-swift-reproducible-build` (`axoloty-swift.bin`) | certain |
-| `check-benchmark-wire-device` | `Makefile` → `Tests/Support/checks/check-benchmark-wire-device.sh` | On-device wire benchmark timing and size report using `Embedded/benchmark` | MOVE TO AXOLOTY-EMBEDDED | **Unmigrated**: the C benchmark firmware did not move in #1 (note B) | certain on disposition |
+| `check-benchmark-wire-device` | `Tests/Support/checks/check-benchmark-wire-device.sh` | On-device wire benchmark timing and size report | MOVE TO AXOLOTY-EMBEDDED | **Landed**: firmware at `Platforms/esp32c6-idf/benchmark/`, runner `Tests/embedded/run-benchmark-wire-device.sh` | certain |
 | `embedded-consumer-proof-{build,flash,validate}` (+ `embedded-external-consumer-*` adapters) | `Makefile` | External-consumer GO proof on a clean sparse Core + firmware archive, ending in a flashed device run | MOVE TO AXOLOTY-EMBEDDED | **Unmigrated**: a cross-repo release-proof lifecycle that #1 deliberately did not move (note A) | certain on disposition |
 
 ## 2. `Tests/Support/embedded/` support scripts
@@ -104,7 +104,7 @@ Source: `phynics/axoloty` `Makefile` targets and the scripts they invoke.
 | `g3-object-model-evidence-host` / `-sanitized` | `Spikes/BoundedObjectModelEvidence/check-{host,sanitized}.sh` | Portable object-model boundedness | KEEP/REWRITE IN AXOLOTY | Stays; hardware-free | certain |
 | `g3-object-model-evidence-embedded` | `Spikes/BoundedObjectModelEvidence/check-embedded.sh` | Core object-model sources compile/link into a firmware image and their section sizes are recorded | KEEP/REWRITE IN AXOLOTY | Stays; hardware-free (build-only, explicitly not run on device) | moderate — same shape as G1-embedded |
 | `g6-resource-evidence` | `Tests/Support/checks/check-g6-resource-evidence.sh` + `Tests/Support/evidence/validate-g6-resource-evidence.mjs` | Host+device sustained resource budgets at the exact Core commit, with power-cycle runs | MOVE TO AXOLOTY-EMBEDDED | **Unmigrated**: needs a device and re-homes Core's version/subject semantics; see note C | moderate — see note C |
-| `embedded-benchmark` device measurement | `Embedded/benchmark/` + `check-benchmark-wire-device.sh` | On-device wire throughput/size | MOVE TO AXOLOTY-EMBEDDED | Unmigrated (note B) | certain |
+| `embedded-benchmark` device measurement | `Platforms/esp32c6-idf/benchmark/` + `Tests/embedded/run-benchmark-wire-device.sh` | On-device wire throughput/size | MOVE TO AXOLOTY-EMBEDDED | Landed. `Platforms/*/benchmark/` is exempt from the platform protocol-rule scan because the fixture is not linked into any image | certain |
 
 ## 5. Documentation
 
@@ -147,8 +147,11 @@ silent:
   into file-shape assertions. The firmware support they exercise
   (`CarrierNetworkProbe`, `network_bootstrap.c` scenario bits) **did** move in
   #1; only the harnesses remain in Axoloty.
-- **Note B — device benchmark firmware.** `Embedded/benchmark/` (C) never moved.
-  Its checks move with it; the firmware is a separate migration.
+- **Note B — device benchmark firmware.** Landed: the C firmware is at
+  `Platforms/esp32c6-idf/benchmark/` and its runner at
+  `Tests/embedded/run-benchmark-wire-device.sh`. The fixture is exempt from the
+  platform protocol-rule scan because it is a measurement, not platform
+  integration, and is never linked into a firmware image.
 - **Note C — G1/G3/G6 device producers.** These measure a *portable Core*
   property. Their hardware-free variants stay in Axoloty. Their device variants
   need a board, which contradicts "Core checks remain hardware-free", and the
