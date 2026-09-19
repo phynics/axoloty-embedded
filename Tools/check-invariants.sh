@@ -139,7 +139,10 @@ fi
 
 if [ -n "$core_dir" ] && [ -d "$core_dir/Packages" ]; then
     core_names="$(find "$core_dir/Packages" -name '*.swift' -type f -printf '%f\n' 2>/dev/null | sort -u)"
-    local_names="$(tracked '*.swift' | xargs -r -n1 basename 2>/dev/null | sort -u)"
+    # `Package.swift` is a manifest, not portable source. Core's per-package
+    # manifests share the name with this repository's host-peer manifest, and
+    # a name collision there says nothing about copied source.
+    local_names="$(tracked '*.swift' | grep -vE '(^|/)Package\.swift$' | xargs -r -n1 basename 2>/dev/null | sort -u)"
     collisions="$(comm -12 <(echo "$core_names") <(echo "$local_names") 2>/dev/null || true)"
     if [ -n "$collisions" ]; then
         fail core-copy "these filenames also exist in portable Core, which suggests copied source: $(echo "$collisions" | tr '\n' ' ')"
