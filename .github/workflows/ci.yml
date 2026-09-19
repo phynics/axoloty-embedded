@@ -34,12 +34,20 @@ jobs:
     name: Locked Core preparation
     runs-on: ubuntu-latest
     needs: repo
+    env:
+      # Axoloty's tooling selects its Linux execution context from this
+      # variable. Unset, it takes its host path and preparation fails with a
+      # misleading canonical-checkout error; prepare-core.sh refuses rather
+      # than let that happen. See docs/container-builds.md section 1.
+      AXOLOTY_DEVCONTAINER: "1"
     steps:
       - uses: actions/checkout@v4
 
+      # The Core manifests are swift-tools-version 6.3, so the toolchain the
+      # tool builds with must be at least that.
       - uses: swift-actions/setup-swift@v2
         with:
-          swift-version: '6.1'
+          swift-version: '6.3'
 
       # CI sets CI, so prepare-core.sh is strict by default: a dirty or
       # off-lock Core checkout is an error here, never a warning.
