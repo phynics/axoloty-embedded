@@ -266,6 +266,20 @@ struct StaticDeviceAgent: ~Copyable {
         let actorId = agentId == Self.agentAId ? Self.actorAId : Self.actorBId
         return processor.copyActorRoute(actorId: actorId, to: output, capacity: capacity)
     }
+
+    /// Clears transport-local processor state before a live carrier scenario.
+    ///
+    /// The offline smoke vectors and the live exchange share these static agent
+    /// values. A vector leaves its Discover correlation in a non-free pending
+    /// slot, and `ProtocolProcessor` refuses to reuse a correlation id held by a
+    /// non-free slot, so the exchange's fixed `phase4Correlation` would never
+    /// start a Discover. Resetting the transport-local ledger isolates the
+    /// scenario without discarding local advertisement identities.
+    mutating func resetTransportState() {
+        processor.resetTransport()
+        hasAdvertisedPeer = false
+        actionSink.removeAll()
+    }
 }
 
 private let phase4Correlation = UUID16(bytes: (
@@ -282,6 +296,15 @@ private var phase4AgentB = StaticDeviceAgent(
     agentId: StaticDeviceAgent.agentBId,
     deviceObjectId: StaticDeviceAgent.objectBId
 )
+
+/// Resets both static device agents before the live carrier exchange runs.
+///
+/// The exchange is a separate scenario from the offline vectors that preceded
+/// it in the same image; it must not inherit their pending request ledger.
+func resetStaticDeviceAgents() {
+    phase4AgentA.resetTransportState()
+    phase4AgentB.resetTransportState()
+}
 
 @inline(__always)
 func phase4NowMS() -> UInt32 {

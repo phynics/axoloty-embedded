@@ -603,6 +603,10 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
             )
         } else {
             emittingExchangeEvidence = true
+            // The offline vectors above share these static agents and leave a
+            // non-free Discover correlation behind; clear that transport-local
+            // state so the live exchange starts from a clean request ledger.
+            resetStaticDeviceAgents()
             let agentFilter: StaticString = "coaty/3/axoloty-embedded/#"
             let exchangeBits = seam.agentTest(
                 90_000,
