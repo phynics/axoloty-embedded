@@ -32,6 +32,22 @@ export const expectedLastWillTests = new Set([
   "exchange:disconnect",
 ]);
 
+// The broker-restart scenario adds a third MQTT connect after the broker is
+// stopped and restarted, then runs the full exchange.
+export const expectedBrokerRestartTests = new Set([
+  "exchange:wifi",
+  "exchange:ip",
+  "exchange:mqttConnect",
+  "exchange:subscribe",
+  "exchange:reconnect",
+  "exchange:brokerReconnect",
+  "exchange:advertise",
+  "exchange:discover",
+  "exchange:resolve",
+  "exchange:deadvertise",
+  "exchange:disconnect",
+]);
+
 /** Creates the strict validator for one participant in the two-device exchange. */
 export function createEmbeddedAgentValidator(expectedTests = expectedAgentTests) {
   return createEmbeddedSwiftSmokeValidator(expectedTests);

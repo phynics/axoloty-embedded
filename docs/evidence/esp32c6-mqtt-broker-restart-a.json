@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "profile": "esp32c6-mqtt",
+  "check": "broker-restart",
+  "tier": "device",
+  "status": "passed",
+  "recordedAt": "2026-09-19",
+  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8",
+  "firmwareSHA256": "a884a313723c7467ebf5ad5510e2131eb9dd535c1d8ca41c39b66a02c4884422",
+  "coreRevision": "827e598f3d97c5e2e7986d7be4ba1d9a5eac7906",
+  "protocol": "11 deterministic broker-restart cases over serial JSON Lines",
+  "result": "11/11 passed"
+}
