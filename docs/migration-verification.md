@@ -52,41 +52,44 @@ pins that set by count and digest, so a future change cannot shrink it quietly.
 A board cannot catch that kind of loss: a board only runs what it is asked to
 run, and a validator that asks for less still reports a clean pass.
 
-## The "312 cases" figure does not match the validator
+## The "312 cases" figure is right (corrected 2026-09-19)
 
-Issue #1's pass bar, `docs/embedded-consumer-contract.md`, and the 0.8.0 release
-notes all say the smoke run passes **312 deterministic cases**. The validator
-does not count to 312 anywhere.
+An earlier review compared only `expectedSmokeTests` (22) and
+`expectedVectorTests` (56) and concluded the validator enforced 78 case IDs
+while the prose claimed 312. That count was incomplete.
+`Platforms/esp32c6-idf/tools/validate-smoke.mjs` builds
+`expectedEmbeddedSwiftTests` from those two sets **plus every corpus case
+crossed with six corpus operations**: 22 + 56 + 39 × 6 = **312**, and that is
+the set the device validator enforces.
 
-`Platforms/esp32c6-idf/tools/validate-smoke.mjs` decides a pass by matching
-observed case IDs against `expectedSmokeTests` (22) and `expectedVectorTests`
-(56): **78 unique case IDs**. The literal `312` appears in prose only, never in
-the harness, and the pre-split validator counted the same 78.
+The first device run (2026-09-19, Axoloty 0.8.2) validated 312/312 case IDs on
+an ESP32-C6, matching the documented bar. `Tools/check-smoke-coverage.sh` had
+pinned only the two named sets; it now pins all 312 IDs, so the corpus subset
+cannot shrink silently either. The evidence record carries the validator's own
+count.
 
-So this is not a migration defect — the count is unchanged by the move. It is a
-pre-existing mismatch between the documented bar and the enforced one. It
-matters at sign-off: a hardware run that satisfies the validator proves 78 case
-IDs, and recording that as "312/312 passed" would be a claim nothing checked.
+## What the device run proved, and what is still unproven
 
-Reconcile before anyone signs off a device run: either the prose counts
-something else the validator does not enforce (records or stages rather than
-case IDs), or one of the two numbers is wrong. Do not assume which.
+The first device run (2026-09-19, ESP32-C6 QFN40 revision v0.0, MAC
+`40:4c:ca:4d:8c:e8`, Axoloty 0.8.2) resolved the execution questions:
 
-## What is still unproven
+- the migrated CMake configures and compiles;
+- the `@convention(c)` conversions in
+  `Platforms/esp32c6-idf/main/Esp32c6SmokeSeam.swift` compile and call
+  correctly, and `idf_component_register` accepts the absolute transport
+  source path;
+- the image boots and passes the 312-case smoke protocol on hardware;
+- the flashed artifact is the reproducible `7a2780…` image at the locked
+  revision.
 
-Proving the corpus and the case set is not proving the firmware. These need a
-toolchain and a board, and no amount of inspection substitutes:
+Still unproven, because this image carries no compiled network configuration
+and the smoke run is serial-only:
 
-- that the migrated CMake configures and compiles at all;
-- that the `@convention(c)` closure conversions in
-  `Platforms/esp32c6-idf/main/Esp32c6SmokeSeam.swift` compile and call correctly;
-- that `idf_component_register` accepts the absolute transport source path
-  `${AXOLOTY_TRANSPORT_DIR}/main/mqtt_event_validation.c`;
-- that the image boots, connects, and passes the smoke protocol on hardware;
-- that MQTT last-will, reconnect, and broker-restart behavior survived the move.
+- MQTT connect, last-will, reconnect, and broker-restart behavior;
+- the role-config and host-interop harnesses that verify those paths, which
+  remain unmigrated (`docs/check-inventory.md`, note A).
 
-Until a board runs them, the migration is well-evidenced in its data and
-unproven in its execution. Say it that way; do not round it up.
+Do not round the serial pass up into an MQTT claim.
 
 ## Pinned defaults that keep behavior identical
 

@@ -1,12 +1,26 @@
 # Handoff: qualifying esp32c6-mqtt on a real board
 
-Everything in this repository up to and including the firmware image has been
-verified. The one thing that has not, and cannot be here, is the device.
+This runbook was executed for the first time on 2026-09-19 and the profile is
+now qualified. Keep it for the next board and for the next lock raise: the
+procedure below is unchanged and still takes about twenty minutes.
 
-This document is for whoever has an ESP32-C6 plugged in. Follow it top to
-bottom; it should take about twenty minutes, most of it the build.
+## Result of the first run (2026-09-19)
 
-## What is already proven, and what is not
+| | |
+|---|---|
+| Unit | ESP32-C6 (QFN40) revision v0.0, MAC `40:4c:ca:4d:8c:e8` |
+| Firmware | `7a2780258888c8bd52034d3de6397de38a958cbc09ad6f693c605519d743a8e3`, 749456 bytes |
+| Core | Axoloty 0.8.2, `827e598f3d97c5e2e7986d7be4ba1d9a5eac7906` |
+| Smoke protocol | `embedded-swift-smoke-v2`, 312/312 case IDs passed over serial JSON Lines |
+| Evidence | `docs/evidence/esp32c6-mqtt-embedded-swift-smoke-v2.json` |
+| Profile qualification | **qualified** at the build and device tiers |
+
+The smoke run is serial-only: this image carries no compiled network
+configuration, so MQTT connect, last-will, reconnect, and broker-restart
+behavior are not covered by this run. The role-config device harnesses that
+would cover them are still unmigrated (see `docs/check-inventory.md`, note A).
+
+## What is proven at build tier
 
 | | |
 |---|---|
@@ -15,11 +29,6 @@ bottom; it should take about twenty minutes, most of it the build.
 | Image size | 749456 bytes |
 | Core revision | `827e598f3d97c5e2e7986d7be4ba1d9a5eac7906` (Axoloty 0.8.2) |
 | Toolchain | `axoloty-dev:latest` — Swift 6.3.3, ESP-IDF v5.4 |
-| Flashed and smoke-tested | **no** — no board was ever attached |
-| Profile qualification | **unqualified**, and the release manifest says so itself |
-
-A container produces an image. It cannot flash one. That is the entire reason
-this handoff exists.
 
 ## Before you start
 
@@ -77,6 +86,21 @@ Use the stable `by-id` path, not `/dev/ttyUSB0`, which renumbers. Export it:
 export PORT=/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_XX-XX
 ```
 
+For the `--device` flag, pass the **resolved node**, not the `by-id` symlink:
+the symbolic name contains the MAC's colons, and `docker run --device` parses
+colons as its `host:container:mode` separator, so it silently truncates the
+path and reports `stat ...: no such file or directory` for the prefix.
+
+```bash
+export DEVICE_NODE=$(readlink -f "$PORT")   # e.g. /dev/ttyACM0
+```
+
+On a rootless runtime the node may appear inside the container owned by an
+unmapped gid, and `--group-add dialout` cannot help because that gid is not
+mapped. `podman run --group-add keep-groups` maps the invoking user's
+supplementary groups instead, which is how the first run was flashed. Use the
+runtime that can open the port; the firmware tooling does not care which.
+
 `flash.sh` reads the chip and **refuses a board that is not an ESP32-C6**. It
 never guesses a port.
 
@@ -122,7 +146,7 @@ provenance the build wrote, so they must share `AXOLOTY_SCRATCH`.
 ```bash
 docker run --rm \
   --user "$(id -u):$(id -g)" \
-  --device "$PORT" \
+  --device "$DEVICE_NODE" \
   --group-add "$(getent group dialout | cut -d: -f3)" \
   -v ~/axemb:/workspace -v ~/axcore:/core -v ~/axhome:/tmp/h \
   -w /workspace \
@@ -131,7 +155,7 @@ docker run --rm \
   -e AXOLOTY_SOURCE_DIR=/core \
   -e AXOLOTY_SCRATCH=/tmp/h/scratch \
   -e AXOLOTY_PROOF_RUN_ID=device-qual-1 \
-  -e AXOLOTY_DEVICE_PORT="$PORT" \
+  -e AXOLOTY_DEVICE_PORT="$DEVICE_NODE" \
   -e AXOLOTY_MQTT_HOST=<broker-host> \
   axoloty-dev:latest \
   bash -lc 'Profiles/esp32c6-mqtt/qualify.sh'
@@ -166,21 +190,20 @@ Then a release becomes possible: `Tools/release.sh --profile esp32c6-mqtt`
 refuses to produce one from a build whose `build` or `device` tier reported
 `SKIP`, so until step 3 passes, there is nothing to release.
 
-## Please read this before recording a pass
+## The case count (resolved 2026-09-19)
 
-**The case count does not reconcile, and it matters here more than anywhere.**
+An earlier review counted `expectedSmokeTests` (22) plus `expectedVectorTests`
+(56) and concluded the validator enforced 78 case IDs while the prose claimed
+312. That count missed the third contribution: `expectedEmbeddedSwiftTests`
+adds every corpus case crossed with six corpus operations, so the enforced set
+is 22 + 56 + 39 × 6 = **312**, and that is what the first device run
+validated.
 
-The issue's pass bar, `docs/embedded-consumer-contract.md`, and the 0.8.0
-release notes all say **312 deterministic cases**. The validator enforces **78
-unique case IDs** — 22 smoke plus 56 vector. The literal `312` appears in prose
-only, never in the harness, and the pre-split validator counted the same 78, so
-the migration did not cause this.
+`Tools/check-smoke-coverage.sh` used to pin only the two named sets. It now
+pins all 312 IDs, so the corpus subset cannot shrink silently either.
 
-`qualify.sh` writes whatever the validator actually counted, which is correct
-behaviour. But if your run reports `78/78 passed`, **do not report it as
-"312/312"** and do not treat 78 as a shortfall until someone establishes which
-number is right. One of the two is wrong, and a device run is exactly the wrong
-moment to paper over the difference.
+`qualify.sh` writes whatever the validator counted — 312/312 on this run. Do
+not restate it from prose; copy the number the record carries.
 
 ## If it does not boot
 

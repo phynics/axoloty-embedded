@@ -70,13 +70,17 @@ if (proof.result !== "passed" || proof.smoke?.validation?.passed !== true) {
 }
 const counts = proof.smoke.validation.counts ?? {};
 const passed = Number.isInteger(counts.passed) ? counts.passed : 0;
+const unit = device.chipDescription
+  ? `${device.chipDescription}${device.mac ? `, MAC ${device.mac}` : ""}`
+  : device.device;
 const record = {
   schemaVersion: 1,
   profile: process.env.PROFILE_NAME,
   check: process.env.CHECK_NAME,
+  tier: "device",
   status: "passed",
   recordedAt: new Date().toISOString().slice(0, 10),
-  device: device.device,
+  device: unit,
   firmwareSHA256: proof.firmwareSha256,
   coreRevision: proof.coreSha,
   protocol: `${passed} deterministic cases over serial JSON Lines`,

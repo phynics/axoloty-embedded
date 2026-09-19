@@ -56,6 +56,12 @@ Those fields are what make the claim checkable by someone who was not there.
 `tier` defaults to `device` when absent, because a device claim is the stricter
 one and should never be the accidental default.
 
+`device` names the **unit that ran**, not the port it was attached to.
+`write-device-manifest.mjs` derives it from the probe's chip description and
+MAC (for example `ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:4d:8c:e8`).
+A path such as `/dev/ttyACM0` renumbers and identifies nothing; it belongs in
+the run log, not in the claim.
+
 ## Unexecuted is a legal state
 
 ```json
