@@ -20,7 +20,7 @@
 
 set -eu
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(git -C "$script_dir" rev-parse --show-toplevel)
 lock="$repo_root/Platforms/esp32c6-idf/dependencies/zenoh-pico.lock.json"
 scratch=${AXOLOTY_SCRATCH:-"$repo_root/.axoloty"}

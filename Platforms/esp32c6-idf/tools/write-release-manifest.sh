@@ -14,8 +14,8 @@
 
 set -eu
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-platform_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+platform_dir=$(CDPATH='' cd -- "$script_dir/.." && pwd)
 repo_root=$(git -C "$script_dir" rev-parse --show-toplevel)
 profile_dir=${1:-}
 
@@ -23,7 +23,7 @@ if [ -z "$profile_dir" ] || [ ! -f "$profile_dir/profile.json" ]; then
     echo "error: usage: write-release-manifest.sh <profile-dir>" >&2
     exit 64
 fi
-profile_dir=$(CDPATH= cd -- "$profile_dir" && pwd)
+profile_dir=$(CDPATH='' cd -- "$profile_dir" && pwd)
 
 scratch=${AXOLOTY_SCRATCH:-"$repo_root/.axoloty"}
 proof_root=${EMBEDDED_PROOF_ROOT:-"$scratch/firmware"}

@@ -14,7 +14,7 @@
 
 set -eu
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(git -C "$script_dir" rev-parse --show-toplevel)
 platform_main="$repo_root/Platforms/esp32c6-idf/main"
 transport_main="$repo_root/Transports/mqtt-espidf/main"

@@ -14,8 +14,8 @@
 
 set -eu
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-platform_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+platform_dir=$(CDPATH='' cd -- "$script_dir/.." && pwd)
 repo_root=$(git -C "$script_dir" rev-parse --show-toplevel)
 
 if [ -z "${AXOLOTY_APPLICATION_DIR:-}" ] || [ ! -d "$AXOLOTY_APPLICATION_DIR" ]; then
