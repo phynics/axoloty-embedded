@@ -61,6 +61,20 @@ report=$(realpath -e -- "$evidence_dir/preparation.json")
 # original repository for provenance checks.
 cp -a "$platform_dir/." "$build_project_dir/"
 
+# Operator network configuration is a private build input: SSID, password,
+# broker host, role, and scenario live in a generated header, never in the
+# repository. The caller (a device-test harness) generates it into scratch
+# and names it here; the platform copies it into the project it just built.
+# Absent, the firmware compiles with AXOLOTY_NETWORK_CONFIGURED 0.
+if [ -n "${AXOLOTY_NETWORK_CONFIG_HEADER:-}" ]; then
+    if [ ! -f "$AXOLOTY_NETWORK_CONFIG_HEADER" ]; then
+        echo "error: AXOLOTY_NETWORK_CONFIG_HEADER is not a file: $AXOLOTY_NETWORK_CONFIG_HEADER" >&2
+        exit 64
+    fi
+    cp "$AXOLOTY_NETWORK_CONFIG_HEADER" "$build_project_dir/main/axoloty_network_config.h"
+    echo "network config: private header injected into the build project"
+fi
+
 idf_path=${IDF_PATH:-/opt/esp/idf}
 if [ ! -f "$idf_path/export.sh" ]; then
     echo "error: ESP-IDF export script is unavailable: $idf_path/export.sh" >&2

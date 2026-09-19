@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const schemaVersion = 2;
 export const expectedRunId = "embedded-swift-smoke-v2";
@@ -208,13 +208,28 @@ export function createEmbeddedSwiftTestValidator() {
   return createEmbeddedSwiftSmokeValidator(expectedEmbeddedSwiftTests);
 }
 
-function runCLI() {
+async function runCLI() {
   const [logPath, resultPath, device = "unknown", deadline = "0"] = process.argv.slice(2);
   if (!logPath || !resultPath) {
     console.error("usage: validate-smoke.mjs serial-log result-json [device] [deadline-seconds]");
     process.exit(64);
   }
-  const validator = createEmbeddedSwiftTestValidator();
+  // Device harnesses select a stricter validator: the corpus set plus the
+  // records their firmware configuration makes it emit. Default is the
+  // standard smoke validator.
+  const validatorPath = process.env.EMBEDDED_VALIDATOR;
+  const factoryName = process.env.EMBEDDED_VALIDATOR_FACTORY || "createEmbeddedSwiftTestValidator";
+  let validator;
+  if (validatorPath) {
+    const module = await import(pathToFileURL(path.resolve(validatorPath)).href);
+    const factory = module[factoryName];
+    if (typeof factory !== "function") {
+      throw new Error(`validator module ${validatorPath} does not export ${factoryName}`);
+    }
+    validator = factory();
+  } else {
+    validator = createEmbeddedSwiftTestValidator();
+  }
   const lines = fs.readFileSync(logPath, "utf8").split(/\r?\n/);
   for (const rawLine of lines) {
     const start = rawLine.indexOf("{");
@@ -240,4 +255,9 @@ function runCLI() {
   if (!validation.passed) process.exitCode = 1;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) runCLI();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  runCLI().catch(error => {
+    console.error(`validate-smoke: ${error.message}`);
+    process.exit(1);
+  });
+}

@@ -1,0 +1,47 @@
+// Copyright (c) 2026 Atakan DULKER. Licensed under the MIT License.
+
+// Write one device evidence record from a completed proof. Every field is
+// computed from what the run observed; a failed proof refuses to write.
+
+import fs from "node:fs";
+import path from "node:path";
+
+const proofPath = process.env.PROOF;
+const devicePath = process.env.DEVICE_MANIFEST;
+const outputPath = process.env.EVIDENCE_OUT;
+const profile = process.env.PROFILE_NAME;
+const check = process.env.CHECK_NAME;
+const cases = process.env.CASES || "deterministic cases over serial JSON Lines";
+if (![proofPath, devicePath, outputPath, profile, check].every(Boolean)) {
+  console.error("PROOF, DEVICE_MANIFEST, EVIDENCE_OUT, PROFILE_NAME, and CHECK_NAME are required");
+  process.exit(64);
+}
+
+const proof = JSON.parse(fs.readFileSync(proofPath, "utf8"));
+const device = JSON.parse(fs.readFileSync(devicePath, "utf8"));
+if (proof.result !== "passed" || proof.smoke?.validation?.passed !== true) {
+  throw new Error("refusing to write device evidence from a failed proof");
+}
+const counts = proof.smoke.validation.counts ?? {};
+const passed = Number.isInteger(counts.passed) ? counts.passed : 0;
+const unit = device.chipDescription
+  ? `${device.chipDescription}${device.mac ? `, MAC ${device.mac}` : ""}`
+  : device.device;
+const record = {
+  schemaVersion: 1,
+  profile,
+  check,
+  tier: "device",
+  status: "passed",
+  recordedAt: new Date().toISOString().slice(0, 10),
+  device: unit,
+  firmwareSHA256: proof.firmwareSha256,
+  coreRevision: proof.coreSha,
+  protocol: `${passed} ${cases}`,
+  result: `${passed}/${passed} passed`,
+};
+const temporary = `${outputPath}.tmp-${process.pid}`;
+fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+fs.writeFileSync(temporary, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o644 });
+fs.renameSync(temporary, outputPath);
+console.log(`device evidence written: ${outputPath}`);
