@@ -379,11 +379,24 @@ for field in ("profile", "check", "recordedAt"):
     if not record.get(field):
         problems.append("%s: %s is required" % (path, field))
 
+tier = record.get("tier")
+if tier not in {"build", "device", None}:
+    problems.append("%s: tier must be build or device when present, found %r" % (path, tier))
+
 if status in {"passed", "failed"}:
-    # An executed claim names what ran it and what it ran.
-    for field in ("device", "firmwareSHA256", "coreRevision", "protocol", "result"):
+    # An executed claim names what ran it and what it ran. A build runs in a
+    # container and has no device; a device run must name the board and the
+    # protocol it drove. Requiring the device fields of a build record made an
+    # honest passed build unrepresentable.
+    required = ["firmwareSHA256", "coreRevision", "result"]
+    if tier == "build":
+        required.append("toolchain")
+    else:
+        required.extend(["device", "protocol"])
+    for field in required:
         if not record.get(field):
-            problems.append("%s: an executed record must name %s" % (path, field))
+            problems.append("%s: an executed %s record must name %s"
+                            % (path, tier or "device", field))
     checksum = str(record.get("firmwareSHA256", ""))
     if checksum and not re.fullmatch(r"[0-9a-f]{64}", checksum):
         problems.append("%s: firmwareSHA256 must be 64 lowercase hexadecimal characters" % path)

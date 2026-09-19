@@ -41,9 +41,20 @@ docs/evidence/<profile>-<check>.json
 | `failed` | It ran, on the named device, and it did not pass. |
 | `unexecuted` | It did not run. `reason` says why. |
 
-An executed record must name `device`, `firmwareSHA256`, `coreRevision`,
-`protocol`, and `result`. Those five fields are what make the claim checkable
-by someone who was not there.
+## Tier
+
+`tier` is `build` or `device`, and it decides which fields an executed record
+must carry. A build runs in the pinned container and has no board; a device run
+must name the board and the protocol it drove.
+
+| `tier` | An executed record must name |
+|---|---|
+| `build` | `firmwareSHA256`, `coreRevision`, `result`, `toolchain` |
+| `device` | `firmwareSHA256`, `coreRevision`, `result`, `device`, `protocol` |
+
+Those fields are what make the claim checkable by someone who was not there.
+`tier` defaults to `device` when absent, because a device claim is the stricter
+one and should never be the accidental default.
 
 ## Unexecuted is a legal state
 

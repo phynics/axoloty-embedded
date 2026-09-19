@@ -253,6 +253,16 @@ fi
 
 printf '\n---- verify summary ----\n%s' "$summary"
 
+# A SKIP is a statement about this run, not about the repository. The toolchain
+# lives in a container, so a bare host almost always skips everything below the
+# repo tier. Say so here, where the reader actually is, rather than letting them
+# conclude the work is unverifiable.
+if printf '%s' "$summary" | grep -q '^SKIP'; then
+    printf '\nA tier skipped. Before concluding anything is unverifiable, run\n'
+    printf '"docker images" and read docs/container-builds.md: axoloty-dev:latest\n'
+    printf 'carries Swift and ESP-IDF, and the build and core tiers run inside it.\n'
+fi
+
 if [ "$failed" -ne 0 ]; then
     printf 'verify: FAILED\n'
     exit 1

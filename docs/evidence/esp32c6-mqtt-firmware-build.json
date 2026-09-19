@@ -2,8 +2,11 @@
   "schemaVersion": 1,
   "profile": "esp32c6-mqtt",
   "check": "firmware-build",
-  "status": "unexecuted",
-  "recordedAt": "2026-09-17",
-  "reason": "No ESP-IDF toolchain, Swift compiler, ESP32-C6 RISC-V toolchain, or MQTT broker was available in this environment, so the locked-Core firmware build could not be produced or observed. Axoloty 0.8.1 started a new compatibility cycle on 39e1ec0662f6; this profile has no device evidence for it.",
-  "coreRevision": "39e1ec0662f65f853c7439ca7d636fd579cc4c05"
+  "tier": "build",
+  "status": "passed",
+  "recordedAt": "2026-09-19",
+  "result": "The esp32c6-mqtt profile built against the locked Axoloty Core from a clean standalone checkout of 7c40fce1e27e5aa087a691ce0b55406aad0fe1d0 with AXOLOTY_STRICT_CORE=1, producing axoloty-swift.bin (749456 bytes). Core preparation reported dirty=false and contract 72a48bdc9beabca6583ff55fdffe4ba3a05266dbd8d475bd36e8b21cafa56933. Proof run clean-release-1; the artifact SHA-256 is identical to the earlier build-5 run from a separate scratch tree. This record covers the build tier only: no board was attached, so the device tier stays unexecuted and the profile remains unqualified.",
+  "firmwareSHA256": "7a2780258888c8bd52034d3de6397de38a958cbc09ad6f693c605519d743a8e3",
+  "coreRevision": "39e1ec0662f65f853c7439ca7d636fd579cc4c05",
+  "toolchain": "axoloty-dev:latest container — Swift 6.3.3 (swift-6.3.3-RELEASE), ESP-IDF v5.4, target esp32c6"
 }
