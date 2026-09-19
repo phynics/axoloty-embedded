@@ -2,8 +2,12 @@
   "schemaVersion": 1,
   "profile": "esp32c6-zenoh",
   "check": "zenoh-pico-compile",
-  "status": "unexecuted",
+  "tier": "component",
+  "status": "passed",
   "recordedAt": "2026-09-19",
+  "component": "eclipse-zenoh/zenoh-pico 1.10.0 (96006957fddef401c20c8c2d813c2a630b666974)",
+  "artifactSHA256": "f91061de869143ae4bf6e33f193f9c67df323d1faf49822feb4f0790a8968f39",
   "coreRevision": "827e598f3d97c5e2e7986d7be4ba1d9a5eac7906",
-  "reason": "The pinned zenoh-pico 1.10.0 (96006957fddef401c20c8c2d813c2a630b666974) component configured and compiled for esp32c6 in proof run clean-0.8.2-zenoh-final-1: 132 C objects and libzenoh_pico.a, sha256 f91061de869143ae4bf6e33f193f9c67df323d1faf49822feb4f0790a8968f39. Two wrapper fixes landed to get there: a CMake MATCHES check that used unsupported {40} syntax, and CONFIGURE_DEPENDS, which is invalid in the requirements pass. The record stays unexecuted rather than passed because a passed build-tier record must name the firmware artifact checksum (docs/evidence.md) and this component-only check produces a static library, not a firmware image; the observed compile result is stated here rather than a checksum recorded under a name it does not describe. The static-footprint numbers in phynics/axoloty docs/dependencies/zenoh.md are that project's qualification evidence, not this repository's."
+  "toolchain": "axoloty-dev:latest container — ESP-IDF v5.4, RISC-V GCC 14.2.0, target esp32c6",
+  "result": "The pinned zenoh-pico component configured and compiled for esp32c6 in proof run clean-0.8.2-zenoh-final-1: 132 C objects, producing libzenoh_pico.a with the recorded SHA-256. Two wrapper fixes landed to get there: a CMake MATCHES check that used unsupported {40} syntax, and CONFIGURE_DEPENDS, which is invalid in the requirements pass. The esp32c6-zenoh image still does not link (#816/#817), so this is a component-only pass: no firmware artifact exists to name."
 }

@@ -96,7 +96,10 @@ sample; a null pointer with a non-zero length is not.
   link yet.** With the report from `Tools/prepare-zenoh-pico.sh`, the wrapper
   configured and compiled the pinned `zenoh-pico 1.10.0` sources for
   `esp32c6` in the pinned container: 132 C objects, zero compiler errors,
-  `libzenoh_pico.a` produced. Two wrapper assumptions needed fixing, both
+  `libzenoh_pico.a` produced. The compile is recorded as a passed
+  `component`-tier record,
+  `docs/evidence/esp32c6-zenoh-zenoh-pico-compile.json`, naming the component
+  and the artifact SHA-256. Two wrapper assumptions needed fixing, both
   found by that first real build: the revision check used a CMake regex
   syntax (`{40}`) that `MATCHES` does not support, and `CONFIGURE_DEPENDS` is
   invalid in the requirements pass. The image then fails at the two seams

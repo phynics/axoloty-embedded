@@ -53,18 +53,22 @@ def validate_evidence(record, path):
         if not record.get(field):
             problems.append("%s: %s is required" % (path, field))
     tier = record.get("tier")
-    if tier not in {"build", "device", None}:
-        problems.append("%s: tier must be build or device when present, found %r" % (path, tier))
+    if tier not in {"build", "component", "device", None}:
+        problems.append("%s: tier must be build, component, or device when present, found %r" % (path, tier))
     if status in {"passed", "failed"}:
         # docs/evidence.md: a build runs in the pinned container and has no
-        # board, so it names the toolchain; a device record names the unit and
-        # the protocol it drove. Requiring the device fields of a build record
-        # made every qualified manifest citing one invalid.
-        required = ["firmwareSHA256", "coreRevision", "result"]
-        if tier == "build":
-            required.append("toolchain")
+        # board, so it names the toolchain; a component record names the
+        # compiled component and its artifact hash; a device record names the
+        # unit and the protocol it drove. Requiring the device fields of a
+        # build record made every qualified manifest citing one invalid.
+        if tier == "component":
+            required = ["component", "artifactSHA256", "coreRevision", "result", "toolchain"]
         else:
-            required.extend(["device", "protocol"])
+            required = ["firmwareSHA256", "coreRevision", "result"]
+            if tier == "build":
+                required.append("toolchain")
+            else:
+                required.extend(["device", "protocol"])
         for field in required:
             if not record.get(field):
                 problems.append("%s: an executed %s record must name %s"
@@ -72,6 +76,9 @@ def validate_evidence(record, path):
         checksum = str(record.get("firmwareSHA256", ""))
         if checksum and not HEX64.fullmatch(checksum):
             problems.append("%s: firmwareSHA256 must be 64 lowercase hexadecimal characters" % path)
+        artifact = str(record.get("artifactSHA256", ""))
+        if artifact and not HEX64.fullmatch(artifact):
+            problems.append("%s: artifactSHA256 must be 64 lowercase hexadecimal characters" % path)
         revision = str(record.get("coreRevision", ""))
         if revision and not HEX40.fullmatch(revision):
             problems.append("%s: coreRevision must be a full commit SHA" % path)
