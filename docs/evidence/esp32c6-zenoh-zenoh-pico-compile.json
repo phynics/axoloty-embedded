@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "profile": "esp32c6-zenoh",
+  "check": "zenoh-pico-compile",
+  "status": "unexecuted",
+  "recordedAt": "2026-09-18",
+  "coreRevision": "39e1ec0662f65f853c7439ca7d636fd579cc4c05",
+  "reason": "No ESP-IDF toolchain was available, so the pinned zenoh-pico 1.10.0 (96006957fddef401c20c8c2d813c2a630b666974) component could not be configured or compiled for esp32c6. Tools/prepare-zenoh-pico.sh unexpectedly fetched the pinned tree in this environment, so the wrapper's generated-header tokens (53 template tokens) and its 101-source list were reconciled against the real tree; it remains unexecuted. The static-footprint numbers in phynics/axoloty docs/dependencies/zenoh.md are that project's qualification evidence, not this repository's."
+}

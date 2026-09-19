@@ -40,6 +40,18 @@ endforeach()
 set(AXOLOTY_APPLICATION_MAIN_DIR "${AXOLOTY_APPLICATION_DIR}/main")
 set(AXOLOTY_TRANSPORT_MAIN_DIR "${AXOLOTY_TRANSPORT_DIR}/main")
 
+# The transport axis supplies its carrier sources declaratively. The platform
+# compiles exactly what the selected transport lists, so the profile's
+# transport selection reaches the build without the platform naming a carrier.
+set(AXOLOTY_TRANSPORT_SOURCES_FILE "${AXOLOTY_TRANSPORT_MAIN_DIR}/idf_sources.cmake")
+if(NOT EXISTS "${AXOLOTY_TRANSPORT_SOURCES_FILE}")
+    message(FATAL_ERROR
+        "transport ${AXOLOTY_TRANSPORT_DIR} declares no main/idf_sources.cmake; "
+        "it cannot be composed into the platform"
+    )
+endif()
+include("${AXOLOTY_TRANSPORT_SOURCES_FILE}")
+
 set(AXOLOTY_SWIFT_SOURCES
     ${AXOLOTY_APPLICATION_MAIN_DIR}/Main.swift
     ${AXOLOTY_APPLICATION_MAIN_DIR}/StaticDeviceAgent.swift
@@ -47,8 +59,7 @@ set(AXOLOTY_SWIFT_SOURCES
     ${AXOLOTY_APPLICATION_MAIN_DIR}/ProtocolModuleConsumer.swift
     ${AXOLOTY_APPLICATION_MAIN_DIR}/ObjectModelModuleConsumer.swift
     ${AXOLOTY_APPLICATION_MAIN_DIR}/CoatyModelsModuleConsumer.swift
-    ${AXOLOTY_TRANSPORT_MAIN_DIR}/EmbeddedMQTTClient.swift
-    ${AXOLOTY_TRANSPORT_MAIN_DIR}/CarrierNetworkProbe.swift
+    ${AXOLOTY_TRANSPORT_SWIFT_SOURCES}
     ${CMAKE_CURRENT_LIST_DIR}/Esp32c6SmokeSeam.swift
     ${CMAKE_CURRENT_LIST_DIR}/Esp32c6AppMain.swift
 )
@@ -84,7 +95,7 @@ idf_component_register(
         "log_helper.c"
         "network_bootstrap.c"
         "runtime_identity.c"
-        "${AXOLOTY_TRANSPORT_MAIN_DIR}/mqtt_event_validation.c"
+        ${AXOLOTY_TRANSPORT_C_SOURCES}
     PRIV_INCLUDE_DIRS "." "${CMAKE_CURRENT_BINARY_DIR}" "${AXOLOTY_TRANSPORT_MAIN_DIR}"
     PRIV_REQUIRES
         idf_swift
@@ -104,6 +115,7 @@ idf_component_register(
         esp_netif
         nvs_flash
         mqtt
+        ${AXOLOTY_TRANSPORT_IDF_REQUIRES}
     LDFRAGMENTS "linker.lf"
 )
 

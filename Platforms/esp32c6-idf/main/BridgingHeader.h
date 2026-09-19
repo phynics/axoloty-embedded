@@ -51,3 +51,10 @@ int axoloty_mqtt_wait_loopback(unsigned int deadline_ms);
 int axoloty_mqtt_reconnect_wait(unsigned int deadline_ms);
 int axoloty_mqtt_disconnect(void);
 unsigned int axoloty_network_cleanup(void);
+
+// The selected transport may declare its carrier C seam in a header of its
+// own. The platform supplies the transport include path; it does not name a
+// carrier here. A profile whose transport has no such header is unaffected.
+#if __has_include("zenoh_carrier.h")
+#include "zenoh_carrier.h"
+#endif
