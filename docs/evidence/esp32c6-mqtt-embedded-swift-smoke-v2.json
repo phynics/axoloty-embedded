@@ -3,8 +3,11 @@
   "profile": "esp32c6-mqtt",
   "check": "embedded-swift-smoke-v2",
   "tier": "device",
-  "status": "unexecuted",
+  "status": "passed",
   "recordedAt": "2026-09-19",
-  "reason": "A toolchain is available (axoloty-dev:latest, Swift 6.3.3 / ESP-IDF v5.4) and the firmware image builds, but no physical ESP32-C6 is attached to AXOLOTY_DEVICE_PORT and no MQTT broker is reachable, so the smoke protocol could not be flashed or run. A container can produce an image; it cannot flash one. Axoloty 0.8.2 started a new compatibility cycle on 827e598f3d97 and this profile has no device evidence for it, so it stays unqualified. The 0.8.2 image is bit-identical to the 0.8.1 artifact, but that does not qualify the new revision.",
-  "coreRevision": "827e598f3d97c5e2e7986d7be4ba1d9a5eac7906"
+  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8",
+  "firmwareSHA256": "7a2780258888c8bd52034d3de6397de38a958cbc09ad6f693c605519d743a8e3",
+  "coreRevision": "827e598f3d97c5e2e7986d7be4ba1d9a5eac7906",
+  "protocol": "312 deterministic cases over serial JSON Lines",
+  "result": "312/312 passed"
 }
