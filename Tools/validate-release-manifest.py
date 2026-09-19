@@ -52,10 +52,23 @@ def validate_evidence(record, path):
     for field in ("profile", "check", "recordedAt"):
         if not record.get(field):
             problems.append("%s: %s is required" % (path, field))
+    tier = record.get("tier")
+    if tier not in {"build", "device", None}:
+        problems.append("%s: tier must be build or device when present, found %r" % (path, tier))
     if status in {"passed", "failed"}:
-        for field in ("device", "firmwareSHA256", "coreRevision", "protocol", "result"):
+        # docs/evidence.md: a build runs in the pinned container and has no
+        # board, so it names the toolchain; a device record names the unit and
+        # the protocol it drove. Requiring the device fields of a build record
+        # made every qualified manifest citing one invalid.
+        required = ["firmwareSHA256", "coreRevision", "result"]
+        if tier == "build":
+            required.append("toolchain")
+        else:
+            required.extend(["device", "protocol"])
+        for field in required:
             if not record.get(field):
-                problems.append("%s: an executed record must name %s" % (path, field))
+                problems.append("%s: an executed %s record must name %s"
+                                % (path, tier or "device", field))
         checksum = str(record.get("firmwareSHA256", ""))
         if checksum and not HEX64.fullmatch(checksum):
             problems.append("%s: firmwareSHA256 must be 64 lowercase hexadecimal characters" % path)
