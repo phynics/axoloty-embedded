@@ -18,6 +18,20 @@ export const expectedAgentTests = new Set([
   "exchange:disconnect",
 ]);
 
+// The last-will scenario has no Discover/Resolve exchange. The observer must
+// see the peer Advertise and then the broker-published Deadvertise after the
+// advertiser is reset abnormally.
+export const expectedLastWillTests = new Set([
+  "exchange:wifi",
+  "exchange:ip",
+  "exchange:mqttConnect",
+  "exchange:subscribe",
+  "exchange:reconnect",
+  "exchange:advertise",
+  "exchange:deadvertise",
+  "exchange:disconnect",
+]);
+
 /** Creates the strict validator for one participant in the two-device exchange. */
 export function createEmbeddedAgentValidator(expectedTests = expectedAgentTests) {
   return createEmbeddedSwiftSmokeValidator(expectedTests);

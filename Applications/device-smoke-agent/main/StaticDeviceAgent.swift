@@ -218,7 +218,8 @@ struct StaticDeviceAgent: ~Copyable {
         topicBuffer: UnsafeMutablePointer<UInt8>,
         topicCapacity: Int,
         payloadBuffer: UnsafeMutablePointer<UInt8>,
-        payloadCapacity: Int
+        payloadCapacity: Int,
+        recordWithProcessor: Bool = true
     ) throws(WireEncodeError) -> (topicLength: Int, payloadLength: Int) {
         var topic = TopicBuilder(buffer: topicBuffer, capacity: topicCapacity)
         try topic.writePrefix()
@@ -236,6 +237,14 @@ struct StaticDeviceAgent: ~Copyable {
         let borrowedPayload = ByteSlice(bytes: payloadBuffer, length: payload.position)
         let capability = ProtocolCapability(wireEventType: eventType)
         guard let capability else { throw .invalidValue }
+        // A last will is a pre-encoded template the broker publishes after this
+        // agent is gone. There is no live session for the processor to track,
+        // so the will only needs valid bytes, not an accepted outbound
+        // transition. Planning it would also require the advertised object to
+        // already exist, which is not true at will-configuration time.
+        guard recordWithProcessor else {
+            return (topic.position, payload.position)
+        }
         guard let operation = try? ProtocolLocalOperation(
             capability: capability,
             sourceID: agentId,
@@ -319,19 +328,22 @@ private func phase4Encode<T: WireEncodable>(
     topicBuffer: UnsafeMutablePointer<UInt8>,
     topicCapacity: Int32,
     payloadBuffer: UnsafeMutablePointer<UInt8>,
-    payloadCapacity: Int32
+    payloadCapacity: Int32,
+    recordWithProcessor: Bool = true
 ) throws(WireEncodeError) -> (topicLength: Int, payloadLength: Int) {
     if role == 1 {
         return try phase4AgentA.encode(
             value, eventType: eventType, correlationId: correlationId, nowMS: phase4NowMS(),
             topicBuffer: topicBuffer, topicCapacity: Int(topicCapacity),
-            payloadBuffer: payloadBuffer, payloadCapacity: Int(payloadCapacity)
+            payloadBuffer: payloadBuffer, payloadCapacity: Int(payloadCapacity),
+            recordWithProcessor: recordWithProcessor
         )
     }
     return try phase4AgentB.encode(
         value, eventType: eventType, correlationId: correlationId, nowMS: phase4NowMS(),
         topicBuffer: topicBuffer, topicCapacity: Int(topicCapacity),
-        payloadBuffer: payloadBuffer, payloadCapacity: Int(payloadCapacity)
+        payloadBuffer: payloadBuffer, payloadCapacity: Int(payloadCapacity),
+        recordWithProcessor: recordWithProcessor
     )
 }
 
@@ -397,7 +409,8 @@ private func phase4EncodeSource(
     payloadBuffer: UnsafeMutablePointer<UInt8>,
     payloadCapacity: Int32,
     topicLength: UnsafeMutablePointer<Int32>,
-    payloadLength: UnsafeMutablePointer<Int32>
+    payloadLength: UnsafeMutablePointer<Int32>,
+    recordWithProcessor: Bool = true
 ) -> Bool {
     let result: (topicLength: Int, payloadLength: Int)?
     let reader = WireReader(bytes: sourceBytes, length: sourceLength)
@@ -406,25 +419,29 @@ private func phase4EncodeSource(
         result = (try? AdvertiseWireData(from: reader)).flatMap {
             try? phase4Encode(role: role, value: $0, eventType: eventType, correlationId: correlationId,
                               topicBuffer: topicBuffer, topicCapacity: topicCapacity,
-                              payloadBuffer: payloadBuffer, payloadCapacity: payloadCapacity)
+                              payloadBuffer: payloadBuffer, payloadCapacity: payloadCapacity,
+                              recordWithProcessor: recordWithProcessor)
         }
     case .deadvertise:
         result = (try? DeadvertiseWireData(from: reader)).flatMap {
             try? phase4Encode(role: role, value: $0, eventType: eventType, correlationId: correlationId,
                               topicBuffer: topicBuffer, topicCapacity: topicCapacity,
-                              payloadBuffer: payloadBuffer, payloadCapacity: payloadCapacity)
+                              payloadBuffer: payloadBuffer, payloadCapacity: payloadCapacity,
+                              recordWithProcessor: recordWithProcessor)
         }
     case .discover:
         result = (try? DiscoverWireData(from: reader)).flatMap {
             try? phase4Encode(role: role, value: $0, eventType: eventType, correlationId: correlationId,
                               topicBuffer: topicBuffer, topicCapacity: topicCapacity,
-                              payloadBuffer: payloadBuffer, payloadCapacity: payloadCapacity)
+                              payloadBuffer: payloadBuffer, payloadCapacity: payloadCapacity,
+                              recordWithProcessor: recordWithProcessor)
         }
     case .resolve:
         result = (try? ResolveWireData(from: reader)).flatMap {
             try? phase4Encode(role: role, value: $0, eventType: eventType, correlationId: correlationId,
                               topicBuffer: topicBuffer, topicCapacity: topicCapacity,
-                              payloadBuffer: payloadBuffer, payloadCapacity: payloadCapacity)
+                              payloadBuffer: payloadBuffer, payloadCapacity: payloadCapacity,
+                              recordWithProcessor: recordWithProcessor)
         }
     default:
         result = nil
@@ -480,13 +497,18 @@ private func preparePhase4Message(
             )
         }
     case (1, 4):
+        // The role-A last will is a pre-encoded Deadvertise template the broker
+        // publishes after an abnormal disconnect. It is prepared at connect
+        // time, before the object is advertised, so it must not plan a live
+        // outbound transition (that would require the object to already exist).
         let source: StaticString = "{\"objectIds\":[\"32400000-0000-4000-8000-000000000002\"]}"
         return phase4EncodeSource(
             role: role, eventType: .deadvertise, correlationId: nil,
             sourceBytes: source.utf8Start, sourceLength: source.utf8CodeUnitCount,
             topicBuffer: topicBuffer, topicCapacity: topicCapacity,
             payloadBuffer: payloadBuffer, payloadCapacity: payloadCapacity,
-            topicLength: topicLength, payloadLength: payloadLength
+            topicLength: topicLength, payloadLength: payloadLength,
+            recordWithProcessor: false
         )
     default:
         return false
