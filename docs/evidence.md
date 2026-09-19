@@ -99,6 +99,19 @@ Two rules follow:
 When a check becomes a rule in `Tools/check-invariants.sh`, an evidence record
 may cite it by name, because `Tools/verify.sh --tier repo` fails closed on it.
 
+## A record names the locked Core revision
+
+An evidence record that names `coreRevision` must name the revision in
+[`axoloty-core.lock.json`](../axoloty-core.lock.json). A record for a
+superseded revision is stale at best; a `passed` one is a compatibility claim
+for a Core the current lock no longer names, and nothing downstream may notice
+because the record still looks complete. When the lock moves, regenerate the
+record or delete it — do not leave it reading `passed`.
+`Tools/check-invariants.sh` enforces this on every checkout, for every status.
+
+Imported evidence is exempt: `importedFrom.revision` records the revision the
+run actually happened at, and re-proving it is not import's job.
+
 ## Provenance for imported evidence
 
 Evidence imported from `phynics/axoloty` keeps its origin, because filtered Git

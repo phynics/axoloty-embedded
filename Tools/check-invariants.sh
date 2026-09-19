@@ -348,7 +348,12 @@ done
 # 9. Evidence records are well formed, and a claim carries evidence.
 # ---------------------------------------------------------------------------
 # See docs/evidence.md. Unexecuted is a legal, honest state. A pass without a
-# device, an artifact checksum, and a Core commit is not evidence.
+# device, an artifact checksum, and a Core commit is not evidence. A record
+# that names a Core revision must name the lock's revision: after a lock raise,
+# a stale passed record is a compatibility claim for a revision the repository
+# no longer ships, and it must not survive a checkout silently. Imported
+# evidence is exempt because its importedFrom block records where it came
+# from.
 
 evidence_files="$(tracked 'docs/evidence/*.json' || true)"
 if [ -z "$evidence_files" ]; then
@@ -356,9 +361,9 @@ if [ -z "$evidence_files" ]; then
 else
     evidence_bad=0
     for record in $evidence_files; do
-        report="$(python3 - "$record" <<'PY'
+        report="$(python3 - "$record" "$lock_revision" <<'PY'
 import json, re, sys
-path = sys.argv[1]
+path, lock_revision = sys.argv[1], sys.argv[2]
 try:
     with open(path) as handle:
         record = json.load(handle)
@@ -406,6 +411,19 @@ if status in {"passed", "failed"}:
 elif status == "unexecuted":
     if not record.get("reason"):
         problems.append("%s: an unexecuted record must state a reason" % path)
+
+# A record describes one Core revision. After the lock moves, a record for the
+# superseded revision is stale, and a "passed" one is worse: it reads as a
+# compatibility claim for the current lock while describing the old one.
+# Imported evidence keeps its original revision and cites its origin, so it is
+# exempt.
+revision_value = record.get("coreRevision")
+if revision_value and not record.get("importedFrom") and lock_revision:
+    if revision_value != lock_revision:
+        problems.append(
+            "%s: coreRevision %s does not match the locked Core revision %s; "
+            "regenerate or remove the record when the lock moves"
+            % (path, str(revision_value)[:12], lock_revision[:12]))
 
 for problem in problems:
     print("ERR " + problem)
