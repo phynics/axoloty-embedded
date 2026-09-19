@@ -43,14 +43,23 @@ docs/evidence/<profile>-<check>.json
 
 ## Tier
 
-`tier` is `build` or `device`, and it decides which fields an executed record
-must carry. A build runs in the pinned container and has no board; a device run
-must name the board and the protocol it drove.
+`tier` is `build`, `component`, or `device`, and it decides which fields an
+executed record must carry. A build runs in the pinned container and has no
+board; a component check compiles one pinned component without a linkable
+firmware image; a device run must name the board and the protocol it drove.
 
 | `tier` | An executed record must name |
 |---|---|
 | `build` | `firmwareSHA256`, `coreRevision`, `result`, `toolchain` |
+| `component` | `component`, `artifactSHA256`, `coreRevision`, `result`, `toolchain` |
 | `device` | `firmwareSHA256`, `coreRevision`, `result`, `device`, `protocol` |
+
+A `component` record names the component (`component`, for example
+`eclipse-zenoh/zenoh-pico 1.10.0`) and the SHA-256 of the artifact it compiled
+(`artifactSHA256`, for example `libzenoh_pico.a`). A component-only check
+produces no firmware image, so it carries no `firmwareSHA256`; recording the
+library hash in a firmware field would state something the field does not
+describe.
 
 Those fields are what make the claim checkable by someone who was not there.
 `tier` defaults to `device` when absent, because a device claim is the stricter
