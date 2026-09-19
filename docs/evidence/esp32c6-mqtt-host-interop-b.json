@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "profile": "esp32c6-mqtt",
+  "check": "host-interop",
+  "tier": "device",
+  "status": "passed",
+  "recordedAt": "2026-09-19",
+  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8",
+  "firmwareSHA256": "41e55f8b7a0d8e351a1f5ed407532037941aa42d7d7e149d7eb57cccefbfb253",
+  "coreRevision": "827e598f3d97c5e2e7986d7be4ba1d9a5eac7906",
+  "protocol": "10 deterministic exchange cases against the Axoloty host runtime",
+  "result": "10/10 passed"
+}
