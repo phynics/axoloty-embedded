@@ -100,10 +100,10 @@ Source: `phynics/axoloty` `Makefile` targets and the scripts they invoke.
 |---|---|---|---|---|---|
 | `g1-bounded-runtime-host` / `-sanitized` | `Spikes/BoundedPortableRuntime/check-{host,sanitized}.sh` | Portable runtime boundedness: zero allocation growth, saturation, stale-token rejection | KEEP/REWRITE IN AXOLOTY | Stays; hardware-free | certain |
 | `g1-bounded-runtime-embedded` | `Spikes/BoundedPortableRuntime/check-embedded.sh` | Core boundedness compiles for ESP32-C6 and grows linearly with capacity, no board | KEEP/REWRITE IN AXOLOTY | Stays; hardware-free (build-only) | moderate — it produces a spike firmware image to measure Core growth |
-| `g1-bounded-runtime-device` | `Spikes/BoundedPortableRuntime/check-device.sh` | The same boundedness measured on a physical board | MOVE TO AXOLOTY-EMBEDDED | **Unmigrated**: needs a board; the spike firmware did not move in #1. The retained reviewed result is Core evidence and stays quoted in Axoloty's `EVIDENCE.md` | moderate — see note C |
+| `g1-bounded-runtime-device` | `Spikes/BoundedPortableRuntime/check-device.sh` | The same boundedness measured on a physical board | SUPERSEDE (decided 2026-09-19) | Superseded by the on-device wire benchmark here, extended with resource measurements and a sustained workload. Axoloty removes the spike firmware and device producer under [axoloty#854](https://github.com/phynics/axoloty/issues/854) | certain |
 | `g3-object-model-evidence-host` / `-sanitized` | `Spikes/BoundedObjectModelEvidence/check-{host,sanitized}.sh` | Portable object-model boundedness | KEEP/REWRITE IN AXOLOTY | Stays; hardware-free | certain |
 | `g3-object-model-evidence-embedded` | `Spikes/BoundedObjectModelEvidence/check-embedded.sh` | Core object-model sources compile/link into a firmware image and their section sizes are recorded | KEEP/REWRITE IN AXOLOTY | Stays; hardware-free (build-only, explicitly not run on device) | moderate — same shape as G1-embedded |
-| `g6-resource-evidence` | `Tests/Support/checks/check-g6-resource-evidence.sh` + `Tests/Support/evidence/validate-g6-resource-evidence.mjs` | Host+device sustained resource budgets at the exact Core commit, with power-cycle runs | MOVE TO AXOLOTY-EMBEDDED | **Unmigrated**: needs a device and re-homes Core's version/subject semantics; see note C | moderate — see note C |
+| `g6-resource-evidence` | `Tests/Support/checks/check-g6-resource-evidence.sh` + `Tests/Support/evidence/validate-g6-resource-evidence.mjs` | Host+device sustained resource budgets at the exact Core commit, with power-cycle runs | MOVE TO AXOLOTY-EMBEDDED (decided 2026-09-19) | The device `esp32c6` environment is produced here from the benchmark. Axoloty keeps the validator, policy, and thresholds; its release gate cites the device evidence at the locked Core revision | certain |
 | `embedded-benchmark` device measurement | `Platforms/esp32c6-idf/benchmark/` + `Tests/embedded/run-benchmark-wire-device.sh` | On-device wire throughput/size | MOVE TO AXOLOTY-EMBEDDED | Landed. `Platforms/*/benchmark/` is exempt from the platform protocol-rule scan because the fixture is not linked into any image | certain |
 
 ## 5. Documentation
@@ -152,13 +152,18 @@ silent:
   `Tests/embedded/run-benchmark-wire-device.sh`. The fixture is exempt from the
   platform protocol-rule scan because it is a measurement, not platform
   integration, and is never linked into a firmware image.
-- **Note C — G1/G3/G6 device producers.** These measure a *portable Core*
-  property. Their hardware-free variants stay in Axoloty. Their device variants
-  need a board, which contradicts "Core checks remain hardware-free", and the
-  spike firmware did not move in #1. The retained reviewed results stay in
-  Axoloty's `EVIDENCE.md` and the G6 resource gate stays a Core release gate
-  until the maintainer decides whether device resource evidence is a firmware
-  or a Core artifact. Flagged, not guessed.
+- **Note C — G1/G3/G6 device producers (decided 2026-09-19).** Device resource
+  evidence is a firmware artifact owned here. `g1-bounded-runtime-device` is
+  superseded by the on-device wire benchmark, extended with resource
+  measurements and a sustained workload to produce the G6 `esp32c6`
+  environment. Axoloty keeps the hardware-free variants (G1 host/sanitized/
+  embedded, G3 build-only), the G6 resource policy, thresholds, and
+  `validate-g6-resource-evidence.mjs`; its release gate cites the device
+  evidence produced here at the locked Core revision. Axoloty removes
+  `Spikes/BoundedPortableRuntime/Embedded` and `check-device.sh` under
+  [axoloty#854](https://github.com/phynics/axoloty/issues/854). The retained
+  reviewed results stay quoted in Axoloty's `EVIDENCE.md` as historical Core
+  evidence.
 
 ## No committed historical device evidence to import
 
