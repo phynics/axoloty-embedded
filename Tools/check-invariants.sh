@@ -154,6 +154,29 @@ fi
 [ "$copy_violation" -eq 0 ] && pass core-copy 'no module-named directory and no local Core target declaration'
 
 # ---------------------------------------------------------------------------
+# 2b. The host peer pins the same Core revision as the lock.
+# ---------------------------------------------------------------------------
+# Package.swift consumes the Axoloty host runtime as a pinned git dependency.
+# The lock is the single source of truth for the Core this repository speaks
+# to, so a package revision that drifts from the lock is a silent
+# incompatibility. Move the lock and the package together or not at all.
+
+if [ -f Package.swift ]; then
+    package_revision="$(grep -oE 'revision:[[:space:]]*"[0-9a-f]{40}"' Package.swift | head -1 | grep -oE '[0-9a-f]{40}' || true)"
+    if [ -z "$package_revision" ]; then
+        fail host-peer-lock 'Package.swift pins no 40-character Core revision'
+    elif [ -z "$lock_revision" ]; then
+        skip host-peer-lock 'the lock revision could not be read'
+    elif [ "$package_revision" != "$lock_revision" ]; then
+        fail host-peer-lock "Package.swift pins ${package_revision:0:12} but the lock is ${lock_revision:0:12}"
+    else
+        pass host-peer-lock "the host peer pins the locked Core revision ${lock_revision:0:12}"
+    fi
+else
+    skip host-peer-lock 'no host peer manifest exists yet'
+fi
+
+# ---------------------------------------------------------------------------
 # 3. An application names no board, SDK, or broker.
 # ---------------------------------------------------------------------------
 # An application is what the firmware does. The moment it can name ESP-IDF or
