@@ -161,3 +161,48 @@ records say so. See [evidence.md](./evidence.md).
 Do not describe a successful container build as a qualified profile. A build
 proves the image compiles against the locked Core. It proves nothing about the
 device.
+
+## 6. An unselected component still runs, and can still fail the build
+
+A third instance of the same ESP-IDF requirements-pass trap, found after §5
+was written, by rebuilding a working profile after an unrelated merge.
+
+**Symptom:** adding `Platforms/esp32c6-idf/components/zenoh_pico/` broke the
+**mqtt** profile, which does not use Zenoh:
+
+```
+CMake Error at .../components/zenoh_pico/CMakeLists.txt:28 (message):
+  AXOLOTY_ZENOH_PICO_REPORT must name a prepared zenoh-pico report;
+  run Tools/prepare-zenoh-pico.sh first
+Call Stack:
+  component_get_requirements.cmake:107 (include)
+```
+
+**Cause:** `idf_build_process` walks *every* directory under `components/`
+during the requirements pass, regardless of what the build actually needs. A
+component that calls `message(FATAL_ERROR)` at file scope therefore fails
+every profile in the repository, not just its own.
+
+Failing closed is right, and the wrapper was right to want it. The mistake is
+the *scope*: a component cannot treat its own prerequisites as the build's
+prerequisites, because it does not yet know whether it is in the build.
+
+**Rule:** a component that needs a prepared dependency must first ask whether
+it is selected, and register empty if not:
+
+```cmake
+get_filename_component(SELECTED "${AXOLOTY_TRANSPORT_DIR}" NAME)
+if(NOT SELECTED STREQUAL "<this-transport>")
+    idf_component_register()
+    return()
+endif()
+# ... now the hard requirements checks, which only apply when selected
+```
+
+Read the selection from the environment, per §5.
+
+**And the wider lesson:** this was caught by rebuilding a profile that the
+change did not touch, and comparing the image digest against a known one. A
+second profile does not only add coverage for itself — it adds a way for any
+new axis to break an existing one. Rebuild the *other* profile after any
+change under `Platforms/`, `components/`, or a transport.

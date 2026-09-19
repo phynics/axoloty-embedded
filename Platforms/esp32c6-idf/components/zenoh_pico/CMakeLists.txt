@@ -14,10 +14,32 @@
 # include/zenoh-pico/config.h.in and include/zenoh-pico.h.in, and the source
 # list mirrors its top-level CMakeLists.txt plus cmake/platforms/espidf.cmake.
 #
-# UNVERIFIED: no ESP-IDF toolchain was available, so this wrapper has never
-# been configured or compiled. The assumptions that can be checked cheaply fail
-# closed: a missing template, a missing listed source, or a missing report is a
-# configure error, not a silent misbuild.
+# PARTLY VERIFIED: ESP-IDF has evaluated this file's requirements pass, which
+# is how the selection guard below was found to be necessary. It has never
+# been configured or compiled with a real zenoh-pico tree, because none is
+# prepared here. The assumptions that can be checked cheaply fail closed: a
+# missing template, a missing listed source, or a missing report is a configure
+# error, not a silent misbuild -- but only once this transport is selected.
+
+# ESP-IDF walks every directory under components/ during its requirements
+# pass, including components no profile selected. A component that fails
+# closed there fails every other profile's build too: adding this wrapper
+# broke the working esp32c6-mqtt build with
+# "AXOLOTY_ZENOH_PICO_REPORT must name a prepared zenoh-pico report".
+#
+# So fail closed only when this transport is the selected one. Unselected, the
+# component registers empty and contributes nothing. The transport axis is the
+# authority on selection, exactly as it is for the main component's sources.
+if(NOT DEFINED AXOLOTY_TRANSPORT_DIR OR "${AXOLOTY_TRANSPORT_DIR}" STREQUAL "")
+    if(DEFINED ENV{AXOLOTY_TRANSPORT_DIR})
+        set(AXOLOTY_TRANSPORT_DIR "$ENV{AXOLOTY_TRANSPORT_DIR}")
+    endif()
+endif()
+get_filename_component(AXOLOTY_SELECTED_TRANSPORT "${AXOLOTY_TRANSPORT_DIR}" NAME)
+if(NOT AXOLOTY_SELECTED_TRANSPORT STREQUAL "zenoh-pico")
+    idf_component_register()
+    return()
+endif()
 
 if(NOT DEFINED AXOLOTY_ZENOH_PICO_REPORT OR "${AXOLOTY_ZENOH_PICO_REPORT}" STREQUAL "")
     if(DEFINED ENV{AXOLOTY_ZENOH_PICO_REPORT})
