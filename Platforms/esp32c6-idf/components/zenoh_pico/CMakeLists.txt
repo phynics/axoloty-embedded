@@ -14,11 +14,17 @@
 # include/zenoh-pico/config.h.in and include/zenoh-pico.h.in, and the source
 # list mirrors its top-level CMakeLists.txt plus cmake/platforms/espidf.cmake.
 #
-# PARTLY VERIFIED: ESP-IDF has evaluated this file's requirements pass, which
-# is how the selection guard below was found to be necessary. It has never
-# been configured or compiled with a real zenoh-pico tree, because none is
-# prepared here. The assumptions that can be checked cheaply fail closed: a
-# missing template, a missing listed source, or a missing report is a configure
+# VERIFIED AGAINST THE REAL PINNED TREE: with the report from
+# Tools/prepare-zenoh-pico.sh, this wrapper configures and the pinned
+# zenoh-pico 1.10.0 sources compile for esp32c6 -- 132 C objects, zero
+# compiler errors. Two assumptions needed fixing to get there: the revision
+# check below used a CMake regex syntax (`{40}`) that MATCHES does not
+# support, and CONFIGURE_DEPENDS is invalid in the requirements pass (script
+# mode). The esp32c6-zenoh profile image still does not link, because the
+# application carrier seam and the platform network bootstrap are
+# MQTT-shaped; generalizing them is #816/#817 work, not a wrapper concern.
+# The assumptions that can be checked cheaply fail closed: a missing
+# template, a missing listed source, or a missing report is a configure
 # error, not a silent misbuild -- but only once this transport is selected.
 
 # ESP-IDF walks every directory under components/ during its requirements
@@ -68,7 +74,9 @@ file(REAL_PATH "${AXOLOTY_ZENOH_PICO_DIR}" AXOLOTY_ZENOH_PICO_DIR_REAL)
 if(NOT "${AXOLOTY_ZENOH_PICO_DIR}" STREQUAL "${AXOLOTY_ZENOH_PICO_DIR_REAL}")
     message(FATAL_ERROR "the zenoh-pico preparation report sourceDir must be canonical")
 endif()
-if(NOT AXOLOTY_ZENOH_PICO_REVISION MATCHES "^[0-9a-f]{40}$")
+string(LENGTH "${AXOLOTY_ZENOH_PICO_REVISION}" AXOLOTY_ZENOH_PICO_REVISION_LENGTH)
+if(NOT AXOLOTY_ZENOH_PICO_REVISION_LENGTH EQUAL 40 OR
+   NOT AXOLOTY_ZENOH_PICO_REVISION MATCHES "^[0-9a-f]+$")
     message(FATAL_ERROR "the zenoh-pico preparation report revision is not a full commit SHA")
 endif()
 
@@ -184,7 +192,7 @@ foreach(pattern IN ITEMS
     "src/link/unicast/*.c"
     "src/link/transport/common/*.c"
 )
-    file(GLOB_RECURSE _globbed CONFIGURE_DEPENDS "${AXOLOTY_ZENOH_PICO_DIR}/${pattern}")
+    file(GLOB_RECURSE _globbed "${AXOLOTY_ZENOH_PICO_DIR}/${pattern}")
     list(APPEND AXOLOTY_ZENOH_PICO_SOURCES ${_globbed})
 endforeach()
 list(APPEND AXOLOTY_ZENOH_PICO_SOURCES

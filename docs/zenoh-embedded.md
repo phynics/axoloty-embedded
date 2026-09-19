@@ -18,7 +18,7 @@ re-scoped for the repository split by
 | `AxolotyZenoh` host runtime transport, host parity | `phynics/axoloty` | Not landed |
 | `EmbeddedZenohClient` (bounded device client) | here | Skeleton landed |
 | `zenoh-pico` backend of the facade | here | Not landed (proposed) |
-| ESP-IDF component wiring for pinned `zenoh-pico` | here | Pin landed; wrapper unverified (proposed) |
+| ESP-IDF component wiring for pinned `zenoh-pico` | here | Pin landed; wrapper configures and compiles the pinned tree (proposed) |
 | Embedded route/subscription wiring | here | Not landed (proposed) |
 | Device/resource qualification | here | Not landed; needs a board (proposed) |
 
@@ -92,12 +92,18 @@ sample; a null pointer with a non-zero length is not.
   (`main/idf_sources.cmake`) composes the Swift carrier surface, but a real
   Zenoh image also needs the platform's Wi-Fi bring-up separated from the
   carrier. That split is a platform change and is flagged, not attempted here.
-- **The component wrapper has never been compiled.**
-  `Tools/prepare-zenoh-pico.sh` unexpectedly fetched the pinned tree in this
-  environment, so the wrapper's generated-header tokens and source list were
-  reconciled against the real `zenoh-pico 1.10.0` tree, but no ESP-IDF
-  toolchain existed to configure or compile it. Its remaining assumptions fail
-  closed, so the first real build reports what to reconcile.
+- **The component wrapper compiles the pinned tree; the profile image does not
+  link yet.** With the report from `Tools/prepare-zenoh-pico.sh`, the wrapper
+  configured and compiled the pinned `zenoh-pico 1.10.0` sources for
+  `esp32c6` in the pinned container: 132 C objects, zero compiler errors,
+  `libzenoh_pico.a` produced. Two wrapper assumptions needed fixing, both
+  found by that first real build: the revision check used a CMake regex
+  syntax (`{40}`) that `MATCHES` does not support, and `CONFIGURE_DEPENDS` is
+  invalid in the requirements pass. The image then fails at the two seams
+  above, not in this component: `platform/main/network_bootstrap.c` includes
+  `mqtt_event_validation.h`, and the application calls
+  `runCarrierNetworkProbe`/`emitAgentExchange`, which only the MQTT transport
+  defines. Both are #816/#817 work, deliberately not attempted here.
 - **No device or resource evidence.** None was produced and none was invented.
   See `docs/evidence/esp32c6-zenoh-*.json`.
 - **The release manifest does not know the Zenoh backend.** 
