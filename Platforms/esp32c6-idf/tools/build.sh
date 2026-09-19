@@ -61,6 +61,21 @@ report=$(realpath -e -- "$evidence_dir/preparation.json")
 # original repository for provenance checks.
 cp -a "$platform_dir/." "$build_project_dir/"
 
+# IDF applies sdkconfig.defaults only when it first writes sdkconfig. An
+# existing sdkconfig silently keeps the old defaults, so a changed default
+# looked applied while the build kept using the previous value. Drop the
+# whole build directory when the tracked defaults are newer.
+if [ -f "$sdkconfig" ] && [ "$build_project_dir/sdkconfig.defaults" -nt "$sdkconfig" ]; then
+    rm -rf "$build_dir"
+fi
+# A non-empty build directory without a CMake cache is the remains of a
+# failed configure. IDF refuses to clean it and reports an error about the
+# directory, so clear it here rather than making the retry fail the same way.
+if [ -d "$build_dir" ] && [ ! -f "$build_dir/CMakeCache.txt" ] && [ -n "$(ls -A "$build_dir" 2>/dev/null)" ]; then
+    rm -rf "$build_dir"
+fi
+mkdir -p "$build_dir"
+
 # Operator network configuration is a private build input: SSID, password,
 # broker host, role, and scenario live in a generated header, never in the
 # repository. The caller (a device-test harness) generates it into scratch

@@ -243,7 +243,11 @@ struct StaticDeviceAgent: ~Copyable {
             payload: borrowedPayload,
             requestTimeoutMS: eventType == .discover ? Self.discoverTimeoutMS : nil
         ) else { throw .invalidValue }
-        var actionSink = InlineProtocolActionSink<1>()
+        // An Advertise that names a coreType and objectType plans two
+        // publications (the direct coreType filter and the objectType filter);
+        // a sink of one rejects it with capacityExceeded before anything is
+        // published. Size for the plan, not for the common one-filter case.
+        var actionSink = InlineProtocolActionSink<2>()
         let outcome = processor.processOutbound(
             operation, nowMS: nowMS, classifier: routeClassifier, sink: &actionSink
         )

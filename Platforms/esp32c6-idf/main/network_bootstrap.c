@@ -631,6 +631,14 @@ unsigned int axoloty_agent_test(unsigned int overall_deadline_ms,
     esp_mqtt_client_config_t config = { 0 };
     config.broker.address.uri = uri;
     config.credentials.client_id = network_client_id;
+    // The agent exchange parses and answers inbound Advertises inside the
+    // ESP-MQTT event task. The generic protocol inbound path, with Embedded
+    // Swift's temporary-allocation workspace per non-inlined frame, needs
+    // about 54 KB on the hardware stack guard's measurement: 6 KB (IDF
+    // default) and 32 KB both tripped it on the first real runs. 96 KB gives
+    // the headroom the 128 KB main task has for the same code. The network
+    // probe runs no Swift in its callback, so it keeps the default.
+    config.task.stack_size = 98304;
     if (has_will) {
         config.session.last_will.topic = (const char *)agent_will_topic;
         config.session.last_will.msg = (const char *)agent_will_payload;
