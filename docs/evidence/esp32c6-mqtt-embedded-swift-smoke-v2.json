@@ -5,6 +5,6 @@
   "tier": "device",
   "status": "unexecuted",
   "recordedAt": "2026-09-19",
-  "reason": "A toolchain is available (axoloty-dev:latest, Swift 6.3.3 / ESP-IDF v5.4) and the firmware image builds, but no physical ESP32-C6 is attached to AXOLOTY_DEVICE_PORT and no MQTT broker is reachable, so the smoke protocol could not be flashed or run. A container can produce an image; it cannot flash one. Axoloty 0.8.1 started a new compatibility cycle on 39e1ec0662f6 and this profile has no device evidence for it, so it stays unqualified.",
-  "coreRevision": "39e1ec0662f65f853c7439ca7d636fd579cc4c05"
+  "reason": "A toolchain is available (axoloty-dev:latest, Swift 6.3.3 / ESP-IDF v5.4) and the firmware image builds, but no physical ESP32-C6 is attached to AXOLOTY_DEVICE_PORT and no MQTT broker is reachable, so the smoke protocol could not be flashed or run. A container can produce an image; it cannot flash one. Axoloty 0.8.2 started a new compatibility cycle on 827e598f3d97 and this profile has no device evidence for it, so it stays unqualified. The 0.8.2 image is bit-identical to the 0.8.1 artifact, but that does not qualify the new revision.",
+  "coreRevision": "827e598f3d97c5e2e7986d7be4ba1d9a5eac7906"
 }

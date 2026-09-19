@@ -10,10 +10,10 @@ bottom; it should take about twenty minutes, most of it the build.
 
 | | |
 |---|---|
-| Firmware builds against the locked Core | **yes** — reproducible digest, twice, from independent scratch trees |
-| Image digest | `7a2780258888c8bd52034d3de6397de38a958cbc09ad6f693c605519d743a8e3` |
+| Firmware builds against the locked Core | **yes** — repinned to 0.8.2 and rebuilt; `check-reproducible-build.sh` matched two independent proof roots |
+| Image digest | `7a2780258888c8bd52034d3de6397de38a958cbc09ad6f693c605519d743a8e3` (bit-identical to the 0.8.1 build) |
 | Image size | 749456 bytes |
-| Core revision | `39e1ec0662f65f853c7439ca7d636fd579cc4c05` (Axoloty 0.8.1) |
+| Core revision | `827e598f3d97c5e2e7986d7be4ba1d9a5eac7906` (Axoloty 0.8.2) |
 | Toolchain | `axoloty-dev:latest` — Swift 6.3.3, ESP-IDF v5.4 |
 | Flashed and smoke-tested | **no** — no board was ever attached |
 | Profile qualification | **unqualified**, and the release manifest says so itself |
@@ -35,7 +35,7 @@ You need:
 - Your user in the `dialout` group, or equivalent access to the serial device
 - An MQTT broker reachable from the board, for the network portion
 
-**A note on the lock.** This branch pins Axoloty 0.8.1 (`39e1ec06`). If
+**A note on the lock.** This branch pins Axoloty 0.8.2 (`827e598f`). If
 `origin/main` has since raised the lock, `Tools/check-invariants.sh` will tell
 you so and refuse — that is deliberate, not a bug. Qualify what this branch
 pins, or repin and rebuild first. Do not qualify a mismatch.
@@ -50,7 +50,7 @@ git clone https://github.com/phynics/axoloty-embedded.git ~/axemb
 git -C ~/axemb checkout orchestrate/embedded-tickets-1-4
 
 git clone https://github.com/phynics/axoloty.git ~/axcore
-git -C ~/axcore checkout --detach 39e1ec0662f65f853c7439ca7d636fd579cc4c05
+git -C ~/axcore checkout --detach 827e598f3d97c5e2e7986d7be4ba1d9a5eac7906
 ```
 
 Both trees must be **clean**. Strict mode refuses a dirty Core, and the

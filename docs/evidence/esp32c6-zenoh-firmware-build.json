@@ -3,7 +3,7 @@
   "profile": "esp32c6-zenoh",
   "check": "firmware-build",
   "status": "unexecuted",
-  "recordedAt": "2026-09-18",
-  "coreRevision": "39e1ec0662f65f853c7439ca7d636fd579cc4c05",
-  "reason": "No ESP-IDF toolchain, Swift compiler, RISC-V toolchain, or zenoh-pico checkout was available in this environment, so the esp32c6-zenoh firmware image could not be built or observed. The platform main component now selects transport sources declaratively, but the zenoh-pico backend implementing the axoloty_zenoh_* carrier seam and the application's carrier-probe seam are not implemented yet, so a linkable image does not exist."
+  "recordedAt": "2026-09-19",
+  "coreRevision": "827e598f3d97c5e2e7986d7be4ba1d9a5eac7906",
+  "reason": "The esp32c6-zenoh profile was attempted in the pinned container (axoloty-dev:latest, proof run clean-0.8.2-zenoh-final-1). Core preparation succeeded at 827e598f3d97 and every C component compiled, including the pinned zenoh-pico 1.10.0 wrapper. The image does not link: platform/main/network_bootstrap.c includes mqtt_event_validation.h, and the application calls runCarrierNetworkProbe and emitAgentExchange, which only the MQTT transport defines. A linkable Zenoh image needs the carrier seam generalized (#816/#817); no artifact exists to record."
 }
