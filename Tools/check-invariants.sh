@@ -203,7 +203,10 @@ fi
 # 5. A platform owns no protocol behavior.
 # ---------------------------------------------------------------------------
 
-platform_sources="$(axis_sources 'Platforms/*')"
+# The wire benchmark is a measurement fixture. It mirrors AxolotyWire's JSON
+# scanning in C for on-device timing, is not linked into any firmware image,
+# and is not platform integration; it is exempt from the protocol-rule scan.
+platform_sources="$(axis_sources 'Platforms/*' | grep -v '/benchmark/' || true)"
 platform_bad=0
 for file in $platform_sources; do
     hits="$(grep -nE "$protocol_tokens" "$file" 2>/dev/null | head -3 || true)"

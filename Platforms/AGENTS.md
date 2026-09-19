@@ -17,6 +17,11 @@ A platform owns no protocol behavior. `Tools/check-invariants.sh` fails on
 `ProtocolSubscriptionRegistry`, `BorrowedProtocolFrame`,
 `InlineProtocolActionSink`, and the literal `coaty/3` under this directory.
 
+The one exception is `esp32c6-idf/benchmark/`. It is a standalone measurement
+fixture that mirrors AxolotyWire's JSON scanning in C for on-device timing, it
+is not linked into any firmware image, and the invariant exempts its path from
+the protocol-rule scan.
+
 ## Core
 
 Reach Core only through `Tools/prepare-core.sh` and the report it writes.
