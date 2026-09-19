@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "profile": "esp32c6-mqtt",
+  "check": "last-will",
+  "tier": "device",
+  "status": "passed",
+  "recordedAt": "2026-09-19",
+  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
+  "firmwareSHA256": "c2fac8f33d0f742c1b8679d2e9388189b8504da8d64e5764ba78289ed1349686",
+  "coreRevision": "827e598f3d97c5e2e7986d7be4ba1d9a5eac7906",
+  "protocol": "8 deterministic last-will cases over serial JSON Lines",
+  "result": "8/8 passed"
+}

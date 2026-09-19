@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "profile": "esp32c6-mqtt",
+  "check": "firmware-build",
+  "tier": "build",
+  "status": "passed",
+  "recordedAt": "2026-09-19",
+  "result": "The esp32c6-mqtt profile built against the locked Axoloty Core from a clean standalone checkout of 2ce095a43b0c with AXOLOTY_STRICT_CORE=1, producing axoloty-swift.bin (749456 bytes). Core preparation reported dirty=false and contract 72a48bdc9beabca6583ff55fdffe4ba3a05266dbd8d475bd36e8b21cafa56933. Proof run clean-0.8.2-final-3; Tests/embedded/check-reproducible-build.sh rebuilt the image twice from clean proof roots and both hashes equal this artifact's SHA-256, which is also identical to the record for the superseded 0.8.1 revision. The swift-linker and smoke-coverage checks passed in the same verification run. This record covers the build tier only: no board was attached, so the device tier stays unexecuted and the profile remains unqualified.",
+  "firmwareSHA256": "7a2780258888c8bd52034d3de6397de38a958cbc09ad6f693c605519d743a8e3",
+  "coreRevision": "827e598f3d97c5e2e7986d7be4ba1d9a5eac7906",
+  "toolchain": "axoloty-dev:latest container — Swift 6.3.3 (swift-6.3.3-RELEASE), ESP-IDF v5.4, target esp32c6"
+}

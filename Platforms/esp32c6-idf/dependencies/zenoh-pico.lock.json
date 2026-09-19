@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "component": "eclipse-zenoh/zenoh-pico",
+  "url": "https://github.com/eclipse-zenoh/zenoh-pico.git",
+  "version": "1.10.0",
+  "tag": "1.10.0",
+  "revision": "96006957fddef401c20c8c2d813c2a630b666974",
+  "revisionFormat": "git-commit-sha1",
+  "license": "Apache-2.0 OR EPL-2.0",
+  "versionSource": "phynics/axoloty, issue #797, docs/dependencies/zenoh.md (branch exploration/zenoh)",
+  "note": "The 1.10.0 tag is an annotated tag object; revision is the commit it points at. Zenoh publishes zenoh/zenoh-c/zenoh-pico as one release train, so this pin must move with the host zenoh-c pin."
+}

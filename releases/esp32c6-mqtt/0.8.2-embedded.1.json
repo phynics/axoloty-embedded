@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "mode": "release",
+  "profile": "esp32c6-mqtt",
+  "application": "device-smoke-agent",
+  "platform": "esp32c6-idf",
+  "board": "ESP32-C6-DevKitC-1",
+  "transport": {
+    "name": "mqtt-espidf",
+    "backend": "esp-idf/mqtt",
+    "version": "5.4.0",
+    "versionSource": "Platforms/esp32c6-idf/dependencies.lock"
+  },
+  "compatibility": {
+    "scope": "profile",
+    "status": "qualified",
+    "description": "Profile esp32c6-mqtt is qualified against Axoloty 0.8.2 (827e598f3d97) on ESP32-C6-DevKitC-1."
+  },
+  "axoloty": {
+    "version": "0.8.2",
+    "tag": "v0.8.2",
+    "sha": "827e598f3d97c5e2e7986d7be4ba1d9a5eac7906",
+    "dirty": false,
+    "contractSha256": "72a48bdc9beabca6583ff55fdffe4ba3a05266dbd8d475bd36e8b21cafa56933"
+  },
+  "embedded": {
+    "version": "0.8.2-embedded.1",
+    "sha": "443da561b64233c6d15f8b2e536e8cf5d2de00bf",
+    "dirty": false
+  },
+  "toolchain": {
+    "swift": "Swift version 6.3.3 (swift-6.3.3-RELEASE)\nTarget: x86_64-unknown-linux-gnu",
+    "sdk": "ESP-IDF v5.4",
+    "target": "esp32c6"
+  },
+  "configurationFingerprint": "06d0a86a7be1aef884bcff439218a06fad54684f2cd02c5b31cdfda286ea2083",
+  "image": {
+    "path": "axoloty-swift.bin",
+    "sha256": "7a2780258888c8bd52034d3de6397de38a958cbc09ad6f693c605519d743a8e3",
+    "byteCount": 749456
+  },
+  "resources": null,
+  "qualification": {
+    "status": "qualified",
+    "evidence": [
+      {
+        "path": "docs/evidence/esp32c6-mqtt-embedded-swift-smoke-v2.json",
+        "check": "embedded-swift-smoke-v2",
+        "status": "passed",
+        "coreRevision": "827e598f3d97c5e2e7986d7be4ba1d9a5eac7906",
+        "firmwareSHA256": "7a2780258888c8bd52034d3de6397de38a958cbc09ad6f693c605519d743a8e3"
+      },
+      {
+        "path": "docs/evidence/esp32c6-mqtt-firmware-build.json",
+        "check": "firmware-build",
+        "status": "passed",
+        "coreRevision": "827e598f3d97c5e2e7986d7be4ba1d9a5eac7906",
+        "firmwareSHA256": "7a2780258888c8bd52034d3de6397de38a958cbc09ad6f693c605519d743a8e3"
+      }
+    ]
+  }
+}
