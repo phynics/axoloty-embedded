@@ -69,6 +69,7 @@ const record = {
   schemaVersion: 1,
   profile: process.env.PROFILE_NAME,
   check: process.env.CHECK_NAME,
+  tier: "device",
   status: "passed",
   recordedAt: new Date().toISOString().slice(0, 10),
   device: device.device,

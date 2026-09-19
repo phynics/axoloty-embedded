@@ -83,7 +83,11 @@ longer matches the invariant is worse than no rule.
 3. Branch per issue, one fix per branch.
 4. Run `Tools/verify.sh` and keep it passing as you go, not at the end.
 5. Record what you could not run, as an evidence record with status
-   `unexecuted` and a reason. See [evidence.md](./evidence.md).
+   `unexecuted` and a reason. See [evidence.md](./evidence.md). Before you
+   conclude something is unrunnable, check `docker images` — the toolchain is
+   in a container, not on PATH. See [container-builds.md](./container-builds.md).
+   Work that genuinely needs a board is handed off through
+   [device-qualification-handoff.md](./device-qualification-handoff.md).
 6. Commit with Conventional Commits and the configured identity. No bot
    co-author trailer.
 7. Open the PR against `main` with `Closes #<issue-number>`.
