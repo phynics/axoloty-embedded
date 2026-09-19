@@ -115,7 +115,7 @@ This one is a property of ESP-IDF, and it is the most likely to bite again.
 empty inside a component `CMakeLists.txt`. The failure surfaces far from the
 cause — an empty path becomes a missing file, and the error names the file.
 
-Two instances were found and fixed while first building this firmware:
+Instances found and fixed while first building this firmware:
 
 - `AXOLOTY_PREPARATION_REPORT` was passed only with `-D`, and the requirements
   pass reported `AXOLOTY_PREPARATION_REPORT is required; run
@@ -125,6 +125,14 @@ Two instances were found and fixed while first building this firmware:
   the corpus generator path `/fixtures/generate-embedded-corpus.mjs`, which
   failed as `Failed to generate Embedded Swift corpus vectors` — a message
   about a generator, caused by a missing selection.
+- `Tests/embedded/check-swift-linker.sh` re-ran `idf.py` in an
+  already-configured tree to flip the Unicode linker probe. The reconfigure
+  enters the requirements pass again, which reads no cache, and the script
+  did not export the selection its own first build had produced — so the
+  check failed with "AXOLOTY_PREPARATION_REPORT is required" and then, once
+  that was exported, "AXOLOTY_APPLICATION_DIR is required" from the tree it
+  had just built. Export the report, `AXOLOTY_APPLICATION_DIR`, and
+  `AXOLOTY_TRANSPORT_DIR` before the second invocation.
 
 **Cause:** `idf_build_process` expands component requirements in a separate
 CMake sub-invocation. Cache variables from the outer command line are not

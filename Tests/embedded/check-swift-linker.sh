@@ -46,8 +46,23 @@ AXOLOTY_PROOF_RUN_ID="$proof_run_id" \
     EMBEDDED_EVIDENCE_DIR="$proof_root/working-evidence" \
     "$profile_dir/build.sh"
 
-# Re-run in the same build tree with the probe enabled. The application,
-# transport, and Core-preparation cache entries survive from the build above.
+# Re-run in the same build tree with the probe enabled. The reconfigure runs
+# the requirements pass again, and that pass reads the environment, not the
+# CMake cache the first build populated. Export every value it needs, or it
+# fails with "AXOLOTY_PREPARATION_REPORT is required" or
+# "AXOLOTY_APPLICATION_DIR is required" from a tree it just built.
+report="$proof_root/working-evidence/preparation.json"
+if [ ! -f "$report" ]; then
+    echo "EMBEDDED SWIFT LINKER FAIL: no Core preparation report at $report" >&2
+    exit 1
+fi
+application=$(node -e 'const p = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(p.application);' \
+    "$profile_dir/profile.json")
+transport=$(node -e 'const p = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(p.transport);' \
+    "$profile_dir/profile.json")
+export AXOLOTY_PREPARATION_REPORT="$report"
+export AXOLOTY_APPLICATION_DIR="$repo_root/Applications/$application"
+export AXOLOTY_TRANSPORT_DIR="$repo_root/Transports/$transport"
 cd "$project_dir" || exit 1
 echo "== build (Unicode linker probe) =="
 idf.py -B "$build_dir" \
