@@ -20,7 +20,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/phynics/axoloty.git",
-            revision: "827e598f3d97c5e2e7986d7be4ba1d9a5eac7906"
+            revision: "e065a7b9c0a690db22c71499ee482d163eb36261"
         ),
     ],
     targets: [
