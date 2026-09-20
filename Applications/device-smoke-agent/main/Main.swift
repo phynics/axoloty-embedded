@@ -15,12 +15,19 @@ import AxolotyProtocol
 import AxolotyObjectModel
 
 @inline(__always)
+/// Records that the registry invoked its handler.
+///
+/// The handler context is a `UInt32`, so it cannot carry a host pointer on a
+/// 64-bit host. The flag is process-global and the vector resets it before
+/// dispatching, which is identical on the 32-bit device and safe on a host.
+nonisolated(unsafe) private var routerDispatchObserved = false
+
 private func recordRouterDispatch(
-    _ context: UInt32,
+    _: UInt32,
     _: UnsafePointer<UInt8>?, _: Int,
     _: UnsafePointer<UInt8>?, _: Int
 ) {
-    UnsafeMutablePointer<Bool>(bitPattern: UInt(context))?.pointee = true
+    routerDispatchObserved = true
 }
 
 private struct UnsafeSendablePointer<Pointee>: @unchecked Sendable {
@@ -48,22 +55,20 @@ private func runRegistryVectors(_ record: (StaticString, Bool) -> Void) {
         var processor = ProtocolProcessor<16>()
         var sink = InlineProtocolActionSink<1>()
         var registry = ProtocolSubscriptionRegistry<16>()
-        withUnsafeTemporaryAllocation(of: Bool.self, capacity: 1) { dispatched in
-            dispatched[0] = false
-            let registration = try? registry.register(
-                selector: .capability(.discover),
-                handler: ProtocolHandlerEntry(function: recordRouterDispatch, context: UInt32(UInt(bitPattern: dispatched.baseAddress!)))
-            )
-            let outcome: ProtocolProcessOutcome
-            if let frame = try? BorrowedProtocolFrame(topic: discoverMessage.topic, payload: discoverMessage.payload) {
-                outcome = processor.processInbound(.profile(frame), nowMS: 1, sink: &sink)
-            } else {
-                outcome = .rejected(.malformedFrame)
-            }
-            if let action = sink[0] { _ = registry.dispatch(action) }
-            record("router:subscribe", registration != nil)
-            record("router:dispatch", outcome == .accepted && dispatched[0])
+        routerDispatchObserved = false
+        let registration = try? registry.register(
+            selector: .capability(.discover),
+            handler: ProtocolHandlerEntry(function: recordRouterDispatch, context: 0)
+        )
+        let outcome: ProtocolProcessOutcome
+        if let frame = try? BorrowedProtocolFrame(topic: discoverMessage.topic, payload: discoverMessage.payload) {
+            outcome = processor.processInbound(.profile(frame), nowMS: 1, sink: &sink)
+        } else {
+            outcome = .rejected(.malformedFrame)
         }
+        if let action = sink[0] { _ = registry.dispatch(action) }
+        record("router:subscribe", registration != nil)
+        record("router:dispatch", outcome == .accepted && routerDispatchObserved)
     }
 }
 
@@ -546,10 +551,16 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     writeIntVector("writer:zero", 0, "0")
     writeIntVector("writer:one", 1, "1")
     writeIntVector("writer:minusOne", -1, "-1")
-    // This target uses a 32-bit `Int`; keep these expectations
-    // target-specific so the device vector detects a width-dependent encoding.
-    writeIntVector("writer:max", Int.max, "2147483647")
-    writeIntVector("writer:min", Int.min, "-2147483648")
+    // The encoded text depends on the target's `Int` width. Expect the value
+    // for the width this build actually has, so the vector still detects a
+    // width-dependent encoding rather than assuming the 32-bit device.
+    if MemoryLayout<Int>.size == 4 {
+        writeIntVector("writer:max", Int.max, "2147483647")
+        writeIntVector("writer:min", Int.min, "-2147483648")
+    } else {
+        writeIntVector("writer:max", Int.max, "9223372036854775807")
+        writeIntVector("writer:min", Int.min, "-9223372036854775808")
+    }
 
     topicVector("topic:exact", 51, "", true)
     topicVector("topic:underCapacity", 50, "", false)
