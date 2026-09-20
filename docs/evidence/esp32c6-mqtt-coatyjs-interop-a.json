@@ -4,10 +4,10 @@
   "check": "coatyjs-interop",
   "tier": "device",
   "status": "passed",
-  "recordedAt": "2026-09-19",
+  "recordedAt": "2026-09-20",
   "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8",
-  "firmwareSHA256": "f4f73212a0db320bbfd68e3fd9b01459c3ed7ab7d6125150c936580b5fa626f9",
-  "coreRevision": "827e598f3d97c5e2e7986d7be4ba1d9a5eac7906",
+  "firmwareSHA256": "6b5297258b7d6e8732905c1b5be842ba7f2a2ec7fe69da8ccabb1e6fb33d1ccf",
+  "coreRevision": "e065a7b9c0a690db22c71499ee482d163eb36261",
   "protocol": "10 deterministic exchange cases against the pinned CoatyJS reference agent",
   "result": "10/10 passed"
 }
