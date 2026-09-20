@@ -121,7 +121,7 @@ swiftc -swift-version 5 -enable-experimental-feature Lifetimes \
     "$transport_main/EmbeddedMQTTClient.swift" \
     "$transport_main/CarrierNetworkProbe.swift" \
     "$work/GeneratedCorpus.swift" \
-    "$seam_dir/HostSmokeSeam.swift" "$seam_dir/main.swift" \
+    "$seam_dir/HostSmokeSeam.swift" "$seam_dir/HostSmokeMain.swift" \
     "$work"/*.o \
     -o "$work/host-smoke"
 
