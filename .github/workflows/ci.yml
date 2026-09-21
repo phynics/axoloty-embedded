@@ -69,7 +69,7 @@ jobs:
 
       - uses: swift-actions/setup-swift@v2
         with:
-          swift-version: '6.3'
+          swift-version: '6.3.3'
 
       # The build tier runs the hardware-free host firmware checks (runtime
       # identity, shared flags, and the MQTT transport seam) and then attempts
