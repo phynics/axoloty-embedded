@@ -64,12 +64,12 @@ jobs:
     name: Firmware host checks and image
     runs-on: ubuntu-latest
     needs: repo
+    container: swift:6.3-jammy
     steps:
       - uses: actions/checkout@v4
 
-      - uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: '6.3.3'
+      - name: Install host test dependencies
+        run: apt-get update -qq && apt-get install -y -qq nodejs
 
       # The build tier runs the hardware-free host firmware checks (runtime
       # identity, shared flags, and the MQTT transport seam) and then attempts
