@@ -161,27 +161,32 @@ AGENT_VALIDATOR="$repo_root/Tests/embedded/agent-validator.mjs" \
 PEER_OUTPUT="$peer_output" \
 HOST_OUTPUT="$host_output" \
 IN_PROCESS="$in_process" \
-    node --input-type=module - <<'JS'
+node --input-type=module - <<'JS'
 import fs from "node:fs";
 
-const { createEmbeddedAgentValidator } = await import(process.env.AGENT_VALIDATOR);
-const validator = createEmbeddedAgentValidator();
-for (const line of fs.readFileSync(process.env.HOST_OUTPUT, "utf8").split(/\r?\n/)) {
-  const start = line.indexOf("{");
-  if (start < 0) continue;
-  let record;
-  try { record = JSON.parse(line.slice(start)); } catch { continue; }
-  if (typeof record.caseId === "string" || record.caseId === undefined && record.schemaVersion !== undefined) {
-    validator.observe(line.slice(start));
+ (async () => {
+  const { createEmbeddedAgentValidator } = await import(process.env.AGENT_VALIDATOR);
+  const validator = createEmbeddedAgentValidator();
+  for (const line of fs.readFileSync(process.env.HOST_OUTPUT, "utf8").split(/\r?\n/)) {
+    const start = line.indexOf("{");
+    if (start < 0) continue;
+    let record;
+    try { record = JSON.parse(line.slice(start)); } catch { continue; }
+    if (typeof record.caseId === "string" || record.caseId === undefined && record.schemaVersion !== undefined) {
+      validator.observe(line.slice(start));
+    }
   }
-}
-const result = validator.result();
-if (!result.passed) throw new Error(`host smoke validation failed: ${result.reason}`);
-const peer = fs.readFileSync(process.env.PEER_OUTPUT, "utf8");
-if (!peer.includes('"state":"passed"')) throw new Error("host peer did not report a passed exchange");
-if (process.env.IN_PROCESS === "1") {
-  console.log(`host agent exchange passed: ${result.counts.passed} exchange checks; broker LWT observed`);
-} else {
-  console.log(`host agent exchange passed: ${result.counts.passed} exchange checks`);
-}
+  const result = validator.result();
+  if (!result.passed) throw new Error(`host smoke validation failed: ${result.reason}`);
+  const peer = fs.readFileSync(process.env.PEER_OUTPUT, "utf8");
+  if (!peer.includes('"state":"passed"')) throw new Error("host peer did not report a passed exchange");
+  if (process.env.IN_PROCESS === "1") {
+    console.log(`host agent exchange passed: ${result.counts.passed} exchange checks; broker LWT observed`);
+  } else {
+    console.log(`host agent exchange passed: ${result.counts.passed} exchange checks`);
+  }
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
 JS
