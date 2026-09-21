@@ -37,7 +37,7 @@ let package = Package(
         .target(
             name: "DeviceSmokeApplication",
             dependencies: [
-                "EmbeddedMQTTClient",
+                "DeviceSmokeHostSupport",
                 .product(name: "AxolotyWire", package: "Axoloty"),
                 .product(name: "AxolotyProtocol", package: "Axoloty"),
                 .product(name: "AxolotyObjectModel", package: "Axoloty"),
@@ -54,6 +54,12 @@ let package = Package(
             path: "Transports/mqtt-espidf/main",
             sources: ["EmbeddedMQTTClient.swift", "CarrierNetworkProbe.swift"],
             swiftSettings: [.define("EMBEDDED_MQTT_HOST_TEST")]
+        ),
+        .target(
+            name: "DeviceSmokeHostSupport",
+            dependencies: ["EmbeddedMQTTClient"],
+            path: "Tests/host-agent-support",
+            swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .executableTarget(
             name: "EmbeddedHostPeer",

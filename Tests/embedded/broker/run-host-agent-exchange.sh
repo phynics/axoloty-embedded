@@ -9,7 +9,7 @@
 set -eu
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
-repo_root=$(CDPATH='' cd -- "$script_dir/../../.." && pwd)
+repo_root=$(git -C "$script_dir" rev-parse --show-toplevel)
 if [ -n "${HOST_AGENT_EXCHANGE_WORK:-}" ]; then
     work=$HOST_AGENT_EXCHANGE_WORK
     mkdir -p "$work"

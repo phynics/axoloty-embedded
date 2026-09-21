@@ -14,7 +14,7 @@ import AxolotyWire
 import AxolotyProtocol
 import AxolotyObjectModel
 #if HOST_AGENT_EXCHANGE
-import EmbeddedMQTTClient
+import DeviceSmokeHostSupport
 #endif
 
 @inline(__always)
@@ -631,7 +631,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     // without changing the existing corpus or its counts.
     if seam.networkConfigured() != 0 {
         if networkRole == 0 {
-            runCarrierNetworkProbe(
+            runDeviceSmokeHostNetworkProbe(
                 networkPrepare: seam.networkPrepare,
                 networkCopyTopic: seam.networkCopyTopic,
                 networkCopyPayload: seam.networkCopyPayload,
@@ -650,7 +650,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
                 agentFilter.utf8Start,
                 Int32(agentFilter.utf8CodeUnitCount)
             )
-            emitAgentExchange(exchangeBits, networkScenario, record: record)
+            recordDeviceSmokeExchange(exchangeBits, networkScenario, record: record)
         }
     }
 
