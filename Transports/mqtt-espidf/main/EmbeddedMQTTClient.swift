@@ -34,7 +34,7 @@ private func axoloty_mqtt_disconnect() -> Int32
 ///
 /// ESP-MQTT owns the client handle and callback in C. Every byte buffer passed
 /// here is consumed synchronously and is never retained by this value.
-struct EmbeddedMQTTClient {
+public struct EmbeddedMQTTClient {
     private enum State {
         case idle
         case connected
@@ -44,9 +44,9 @@ struct EmbeddedMQTTClient {
 
     private var state = State.idle
 
-    init() {}
+    public init() {}
 
-    mutating func configureLastWill(
+    public mutating func configureLastWill(
         topic: UnsafePointer<UInt8>, topicLength: Int32,
         payload: UnsafePointer<UInt8>, payloadLength: Int32
     ) -> Bool {
@@ -56,13 +56,13 @@ struct EmbeddedMQTTClient {
         return axoloty_mqtt_configure_last_will(topic, topicLength, payload, payloadLength) != 0
     }
 
-    mutating func connect(deadlineMS: UInt32) -> Bool {
+    public mutating func connect(deadlineMS: UInt32) -> Bool {
         guard state == .idle, axoloty_mqtt_connect_wait(deadlineMS) != 0 else { return false }
         state = .connected
         return true
     }
 
-    mutating func subscribe(
+    public mutating func subscribe(
         topic: UnsafePointer<UInt8>, topicLength: Int32,
         deadlineMS: UInt32
     ) -> Bool {
@@ -73,7 +73,7 @@ struct EmbeddedMQTTClient {
         return true
     }
 
-    func publish(
+    public func publish(
         topic: UnsafePointer<UInt8>, topicLength: Int32,
         payload: UnsafePointer<UInt8>, payloadLength: Int32
     ) -> Bool {
@@ -83,15 +83,15 @@ struct EmbeddedMQTTClient {
         return axoloty_mqtt_publish(topic, topicLength, payload, payloadLength) != 0
     }
 
-    func waitForLoopback(deadlineMS: UInt32) -> Bool {
+    public func waitForLoopback(deadlineMS: UInt32) -> Bool {
         state == .subscribed && axoloty_mqtt_wait_loopback(deadlineMS) != 0
     }
 
-    func waitForReconnect(deadlineMS: UInt32) -> Bool {
+    public func waitForReconnect(deadlineMS: UInt32) -> Bool {
         state == .subscribed && axoloty_mqtt_reconnect_wait(deadlineMS) != 0
     }
 
-    mutating func disconnect() -> Bool {
+    public mutating func disconnect() -> Bool {
         guard state == .connected || state == .subscribed else { return false }
         guard axoloty_mqtt_disconnect() != 0 else { return false }
         state = .disconnected

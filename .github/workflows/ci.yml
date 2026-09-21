@@ -80,9 +80,8 @@ jobs:
       - name: Host firmware checks and profile image
         run: Tools/verify.sh --tier build
 
-      # The broker tier needs a reachable MQTT broker but no board. This
-      # workflow has none, so it reports UNAVAILABLE rather than a result. A
-      # broker-only check would run here once one is owned.
+      # The broker tier self-provisions an ephemeral in-process broker when no
+      # operator broker is configured. It needs no board or container broker.
       - name: Broker-only checks
         run: Tools/verify.sh --tier broker
 

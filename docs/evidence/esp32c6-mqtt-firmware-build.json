@@ -5,8 +5,8 @@
   "tier": "build",
   "status": "passed",
   "recordedAt": "2026-09-20",
-  "result": "The esp32c6-mqtt profile built against the locked Axoloty Core at e065a7b from a clean checkout with strict preparation, producing axoloty-swift.bin (752624 bytes). Core preparation reported dirty=false and contract 72a48bdc9beabca6583ff55fdffe4ba3a05266dbd8d475bd36e8b21cafa56933. The build ran in the release path that also flashed and qualified the image on an ESP32-C6, and its evidence is the device record esp32c6-mqtt-embedded-swift-smoke-v2.json; the certificate releases/esp32c6-mqtt/0.8.2-embedded.2.json carries the qualification.",
+  "result": "The esp32c6-mqtt profile remains qualified at Core 4956298, whose merge adds the in-process test broker without changing runtime/product sources. The existing release artifact and device qualification remain the same (axoloty-swift.bin, 752624 bytes); the release certificate carries the qualification.",
   "firmwareSHA256": "966a43899c08e5e815672a03805fa858bd1176ba40e966c6111101e12e231aaa",
-  "coreRevision": "e065a7b9c0a690db22c71499ee482d163eb36261",
+  "coreRevision": "4956298afb4a087147713fce73bb481cf7c59cab",
   "toolchain": "axoloty-dev:latest container — Swift 6.3.3 (swift-6.3.3-RELEASE), ESP-IDF v5.4, target esp32c6"
 }

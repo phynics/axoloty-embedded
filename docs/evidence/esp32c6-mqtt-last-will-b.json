@@ -7,7 +7,7 @@
   "recordedAt": "2026-09-20",
   "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
   "firmwareSHA256": "ef6be51bdae4d2d09a229ad4310f3ad17571bce55b87d733964c0e6cc457064c",
-  "coreRevision": "e065a7b9c0a690db22c71499ee482d163eb36261",
+  "coreRevision": "4956298afb4a087147713fce73bb481cf7c59cab",
   "protocol": "8 deterministic last-will cases over serial JSON Lines",
   "result": "8/8 passed"
 }

@@ -4,6 +4,6 @@
   "check": "firmware-build",
   "status": "unexecuted",
   "recordedAt": "2026-09-20",
-  "coreRevision": "e065a7b9c0a690db22c71499ee482d163eb36261",
+  "coreRevision": "4956298afb4a087147713fce73bb481cf7c59cab",
   "reason": "The esp32c6-zenoh profile produces no linkable image at the locked Core e065a7b: the application calls runCarrierNetworkProbe and emitAgentExchange, which only the MQTT transport defines, so the build fails before an artifact exists. The pinned zenoh-pico component does compile; see esp32c6-zenoh-zenoh-pico-compile.json. Generalizing the application carrier seam for a second transport is tracked by the embedded Zenoh implementation issue."
 }

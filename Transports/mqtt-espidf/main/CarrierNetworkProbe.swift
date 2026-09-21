@@ -15,7 +15,7 @@
 /// is configured and that the device role selects the probe path. The platform
 /// network façade is supplied as function pointers so this transport does not
 /// depend on the application seam type.
-func runCarrierNetworkProbe(
+public func runCarrierNetworkProbe(
     networkPrepare: @convention(c) (UInt32) -> UInt32,
     networkCopyTopic: @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
     networkCopyPayload: @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
@@ -92,7 +92,7 @@ func runCarrierNetworkProbe(
 ///
 /// The platform owns the exchange itself; this transport owns the carrier-step
 /// identifiers and the scenario bit layout it reports.
-func emitAgentExchange(
+public func emitAgentExchange(
     _ exchangeBits: UInt32,
     _ scenario: UInt32,
     record: (StaticString, Bool) -> Void

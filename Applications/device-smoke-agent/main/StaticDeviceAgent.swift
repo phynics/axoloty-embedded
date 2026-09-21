@@ -296,12 +296,12 @@ private let phase4Correlation = UUID16(bytes: (
     0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04
 ))
 
-private var phase4AgentA = StaticDeviceAgent(
+nonisolated(unsafe) private var phase4AgentA = StaticDeviceAgent(
     agentId: StaticDeviceAgent.agentAId,
     deviceObjectId: StaticDeviceAgent.objectAId
 )
 
-private var phase4AgentB = StaticDeviceAgent(
+nonisolated(unsafe) private var phase4AgentB = StaticDeviceAgent(
     agentId: StaticDeviceAgent.agentBId,
     deviceObjectId: StaticDeviceAgent.objectBId
 )
