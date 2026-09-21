@@ -9,7 +9,7 @@
 #   core    locked Core preparation             needs swift and network
 #   build   host firmware checks and the         needs a host compiler; the
 #           firmware image build per profile    image part needs ESP-IDF
-#   broker  broker-only checks                  needs a reachable MQTT broker
+#   broker  broker-only checks                  self-provisions or uses a broker
 #   device  flash, monitor, and smoke           needs a physical board
 #
 # A tier whose capability is absent reports UNAVAILABLE with the reason and is
@@ -196,33 +196,37 @@ fi
 # ---------------------------------------------------------------------------
 # broker
 # ---------------------------------------------------------------------------
-# A broker-only check needs a reachable MQTT broker but no board. Most
-# checkouts have no broker, so the capability is explicit and its absence is
-# reported as UNAVAILABLE, never treated as a pass. Checks that need a broker
-# *and* a board are device checks and belong to the `device` tier.
+# A broker-only check needs a reachable MQTT broker but no board. The owned
+# check self-provisions one when no operator broker is configured. Checks that
+# need a broker *and* a board are device checks and belong to `device`.
 
 if wanted broker; then
     broker_host=${AXOLOTY_MQTT_HOST:-}
     broker_port=${AXOLOTY_MQTT_PORT:-1883}
-    if [ -z "$broker_host" ]; then
-        unavailable broker 'AXOLOTY_MQTT_HOST is unset, so no MQTT broker is configured for this run'
-    elif ! (exec 3<>"/dev/tcp/$broker_host/$broker_port") 2>/dev/null; then
+    broker_checks="$(find Tests/embedded/broker -maxdepth 1 -type f -name '*.sh' 2>/dev/null | sort)"
+    if [ -z "$broker_checks" ]; then
+        if [ -z "$broker_host" ]; then
+            unavailable broker 'AXOLOTY_MQTT_HOST is unset and no self-provisioned broker check is owned yet'
+        else
+            unavailable broker 'a broker is configured, but no broker-only check is owned yet'
+        fi
+    elif [ -n "$broker_host" ] && ! (exec 3<>"/dev/tcp/$broker_host/$broker_port") 2>/dev/null; then
         unavailable broker "no MQTT broker is reachable at $broker_host:$broker_port"
     else
-        broker_checks="$(find Tests/embedded/broker -maxdepth 1 -type f -name '*.sh' 2>/dev/null | sort)"
-        if [ -z "$broker_checks" ]; then
-            record SKIP broker 'a broker is reachable, but no broker-only check is owned yet; see docs/check-inventory.md'
-        else
-            for broker_check in $broker_checks; do
-                printf '\n== broker: %s\n' "$broker_check"
-                if "$broker_check"; then
-                    record PASS "broker:$(basename "$broker_check")" 'passed'
+        for broker_check in $broker_checks; do
+            printf '\n== broker: %s\n' "$broker_check"
+            if "$broker_check"; then
+                record PASS "broker:$(basename "$broker_check")" 'passed'
+            else
+                broker_status=$?
+                if [ "$broker_status" -eq 69 ]; then
+                    unavailable broker "the broker check toolchain is unavailable for $(basename "$broker_check")"
                 else
                     record FAIL "broker:$(basename "$broker_check")" 'check failed'
                     failed=1
                 fi
-            done
-        fi
+            fi
+        done
     fi
 fi
 

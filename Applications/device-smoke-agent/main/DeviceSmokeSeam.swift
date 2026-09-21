@@ -10,7 +10,7 @@
 // allocation, no retention, and one synchronous call per operation.
 
 /// Operations the running profile supplies to the device smoke application.
-struct DeviceSmokeSeam {
+public struct DeviceSmokeSeam {
     /// Writes one bounded UTF-8 message to the firmware console.
     var print: @convention(c) (UnsafePointer<CChar>) -> Void
     /// Writes one unsigned value to the firmware console, with a label prefix.
@@ -60,6 +60,54 @@ struct DeviceSmokeSeam {
     var agentTest: @convention(c) (UInt32, UnsafePointer<UInt8>, Int32) -> UInt32
     /// Copies the operator-configured device display name into caller storage.
     var deviceDisplayName: @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32
+
+    public init(
+        print: @escaping @convention(c) (UnsafePointer<CChar>) -> Void,
+        printUInt: @escaping @convention(c) (UnsafePointer<CChar>, UInt32) -> Void,
+        nowMicroseconds: @escaping @convention(c) () -> Int64,
+        delay: @escaping @convention(c) (UInt32) -> Void,
+        restart: @escaping @convention(c) () -> Void,
+        freeInternalHeap: @escaping @convention(c) () -> UInt32,
+        minFreeInternalHeap: @escaping @convention(c) () -> UInt32,
+        largestInternalBlock: @escaping @convention(c) () -> UInt32,
+        mainStackHighWater: @escaping @convention(c) () -> UInt32,
+        mainStackSize: @escaping @convention(c) () -> UInt32,
+        resetReason: @escaping @convention(c) () -> UInt32,
+        heapTraceBegin: @escaping @convention(c) () -> Int32,
+        heapTraceEnd: @escaping @convention(c) () -> UInt32,
+        networkConfigured: @escaping @convention(c) () -> Int32,
+        networkRole: @escaping @convention(c) () -> UInt32,
+        networkScenario: @escaping @convention(c) () -> UInt32,
+        networkPrepare: @escaping @convention(c) (UInt32) -> UInt32,
+        networkCopyTopic: @escaping @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
+        networkCopyPayload: @escaping @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
+        networkCleanup: @escaping @convention(c) () -> UInt32,
+        agentTest: @escaping @convention(c) (UInt32, UnsafePointer<UInt8>, Int32) -> UInt32,
+        deviceDisplayName: @escaping @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32
+    ) {
+        self.print = print
+        self.printUInt = printUInt
+        self.nowMicroseconds = nowMicroseconds
+        self.delay = delay
+        self.restart = restart
+        self.freeInternalHeap = freeInternalHeap
+        self.minFreeInternalHeap = minFreeInternalHeap
+        self.largestInternalBlock = largestInternalBlock
+        self.mainStackHighWater = mainStackHighWater
+        self.mainStackSize = mainStackSize
+        self.resetReason = resetReason
+        self.heapTraceBegin = heapTraceBegin
+        self.heapTraceEnd = heapTraceEnd
+        self.networkConfigured = networkConfigured
+        self.networkRole = networkRole
+        self.networkScenario = networkScenario
+        self.networkPrepare = networkPrepare
+        self.networkCopyTopic = networkCopyTopic
+        self.networkCopyPayload = networkCopyPayload
+        self.networkCleanup = networkCleanup
+        self.agentTest = agentTest
+        self.deviceDisplayName = deviceDisplayName
+    }
 }
 
 extension DeviceSmokeSeam {
@@ -86,7 +134,7 @@ extension DeviceSmokeSeam {
 /// ``startDeviceSmoke(_:)`` and read synchronously from application entry
 /// points that the profile calls back into; it is never accessed from a
 /// concurrent context.
-private var installedDeviceSmokeSeam: DeviceSmokeSeam?
+nonisolated(unsafe) private var installedDeviceSmokeSeam: DeviceSmokeSeam?
 
 /// Returns the installed seam. The application is only reachable after the
 /// profile has installed one.

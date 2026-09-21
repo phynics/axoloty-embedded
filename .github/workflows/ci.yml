@@ -64,12 +64,19 @@ jobs:
     name: Firmware host checks and image
     runs-on: ubuntu-latest
     needs: repo
+    container: swift:6.3-jammy
     steps:
       - uses: actions/checkout@v4
 
-      - uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: '6.1'
+      - name: Trust the checked-out repository in the container
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Install host test dependencies
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq ca-certificates curl
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          apt-get install -y -qq nodejs
 
       # The build tier runs the hardware-free host firmware checks (runtime
       # identity, shared flags, and the MQTT transport seam) and then attempts
@@ -80,9 +87,8 @@ jobs:
       - name: Host firmware checks and profile image
         run: Tools/verify.sh --tier build
 
-      # The broker tier needs a reachable MQTT broker but no board. This
-      # workflow has none, so it reports UNAVAILABLE rather than a result. A
-      # broker-only check would run here once one is owned.
+      # The broker tier self-provisions an ephemeral in-process broker when no
+      # operator broker is configured. It needs no board or container broker.
       - name: Broker-only checks
         run: Tools/verify.sh --tier broker
 

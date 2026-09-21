@@ -13,6 +13,9 @@
 import AxolotyWire
 import AxolotyProtocol
 import AxolotyObjectModel
+#if HOST_AGENT_EXCHANGE
+import DeviceSmokeHostSupport
+#endif
 
 @inline(__always)
 /// Records that the registry invoked its handler.
@@ -309,6 +312,27 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     let networkScenario = seam.networkScenario()
     var emittingExchangeEvidence = false
 
+    struct BenchmarkMetrics {
+        let topicParseP50ns: UInt32
+        let topicParseP95ns: UInt32
+        let dtoDecodeP50ns: UInt32
+        let dtoDecodeP95ns: UInt32
+        let dtoEncodeP50ns: UInt32
+        let dtoEncodeP95ns: UInt32
+        let combinedP50ns: UInt32
+        let combinedP95ns: UInt32
+        let borrowedP50ns: UInt32
+        let borrowedP95ns: UInt32
+
+        static let zero = BenchmarkMetrics(
+            topicParseP50ns: 0, topicParseP95ns: 0,
+            dtoDecodeP50ns: 0, dtoDecodeP95ns: 0,
+            dtoEncodeP50ns: 0, dtoEncodeP95ns: 0,
+            combinedP50ns: 0, combinedP95ns: 0,
+            borrowedP50ns: 0, borrowedP95ns: 0
+        )
+    }
+
     @inline(__always)
     func printStatic(_ value: StaticString) {
         seam.print(
@@ -598,14 +622,16 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
 
     runAgentVectors(record)
 
+    #if !HOST_AGENT_EXCHANGE
     runGeneratedCorpus(record)
+    #endif
 
     // The ordinary vector image is deliberately credential-free. A dedicated
     // network build supplies the operator configuration and appends evidence
     // without changing the existing corpus or its counts.
     if seam.networkConfigured() != 0 {
         if networkRole == 0 {
-            runCarrierNetworkProbe(
+            runDeviceSmokeHostNetworkProbe(
                 networkPrepare: seam.networkPrepare,
                 networkCopyTopic: seam.networkCopyTopic,
                 networkCopyPayload: seam.networkCopyPayload,
@@ -624,18 +650,34 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
                 agentFilter.utf8Start,
                 Int32(agentFilter.utf8CodeUnitCount)
             )
-            emitAgentExchange(exchangeBits, networkScenario, record: record)
+            recordDeviceSmokeExchange(exchangeBits, networkScenario, record: record)
         }
     }
 
     // Prove that a warmed corpus pass performs no heap allocation. The second
     // pass suppresses serial output so the trace covers only AxolotyWire work.
     var hotPathAllocations = UInt32.max
+    #if HOST_AGENT_EXCHANGE
+    let benchmarkMetrics = BenchmarkMetrics.zero
+    #else
     if seam.heapTraceBegin() != 0 {
         runGeneratedCorpus { _, _ in }
         hotPathAllocations = seam.heapTraceEnd()
     }
-    let benchmarkMetrics = benchmarkGeneratedCorpus()
+    let generatedMetrics = benchmarkGeneratedCorpus()
+    let benchmarkMetrics = BenchmarkMetrics(
+        topicParseP50ns: generatedMetrics.topicParseP50ns,
+        topicParseP95ns: generatedMetrics.topicParseP95ns,
+        dtoDecodeP50ns: generatedMetrics.dtoDecodeP50ns,
+        dtoDecodeP95ns: generatedMetrics.dtoDecodeP95ns,
+        dtoEncodeP50ns: generatedMetrics.dtoEncodeP50ns,
+        dtoEncodeP95ns: generatedMetrics.dtoEncodeP95ns,
+        combinedP50ns: generatedMetrics.combinedP50ns,
+        combinedP95ns: generatedMetrics.combinedP95ns,
+        borrowedP50ns: generatedMetrics.borrowedP50ns,
+        borrowedP95ns: generatedMetrics.borrowedP95ns
+    )
+    #endif
 
     // === Summary and completion ===
 
@@ -714,7 +756,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
 /// Embedded Swift compiler from reserving the complete `runSmoke` frame at
 /// entry, which can exhaust the fixed main-task stack before the first smoke
 /// record is emitted.
-func startDeviceSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
+public func startDeviceSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     installDeviceSmokeSeam(seam)
     guard axoloty_protocol_embedded_link_probe() == 3 else {
         return 1

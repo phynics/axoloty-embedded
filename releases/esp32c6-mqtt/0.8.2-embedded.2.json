@@ -14,12 +14,12 @@
   "compatibility": {
     "scope": "profile",
     "status": "qualified",
-    "description": "Profile esp32c6-mqtt is qualified against Axoloty 0.8.2 (e065a7b9c0a6) on ESP32-C6-DevKitC-1."
+    "description": "Profile esp32c6-mqtt is qualified against Axoloty 0.8.2 (4956298afb4a) on ESP32-C6-DevKitC-1. Core 4956298 adds test-broker support without changing runtime/product sources."
   },
   "axoloty": {
     "version": "0.8.2",
     "tag": "v0.8.2",
-    "sha": "e065a7b9c0a690db22c71499ee482d163eb36261",
+    "sha": "4956298afb4a087147713fce73bb481cf7c59cab",
     "dirty": false,
     "contractSha256": "72a48bdc9beabca6583ff55fdffe4ba3a05266dbd8d475bd36e8b21cafa56933"
   },
@@ -47,7 +47,7 @@
         "path": "docs/evidence/esp32c6-mqtt-embedded-swift-smoke-v2.json",
         "check": "embedded-swift-smoke-v2",
         "status": "passed",
-        "coreRevision": "e065a7b9c0a690db22c71499ee482d163eb36261",
+        "coreRevision": "4956298afb4a087147713fce73bb481cf7c59cab",
         "firmwareSHA256": "966a43899c08e5e815672a03805fa858bd1176ba40e966c6111101e12e231aaa"
       }
     ]
