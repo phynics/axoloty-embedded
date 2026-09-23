@@ -264,6 +264,50 @@ done
 [ "$escape_bad" -eq 0 ] && pass core-boundary 'no parent-directory discovery and no Core .build read'
 
 # ---------------------------------------------------------------------------
+# 6b. ESP-IDF compiles the prepared Core modules in dependency order.
+# ---------------------------------------------------------------------------
+# Core owns the portable package list. This repository owns the CMake
+# integration that consumes those paths and publishes each importable module
+# before the next component compiles. Keep these assertions with the firmware,
+# not in Core source-policy checks.
+
+component_root='Platforms/esp32c6-idf/components'
+source_resolver='Platforms/esp32c6-idf/cmake/axoloty-source.cmake'
+main_component='Platforms/esp32c6-idf/main/CMakeLists.txt'
+component_order_bad=0
+require_component_text() {
+    file="$1"
+    text="$2"
+    description="$3"
+    if [ ! -f "$file" ] || ! grep -Fq "$text" "$file"; then
+        fail core-component-order "$description"
+        component_order_bad=1
+    fi
+}
+
+if [ ! -d "$component_root" ]; then
+    skip core-component-order 'no ESP-IDF component tree exists yet'
+else
+    for variable in AXOLOTY_WIRE_SOURCE_DIR AXOLOTY_OBJECT_MODEL_SOURCE_DIR AXOLOTY_PROTOCOL_SOURCE_DIR AXOLOTY_COATY_MODELS_SOURCE_DIR AXOLOTY_STATIC_RUNTIME_SOURCE_DIR; do
+        require_component_text "$source_resolver" "$variable" "$source_resolver does not resolve $variable from the preparation report"
+    done
+    require_component_text "$component_root/axoloty_wire/CMakeLists.txt" '"${AXOLOTY_WIRE_SOURCE_DIR}/*.swift"' 'the wire component does not compile the prepared AxolotyWire sources'
+    require_component_text "$component_root/axoloty_wire/CMakeLists.txt" 'add_custom_target(axoloty_wire_module_alias' 'the wire component does not publish its importable module alias'
+    require_component_text "$component_root/axoloty_object_model/CMakeLists.txt" '"${AXOLOTY_OBJECT_MODEL_SOURCE_DIR}/*.swift"' 'the object-model component does not compile the prepared sources'
+    require_component_text "$component_root/axoloty_object_model/CMakeLists.txt" 'axoloty_wire_module_alias' 'the object-model component does not wait for AxolotyWire'
+    require_component_text "$component_root/axoloty_object_model/CMakeLists.txt" 'add_custom_target(axoloty_object_model_module_alias' 'the object-model component does not publish its importable module alias'
+    require_component_text "$component_root/axoloty_protocol/CMakeLists.txt" '"${AXOLOTY_PROTOCOL_SOURCE_DIR}/*.swift"' 'the protocol component does not compile the prepared sources'
+    require_component_text "$component_root/axoloty_protocol/CMakeLists.txt" 'axoloty_object_model_module_alias' 'the protocol component does not wait for AxolotyObjectModel'
+    require_component_text "$component_root/axoloty_protocol/CMakeLists.txt" 'add_custom_target(axoloty_protocol_module_alias' 'the protocol component does not publish its importable module alias'
+    require_component_text "$component_root/axoloty_coaty_models/CMakeLists.txt" '"${AXOLOTY_COATY_MODELS_SOURCE_DIR}/*.swift"' 'the Coaty-model component does not compile the prepared sources'
+    require_component_text "$component_root/axoloty_coaty_models/CMakeLists.txt" 'axoloty_object_model_module_alias' 'the Coaty-model component does not wait for AxolotyObjectModel'
+    require_component_text "$component_root/axoloty_static_runtime/CMakeLists.txt" 'AXOLOTY_STATIC_RUNTIME_SOURCE_DIR' 'the static-runtime component does not compile prepared sources'
+    require_component_text "$component_root/axoloty_static_runtime/CMakeLists.txt" 'axoloty_protocol_module_alias' 'the static-runtime component does not wait for AxolotyProtocol'
+    require_component_text "$main_component" 'axoloty_static_runtime_module_alias' 'the main component does not wait for AxolotyStaticRuntime'
+    [ "$component_order_bad" -eq 0 ] && pass core-component-order 'ESP-IDF compiles prepared Core modules and preserves their import order'
+fi
+
+# ---------------------------------------------------------------------------
 # 7. A profile is one declarative application x platform x transport selection.
 # ---------------------------------------------------------------------------
 
@@ -521,8 +565,11 @@ if [ -z "$manifest_files" ]; then
     skip release 'no tracked release manifest exists yet'
 else
     for manifest in $manifest_files; do
-        if manifest_report="$(python3 Tools/validate-release-manifest.py "$repo_root" "$manifest" --require-qualified 2>&1)"; then
-            pass release "$manifest is a valid, qualified profile certificate"
+        if manifest_report="$(python3 Tools/validate-release-manifest.py "$repo_root" "$manifest" --require-qualified --allow-revoked 2>&1)"; then
+            case "$manifest_report" in
+                revoked*) skip release "${manifest_report#revoked  \[release-manifest\] }" ;;
+                *) pass release "$manifest is a valid, qualified profile certificate" ;;
+            esac
         else
             while IFS= read -r line; do
                 [ -n "$line" ] && fail release "${line#VIOLATION \[release-manifest\] }"

@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "status": "revoked",
+  "manifestPath": "releases/esp32c6-mqtt/0.8.2-embedded.2.json",
+  "reason": "The certificate records embedded.dirty=true, so it cannot prove a reproducible firmware release."
+}
