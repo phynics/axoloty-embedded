@@ -631,6 +631,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     // without changing the existing corpus or its counts.
     if seam.networkConfigured() != 0 {
         if networkRole == 0 {
+            #if HOST_AGENT_EXCHANGE
             runDeviceSmokeHostNetworkProbe(
                 networkPrepare: seam.networkPrepare,
                 networkCopyTopic: seam.networkCopyTopic,
@@ -638,6 +639,15 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
                 networkCleanup: seam.networkCleanup,
                 record: record
             )
+            #else
+            runCarrierNetworkProbe(
+                networkPrepare: seam.networkPrepare,
+                networkCopyTopic: seam.networkCopyTopic,
+                networkCopyPayload: seam.networkCopyPayload,
+                networkCleanup: seam.networkCleanup,
+                record: record
+            )
+            #endif
         } else {
             emittingExchangeEvidence = true
             // The offline vectors above share these static agents and leave a
@@ -650,7 +660,11 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
                 agentFilter.utf8Start,
                 Int32(agentFilter.utf8CodeUnitCount)
             )
+            #if HOST_AGENT_EXCHANGE
             recordDeviceSmokeExchange(exchangeBits, networkScenario, record: record)
+            #else
+            emitAgentExchange(exchangeBits, networkScenario, record: record)
+            #endif
         }
     }
 
