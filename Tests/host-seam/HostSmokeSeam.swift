@@ -100,6 +100,8 @@ private func hostNetworkScenario() -> UInt32 { HostSmokeConfiguration.networkSce
 @inline(__always)
 private func hostNetworkPrepare(_ deadline: UInt32) -> UInt32 { _ = deadline; return 0 }
 @inline(__always)
+private func hostNetworkReconnect(_ deadline: UInt32) -> UInt32 { _ = deadline; return 0 }
+@inline(__always)
 private func hostNetworkCopyTopic(_ buffer: UnsafeMutablePointer<UInt8>, _ capacity: Int32) -> Int32 {
     _ = buffer; _ = capacity; return 0
 }
@@ -110,9 +112,40 @@ private func hostNetworkCopyPayload(_ buffer: UnsafeMutablePointer<UInt8>, _ cap
 @inline(__always)
 private func hostNetworkCleanup() -> UInt32 { 1 }
 @inline(__always)
-private func hostAgentTest(
-    _ deadline: UInt32, _ filter: UnsafePointer<UInt8>, _ length: Int32
-) -> UInt32 { _ = deadline; _ = filter; _ = length; return 0 }
+private func hostCarrierConfigureLastWill(
+    _ topic: UnsafePointer<UInt8>, _ topicLength: Int32,
+    _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32
+) -> Int32 { _ = topic; _ = topicLength; _ = payload; _ = payloadLength; return 0 }
+@inline(__always)
+private func hostCarrierConnect(_ deadline: UInt32) -> Int32 { _ = deadline; return 0 }
+@inline(__always)
+private func hostCarrierSubscribe(
+    _ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ deadline: UInt32
+) -> Int32 { _ = topic; _ = topicLength; _ = deadline; return 0 }
+@inline(__always)
+private func hostCarrierUnsubscribe(
+    _ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ deadline: UInt32
+) -> Int32 { _ = topic; _ = topicLength; _ = deadline; return 0 }
+@inline(__always)
+private func hostCarrierPublish(
+    _ topic: UnsafePointer<UInt8>, _ topicLength: Int32,
+    _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32
+) -> Int32 { _ = topic; _ = topicLength; _ = payload; _ = payloadLength; return 0 }
+@inline(__always)
+private func hostCarrierPollOneEvent(
+    _ topic: UnsafeMutablePointer<UInt8>, _ topicCapacity: Int32, _ topicLength: UnsafeMutablePointer<Int32>,
+    _ payload: UnsafeMutablePointer<UInt8>, _ payloadCapacity: Int32, _ payloadLength: UnsafeMutablePointer<Int32>
+) -> Int32 {
+    _ = topic; _ = topicCapacity; _ = topicLength
+    _ = payload; _ = payloadCapacity; _ = payloadLength
+    return -1
+}
+@inline(__always)
+private func hostCarrierWaitForReconnect(_ deadline: UInt32) -> Int32 { _ = deadline; return 0 }
+@inline(__always)
+private func hostCarrierDisconnect() -> Int32 { 0 }
+@inline(__always)
+private func hostExchangeMilestone(_: UInt32) {}
 
 @inline(__always)
 private func hostDeviceDisplayName(_ buffer: UnsafeMutablePointer<UInt8>, _ capacity: Int32) -> Int32 {
@@ -142,10 +175,21 @@ func hostSmokeSeam() -> DeviceSmokeSeam {
         networkRole: hostNetworkRole,
         networkScenario: hostNetworkScenario,
         networkPrepare: hostNetworkPrepare,
+        networkReconnect: hostNetworkReconnect,
         networkCopyTopic: hostNetworkCopyTopic,
         networkCopyPayload: hostNetworkCopyPayload,
         networkCleanup: hostNetworkCleanup,
-        agentTest: hostAgentTest,
+        carrier: DeviceSmokeCarrierOperations(
+            configureLastWill: hostCarrierConfigureLastWill,
+            connect: hostCarrierConnect,
+            subscribe: hostCarrierSubscribe,
+            unsubscribe: hostCarrierUnsubscribe,
+            publish: hostCarrierPublish,
+            pollOneEvent: hostCarrierPollOneEvent,
+            waitForReconnect: hostCarrierWaitForReconnect,
+            disconnect: hostCarrierDisconnect
+        ),
+        exchangeMilestone: hostExchangeMilestone,
         deviceDisplayName: hostDeviceDisplayName
     )
 }

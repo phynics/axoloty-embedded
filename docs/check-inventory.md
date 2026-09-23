@@ -147,7 +147,9 @@ silent:
   cannot run in CI or in a toolchain-free checkout, and they were not converted
   into file-shape assertions. The firmware support they exercise
   (`CarrierNetworkProbe`, `network_bootstrap.c` scenario bits) **did** move in
-  #1; only the harnesses remain in Axoloty.
+  #1. Issue #19 later moved agent-exchange sequencing into
+  `Applications/device-smoke-agent/main/AgentExchange.swift` and removed the
+  scenario bits from the platform.
 - **Note B — device benchmark firmware.** Landed: the C firmware is at
   `Platforms/esp32c6-idf/benchmark/` and its runner at
   `Tests/embedded/run-benchmark-wire-device.sh`. The fixture is exempt from the

@@ -17,6 +17,7 @@
 /// depend on the application seam type.
 public func runCarrierNetworkProbe(
     networkPrepare: @convention(c) (UInt32) -> UInt32,
+    networkReconnect: @convention(c) (UInt32) -> UInt32,
     networkCopyTopic: @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
     networkCopyPayload: @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
     networkCleanup: @convention(c) () -> UInt32,
@@ -53,7 +54,8 @@ public func runCarrierNetworkProbe(
                             topic: topic.baseAddress!, topicLength: Int32(topicLength),
                             deadlineMS: 10_000
                         )
-                        reconnected = subscribed && client.waitForReconnect(deadlineMS: 20_000)
+                        let networkReturned = subscribed && networkReconnect(20_000) != 0
+                        reconnected = networkReturned && client.waitForReconnect(deadlineMS: 20_000)
                         rejectedOversize = reconnected && !client.publish(
                             topic: topic.baseAddress!, topicLength: 257,
                             payload: payload.baseAddress!, payloadLength: 0
@@ -86,36 +88,4 @@ public func runCarrierNetworkProbe(
         record("network:receive", false)
         record("network:disconnect", networkCleanup() != 0)
     }
-}
-
-/// Reports the agent-exchange result bits as the frozen `exchange:*` corpus.
-///
-/// The platform owns the exchange itself; this transport owns the carrier-step
-/// identifiers and the scenario bit layout it reports.
-public func emitAgentExchange(
-    _ exchangeBits: UInt32,
-    _ scenario: UInt32,
-    record: (StaticString, Bool) -> Void
-) {
-    let exchangeChecks: [(StaticString, UInt32)] = scenario == 1 ? [
-        ("exchange:wifi", 1), ("exchange:ip", 2),
-        ("exchange:mqttConnect", 4), ("exchange:subscribe", 8),
-        ("exchange:reconnect", 512), ("exchange:advertise", 16),
-        ("exchange:deadvertise", 128), ("exchange:disconnect", 256),
-    ] : scenario == 2 ? [
-        ("exchange:wifi", 1), ("exchange:ip", 2),
-        ("exchange:mqttConnect", 4), ("exchange:subscribe", 8),
-        ("exchange:reconnect", 512), ("exchange:brokerReconnect", 1024),
-        ("exchange:advertise", 16), ("exchange:discover", 32),
-        ("exchange:resolve", 64), ("exchange:deadvertise", 128),
-        ("exchange:disconnect", 256),
-    ] : [
-        ("exchange:wifi", 1), ("exchange:ip", 2),
-        ("exchange:mqttConnect", 4), ("exchange:subscribe", 8),
-        ("exchange:reconnect", 512),
-        ("exchange:advertise", 16), ("exchange:discover", 32),
-        ("exchange:resolve", 64), ("exchange:deadvertise", 128),
-        ("exchange:disconnect", 256),
-    ]
-    for (name, bit) in exchangeChecks { record(name, (exchangeBits & bit) != 0) }
 }

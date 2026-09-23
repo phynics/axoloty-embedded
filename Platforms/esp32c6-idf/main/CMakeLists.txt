@@ -54,6 +54,7 @@ include("${AXOLOTY_TRANSPORT_SOURCES_FILE}")
 
 set(AXOLOTY_SWIFT_SOURCES
     ${AXOLOTY_APPLICATION_MAIN_DIR}/DeviceSmokeApplication.swift
+    ${AXOLOTY_APPLICATION_MAIN_DIR}/AgentExchange.swift
     ${AXOLOTY_APPLICATION_MAIN_DIR}/StaticDeviceAgent.swift
     ${AXOLOTY_APPLICATION_MAIN_DIR}/DeviceSmokeSeam.swift
     ${AXOLOTY_APPLICATION_MAIN_DIR}/ProtocolModuleConsumer.swift

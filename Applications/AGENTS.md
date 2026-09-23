@@ -12,6 +12,9 @@ file, not in a header. `Tools/check-invariants.sh` fails on `esp32`, `esp-idf`,
 `freertos`, `nvs_flash`, `esp_wifi`, `sdkconfig`, `partitions.csv`, `mqtt`, and
 `zenoh` anywhere under this directory.
 
+The exact `exchange:mqttConnect` evidence label is the only exception. It is a
+frozen validator identifier, not a carrier dependency.
+
 This is not stylistic. The axes are only separable while the application cannot
 name the other two; the second board is a rewrite the moment it can.
 

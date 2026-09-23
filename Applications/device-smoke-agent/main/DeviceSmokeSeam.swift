@@ -9,6 +9,57 @@
 // implementations. The value is a plain struct of C function pointers: no
 // allocation, no retention, and one synchronous call per operation.
 
+/// Carrier operations the running profile supplies to the device application.
+///
+/// Calls consume borrowed buffers synchronously. `pollOneEvent` returns `1` for
+/// one complete frame, `0` when no frame is ready, `-1` for an error, and `-2`
+/// when the carrier has closed.
+public struct DeviceSmokeCarrierOperations {
+    var configureLastWill: @convention(c) (UnsafePointer<UInt8>, Int32, UnsafePointer<UInt8>, Int32) -> Int32
+    var connect: @convention(c) (UInt32) -> Int32
+    var subscribe: @convention(c) (UnsafePointer<UInt8>, Int32, UInt32) -> Int32
+    var unsubscribe: @convention(c) (UnsafePointer<UInt8>, Int32, UInt32) -> Int32
+    var publish: @convention(c) (UnsafePointer<UInt8>, Int32, UnsafePointer<UInt8>, Int32) -> Int32
+    var pollOneEvent: @convention(c) (
+        UnsafeMutablePointer<UInt8>, Int32, UnsafeMutablePointer<Int32>,
+        UnsafeMutablePointer<UInt8>, Int32, UnsafeMutablePointer<Int32>
+    ) -> Int32
+    var waitForReconnect: @convention(c) (UInt32) -> Int32
+    var disconnect: @convention(c) () -> Int32
+
+    public init(
+        configureLastWill: @escaping @convention(c) (UnsafePointer<UInt8>, Int32, UnsafePointer<UInt8>, Int32) -> Int32,
+        connect: @escaping @convention(c) (UInt32) -> Int32,
+        subscribe: @escaping @convention(c) (UnsafePointer<UInt8>, Int32, UInt32) -> Int32,
+        unsubscribe: @escaping @convention(c) (UnsafePointer<UInt8>, Int32, UInt32) -> Int32,
+        publish: @escaping @convention(c) (UnsafePointer<UInt8>, Int32, UnsafePointer<UInt8>, Int32) -> Int32,
+        pollOneEvent: @escaping @convention(c) (
+            UnsafeMutablePointer<UInt8>, Int32, UnsafeMutablePointer<Int32>,
+            UnsafeMutablePointer<UInt8>, Int32, UnsafeMutablePointer<Int32>
+        ) -> Int32,
+        waitForReconnect: @escaping @convention(c) (UInt32) -> Int32,
+        disconnect: @escaping @convention(c) () -> Int32
+    ) {
+        self.configureLastWill = configureLastWill
+        self.connect = connect
+        self.subscribe = subscribe
+        self.unsubscribe = unsubscribe
+        self.publish = publish
+        self.pollOneEvent = pollOneEvent
+        self.waitForReconnect = waitForReconnect
+        self.disconnect = disconnect
+    }
+}
+
+/// Exchange milestones let a host harness coordinate external broker actions.
+public enum DeviceSmokeExchangeMilestone: UInt32 {
+    case connected = 1
+    case subscribed = 2
+    case reconnected = 3
+    case advertised = 4
+    case resolved = 5
+}
+
 /// Operations the running profile supplies to the device smoke application.
 public struct DeviceSmokeSeam {
     /// Writes one bounded UTF-8 message to the firmware console.
@@ -50,14 +101,18 @@ public struct DeviceSmokeSeam {
     var networkScenario: @convention(c) () -> UInt32
     /// Brings up the network within the deadline, returning a bit field.
     var networkPrepare: @convention(c) (UInt32) -> UInt32
+    /// Forces a network interruption and waits for the network to return.
+    var networkReconnect: @convention(c) (UInt32) -> UInt32
     /// Copies the prepared carrier topic into caller storage.
     var networkCopyTopic: @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32
     /// Copies the prepared carrier payload into caller storage.
     var networkCopyPayload: @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32
     /// Tears the network façade down, returning non-zero on success.
     var networkCleanup: @convention(c) () -> UInt32
-    /// Runs the bounded agent exchange, returning a result bit field.
-    var agentTest: @convention(c) (UInt32, UnsafePointer<UInt8>, Int32) -> UInt32
+    /// Bounded carrier operations used by the application-owned exchange.
+    var carrier: DeviceSmokeCarrierOperations
+    /// Reports an application exchange milestone to an optional host harness.
+    var exchangeMilestone: @convention(c) (UInt32) -> Void
     /// Copies the operator-configured device display name into caller storage.
     var deviceDisplayName: @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32
 
@@ -79,10 +134,12 @@ public struct DeviceSmokeSeam {
         networkRole: @escaping @convention(c) () -> UInt32,
         networkScenario: @escaping @convention(c) () -> UInt32,
         networkPrepare: @escaping @convention(c) (UInt32) -> UInt32,
+        networkReconnect: @escaping @convention(c) (UInt32) -> UInt32,
         networkCopyTopic: @escaping @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
         networkCopyPayload: @escaping @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
         networkCleanup: @escaping @convention(c) () -> UInt32,
-        agentTest: @escaping @convention(c) (UInt32, UnsafePointer<UInt8>, Int32) -> UInt32,
+        carrier: DeviceSmokeCarrierOperations,
+        exchangeMilestone: @escaping @convention(c) (UInt32) -> Void,
         deviceDisplayName: @escaping @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32
     ) {
         self.print = print
@@ -102,10 +159,12 @@ public struct DeviceSmokeSeam {
         self.networkRole = networkRole
         self.networkScenario = networkScenario
         self.networkPrepare = networkPrepare
+        self.networkReconnect = networkReconnect
         self.networkCopyTopic = networkCopyTopic
         self.networkCopyPayload = networkCopyPayload
         self.networkCleanup = networkCleanup
-        self.agentTest = agentTest
+        self.carrier = carrier
+        self.exchangeMilestone = exchangeMilestone
         self.deviceDisplayName = deviceDisplayName
     }
 }

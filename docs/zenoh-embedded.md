@@ -81,12 +81,12 @@ sample; a null pointer with a non-zero length is not.
   against the operations the embedded client needs, not against a landed
   header. That is a genuine ambiguity: `#814` cannot implement the backend
   until `#801`/`#802`/`#803` define the portable contract.
-- **The application carrier seam is MQTT-shaped.** The application calls
-  `runCarrierNetworkProbe` and `emitAgentExchange`, which the MQTT transport
-  defines, and the `DeviceSmokeSeam` has no carrier-locator operation. A Zenoh
-  image cannot link until that seam is generalized. Generalizing it is `#816`/
-  `#817` work. No probe was written for Zenoh because writing one now would be
-  a stub with a fabricated endpoint source.
+- **The application carrier seam still has MQTT lifecycle assumptions.** The
+  application owns the agent exchange and receives carrier operations through
+  `DeviceSmokeSeam`. The operation table includes last-will setup and a
+  reconnect check. The network probe remains in the MQTT transport. A Zenoh
+  image needs adapters for these operations and a Zenoh network probe. That
+  work remains under `#816` and `#817`.
 - **The platform network bootstrap still owns MQTT.** `network_bootstrap.c`
   brings up Wi-Fi and ESP-MQTT together. The transport source selection
   (`main/idf_sources.cmake`) composes the Swift carrier surface, but a real
@@ -104,9 +104,10 @@ sample; a null pointer with a non-zero length is not.
   syntax (`{40}`) that `MATCHES` does not support, and `CONFIGURE_DEPENDS` is
   invalid in the requirements pass. The image then fails at the two seams
   above, not in this component: `platform/main/network_bootstrap.c` includes
-  `mqtt_event_validation.h`, and the application calls
-  `runCarrierNetworkProbe`/`emitAgentExchange`, which only the MQTT transport
-  defines. Both are #816/#817 work, deliberately not attempted here.
+  `mqtt_event_validation.h`, and the application still calls
+  `runCarrierNetworkProbe`, which only the MQTT transport defines. That probe
+  and the MQTT lifecycle adapter remain #816/#817 work, deliberately not
+  attempted here.
 - **No device or resource evidence.** None was produced and none was invented.
   See `docs/evidence/esp32c6-zenoh-*.json`.
 - **The release manifest does not know the Zenoh backend.** 

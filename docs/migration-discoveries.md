@@ -92,7 +92,9 @@ is [check-inventory.md](./check-inventory.md).
   change, which is a redesign, not a check move. The harnesses are therefore
   **unmigrated** and named `MOVE` in the inventory. The firmware support they
   exercise (`CarrierNetworkProbe`, the `network_bootstrap.c` scenario bits)
-  did move with #1.
+  moved with #1. Issue #19 later moved the agent exchange into
+  `Applications/device-smoke-agent/main/AgentExchange.swift` and removed those
+  scenario bits from `network_bootstrap.c`.
 
 ### 8. No committed historical embedded device evidence exists
 
@@ -217,4 +219,3 @@ expected: the firmware checkout moved from a newer Axoloty `main`-line commit,
 while the build still pins the lock's exact revision through
 `Tools/prepare-core.sh`. No file under `phynics-axoloty` was modified by this
 migration.
-

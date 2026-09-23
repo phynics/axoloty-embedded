@@ -28,15 +28,12 @@ unsigned int axoloty_reset_reason(void);
 int axoloty_heap_trace_begin(void);
 unsigned int axoloty_heap_trace_end(void);
 
-// Synchronous, C-owned Wi-Fi/MQTT hardware-test façade. Callback data never
-// crosses this boundary.
+// Platform-owned Wi-Fi setup and network interruption operations.
 int axoloty_network_configured(void);
 unsigned int axoloty_network_role(void);
 unsigned int axoloty_network_scenario(void);
-unsigned int axoloty_agent_test(unsigned int overall_deadline_ms,
-                                const unsigned char *subscription_filter,
-                                int subscription_filter_length);
 unsigned int axoloty_network_prepare(unsigned int overall_deadline_ms);
+unsigned int axoloty_network_reconnect_wait(unsigned int deadline_ms);
 int axoloty_network_copy_topic(unsigned char *buffer, int capacity);
 int axoloty_network_copy_payload(unsigned char *buffer, int capacity);
 int axoloty_device_display_name(unsigned char *buffer, int capacity);
@@ -45,10 +42,14 @@ int axoloty_mqtt_configure_last_will(const unsigned char *topic, int topic_lengt
 int axoloty_mqtt_connect_wait(unsigned int deadline_ms);
 int axoloty_mqtt_subscribe_wait(const unsigned char *topic, int topic_length,
                                 unsigned int deadline_ms);
+int axoloty_mqtt_unsubscribe(const unsigned char *topic, int topic_length);
 int axoloty_mqtt_publish(const unsigned char *topic, int topic_length,
                         const unsigned char *payload, int payload_length);
 int axoloty_mqtt_wait_loopback(unsigned int deadline_ms);
 int axoloty_mqtt_reconnect_wait(unsigned int deadline_ms);
+int axoloty_mqtt_poll_one_event(unsigned char *topic, int topic_capacity,
+                                int *topic_length, unsigned char *payload,
+                                int payload_capacity, int *payload_length);
 int axoloty_mqtt_disconnect(void);
 unsigned int axoloty_network_cleanup(void);
 

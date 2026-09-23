@@ -190,7 +190,21 @@ app_tokens='esp32|esp-idf|esp_idf|idf_component|freertos|nvs_flash|esp_wifi|sdkc
 app_sources="$(axis_sources 'Applications/*')"
 app_bad=0
 for file in $app_sources; do
-    hits="$(grep -nEi "$app_tokens" "$file" 2>/dev/null | head -3 || true)"
+    hits="$(python3 - "$file" "$app_tokens" <<'PY'
+import re
+import sys
+
+path, token_pattern = sys.argv[1:]
+text = open(path, encoding="utf-8").read()
+# This exact label is frozen validator data, not a carrier dependency.
+text = re.sub(r'"exchange:mqttConnect"', '""', text, flags=re.IGNORECASE)
+pattern = re.compile(token_pattern, re.IGNORECASE)
+for line_number, line in enumerate(text.splitlines(), 1):
+    if pattern.search(line):
+        print(f"{line_number}:{line}")
+        break
+PY
+    )"
     if [ -n "$hits" ]; then
         fail application-neutral "$file names a board, SDK, or broker: $(echo "$hits" | head -1 | cut -c1-120)"
         app_bad=1
@@ -209,13 +223,18 @@ fi
 # AxolotyProtocol, which is Axoloty's to own. A rule that gets restated in a
 # transport is a second source of truth that no Core test covers.
 
-protocol_tokens='import AxolotyProtocol|import AxolotyCoatyModels|ProtocolProcessor|ProtocolSubscriptionRegistry|BorrowedProtocolFrame|InlineProtocolActionSink|coaty/3'
+protocol_tokens='import AxolotyProtocol|import AxolotyCoatyModels|ProtocolProcessor|ProtocolSubscriptionRegistry|BorrowedProtocolFrame|InlineProtocolActionSink|coaty/3|/((ADV|DAD|DSC|RSV|ASC|IOV|CHN)(:|/))|axoloty/test/agent-(ready|observed)|axoloty_static_agent_|axoloty_agent_test|network_agent_(role|scenario)|AGENT_(ADVERTISE|DISCOVER|RESOLVE|DEADVERTISE)_BIT'
+protocol_operation_tokens='ProtocolLocalOperation|WireEventType|StaticDeviceAgent|StaticAgentAction|StaticAgentMessageKind|AgentExchange'
 transport_sources="$(axis_sources 'Transports/*')"
 transport_bad=0
 for file in $transport_sources; do
-    hits="$(grep -nE "$protocol_tokens" "$file" 2>/dev/null | head -3 || true)"
+    scan_tokens="$protocol_tokens"
+    case "$file" in
+        *.swift|*.c|*.h|*.cpp|*.hpp) scan_tokens="$scan_tokens|$protocol_operation_tokens" ;;
+    esac
+    hits="$(grep -nE "$scan_tokens" "$file" 2>/dev/null | head -3 || true)"
     if [ -n "$hits" ]; then
-        fail transport-carrier-only "$file states a protocol rule: $(echo "$hits" | head -1 | cut -c1-120)"
+        fail transport-carrier-only "$file contains a protocol topic or operation: $(echo "$hits" | head -1 | cut -c1-120)"
         transport_bad=1
     fi
 done
@@ -235,9 +254,13 @@ fi
 platform_sources="$(axis_sources 'Platforms/*' | grep -v '/benchmark/' || true)"
 platform_bad=0
 for file in $platform_sources; do
-    hits="$(grep -nE "$protocol_tokens" "$file" 2>/dev/null | head -3 || true)"
+    scan_tokens="$protocol_tokens"
+    case "$file" in
+        *.swift|*.c|*.h|*.cpp|*.hpp) scan_tokens="$scan_tokens|$protocol_operation_tokens" ;;
+    esac
+    hits="$(grep -nE "$scan_tokens" "$file" 2>/dev/null | head -3 || true)"
     if [ -n "$hits" ]; then
-        fail platform-integration-only "$file states a protocol rule: $(echo "$hits" | head -1 | cut -c1-120)"
+        fail platform-integration-only "$file contains a protocol topic or operation: $(echo "$hits" | head -1 | cut -c1-120)"
         platform_bad=1
     fi
 done

@@ -8,6 +8,8 @@ private func hostMQTTSetFailures(_ failures: UInt32)
 private func hostMQTTCallCount(_ operation: UInt32) -> UInt32
 @_silgen_name("host_mqtt_resubscription_count")
 private func hostMQTTResubscriptionCount() -> UInt32
+@_silgen_name("host_mqtt_queue_event")
+private func hostMQTTQueueEvent()
 @_silgen_name("host_identity_tests")
 private func hostIdentityTests() -> Int32
 @_silgen_name("host_callback_validation_tests")
@@ -22,6 +24,8 @@ private struct EmbeddedMQTTHostTest {
     private static let failLoopback: UInt32 = 1 << 4
     private static let failReconnect: UInt32 = 1 << 5
     private static let failDisconnect: UInt32 = 1 << 6
+    private static let failUnsubscribe: UInt32 = 1 << 7
+    private static let failPoll: UInt32 = 1 << 8
 
     static func main() {
         precondition(hostIdentityTests() != 0, "client identity vectors")
@@ -78,6 +82,57 @@ private struct EmbeddedMQTTHostTest {
                     topic: topicPointer, topicLength: Int32(topic.count),
                     payload: payloadPointer, payloadLength: Int32(payload.count)))
                 precondition(client.waitForLoopback(deadlineMS: 1))
+
+                var receivedTopic = Array(repeating: UInt8(0), count: 32)
+                var receivedPayload = Array(repeating: UInt8(0), count: 8)
+                var receivedTopicLength: Int32 = 0
+                var receivedPayloadLength: Int32 = 0
+                let noEvent = receivedTopic.withUnsafeMutableBufferPointer { topicOutput in
+                    receivedPayload.withUnsafeMutableBufferPointer { payloadOutput in
+                        client.pollOneEvent(
+                            topic: topicOutput.baseAddress!, topicCapacity: Int32(topicOutput.count),
+                            topicLength: &receivedTopicLength,
+                            payload: payloadOutput.baseAddress!, payloadCapacity: Int32(payloadOutput.count),
+                            payloadLength: &receivedPayloadLength
+                        )
+                    }
+                }
+                precondition(noEvent == 0)
+                hostMQTTQueueEvent()
+                let received = receivedTopic.withUnsafeMutableBufferPointer { topicOutput in
+                    receivedPayload.withUnsafeMutableBufferPointer { payloadOutput in
+                        client.pollOneEvent(
+                            topic: topicOutput.baseAddress!, topicCapacity: Int32(topicOutput.count),
+                            topicLength: &receivedTopicLength,
+                            payload: payloadOutput.baseAddress!, payloadCapacity: Int32(payloadOutput.count),
+                            payloadLength: &receivedPayloadLength
+                        )
+                    }
+                }
+                precondition(received == 1)
+                precondition(String(decoding: receivedTopic.prefix(Int(receivedTopicLength)), as: UTF8.self) == "coaty/3/test")
+                precondition(String(decoding: receivedPayload.prefix(Int(receivedPayloadLength)), as: UTF8.self) == "{}")
+                hostMQTTSetFailures(failPoll)
+                let rejectedPoll = receivedTopic.withUnsafeMutableBufferPointer { topicOutput in
+                    receivedPayload.withUnsafeMutableBufferPointer { payloadOutput in
+                        client.pollOneEvent(
+                            topic: topicOutput.baseAddress!, topicCapacity: Int32(topicOutput.count),
+                            topicLength: &receivedTopicLength,
+                            payload: payloadOutput.baseAddress!, payloadCapacity: Int32(payloadOutput.count),
+                            payloadLength: &receivedPayloadLength
+                        )
+                    }
+                }
+                precondition(rejectedPoll == -1)
+                hostMQTTSetFailures(0)
+
+                hostMQTTSetFailures(failUnsubscribe)
+                precondition(!client.unsubscribe(
+                    topic: topicPointer, topicLength: Int32(topic.count), deadlineMS: 1))
+                hostMQTTSetFailures(0)
+                precondition(client.unsubscribe(
+                    topic: topicPointer, topicLength: Int32(topic.count), deadlineMS: 1))
+                precondition(hostMQTTCallCount(7) == 2 && hostMQTTCallCount(8) == 3)
 
                 // Reconnect remains subscribed and asks the HAL to resubscribe.
                 hostMQTTSetFailures(failReconnect)

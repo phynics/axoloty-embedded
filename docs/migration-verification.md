@@ -93,13 +93,14 @@ Do not round the serial pass up into an MQTT claim.
 
 ## Pinned defaults that keep behavior identical
 
-Two constants carry the "behavior-preserving" claim, because the axis rules in
-`AGENTS.md` forced their values out of the application:
+Two constants carry the "behavior-preserving" claim. The application owns the
+subscription wildcard. The platform supplies the display name because the
+application cannot name a board.
 
 | Constant | Where | Why it is pinned |
 |---|---|---|
 | `AXOLOTY_DEVICE_DISPLAY_NAME` = `"ESP32-C6 A"` | `Platforms/esp32c6-idf/main/network_bootstrap.c` | The role-A advertise and resolve payloads embed it. Any other value changes the emitted wire bytes. |
-| the subscription wildcard | supplied by the application to `axoloty_agent_test` | It was a hard-coded routing key in platform C. The bytes subscribed must stay the same. |
+| `coaty/3/axoloty-embedded/#` | `Applications/device-smoke-agent/main/AgentExchange.swift` | `AgentExchange` subscribes through the carrier operations. The subscribed bytes must stay the same. |
 
 Changing either changes what the device puts on the wire. Treat both as part of
 the protocol surface until a hardware run says otherwise.

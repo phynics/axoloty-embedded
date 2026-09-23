@@ -634,6 +634,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
             #if HOST_AGENT_EXCHANGE
             runDeviceSmokeHostNetworkProbe(
                 networkPrepare: seam.networkPrepare,
+                networkReconnect: seam.networkReconnect,
                 networkCopyTopic: seam.networkCopyTopic,
                 networkCopyPayload: seam.networkCopyPayload,
                 networkCleanup: seam.networkCleanup,
@@ -642,6 +643,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
             #else
             runCarrierNetworkProbe(
                 networkPrepare: seam.networkPrepare,
+                networkReconnect: seam.networkReconnect,
                 networkCopyTopic: seam.networkCopyTopic,
                 networkCopyPayload: seam.networkCopyPayload,
                 networkCleanup: seam.networkCleanup,
@@ -650,21 +652,10 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
             #endif
         } else {
             emittingExchangeEvidence = true
-            // The offline vectors above share these static agents and leave a
-            // non-free Discover correlation behind; clear that transport-local
-            // state so the live exchange starts from a clean request ledger.
-            resetStaticDeviceAgents()
-            let agentFilter: StaticString = "coaty/3/axoloty-embedded/#"
-            let exchangeBits = seam.agentTest(
-                90_000,
-                agentFilter.utf8Start,
-                Int32(agentFilter.utf8CodeUnitCount)
+            let exchangeBits = runDeviceAgentExchange(
+                role: networkRole, scenario: networkScenario, seam: seam
             )
-            #if HOST_AGENT_EXCHANGE
-            recordDeviceSmokeExchange(exchangeBits, networkScenario, record: record)
-            #else
-            emitAgentExchange(exchangeBits, networkScenario, record: record)
-            #endif
+            emitDeviceAgentExchange(exchangeBits, scenario: networkScenario, record: record)
         }
     }
 
