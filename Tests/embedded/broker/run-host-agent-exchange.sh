@@ -77,6 +77,40 @@ else
     broker_host=127.0.0.1
 fi
 
+HOST_AGENT_BROKER_MODE=$([ "$in_process" -eq 1 ] && printf in-process || printf external) \
+HOST_AGENT_CONTROL_DIR="$work/agent-control" \
+HOST_AGENT_ROLE=1 \
+HOST_AGENT_CLIENT_ID="axoloty-host-smoke-agent" \
+WIRE_BROKER_HOST="$broker_host" \
+WIRE_BROKER_PORT="$broker_port" \
+    "$bin_dir/HostSmokeAgent" >"$host_output" 2>"$work/host-stderr.log" &
+agent_pid=$!
+
+wait_for_marker() {
+    marker=$1
+    timeout=${2:-90}
+    deadline=$(( $(date +%s) + timeout ))
+    while [ ! -f "$agent_control/$marker" ]; do
+        if [ -n "$peer_pid" ] && ! kill -0 "$peer_pid" 2>/dev/null; then
+            echo "run-host-agent-exchange: host peer exited while waiting for $marker" >&2
+            cat "$peer_output" >&2 || true
+            exit 1
+        fi
+        [ "$(date +%s)" -lt "$deadline" ] || {
+            echo "run-host-agent-exchange: timed out waiting for $marker" >&2
+            exit 1
+        }
+        sleep 1
+    done
+}
+
+wait_for_marker subscribed
+printf '%s\n' reconnect-requested > "$agent_control/reconnect-requested"
+wait_for_marker reconnected
+wait_for_marker advertised
+
+# Start the peer after the first Advertise. The application must keep publishing
+# that message until the late subscriber can discover it.
 WIRE_EMBEDDED_HOST_DIRECTION=host-requester \
 WIRE_BROKER_HOST="$broker_host" \
 WIRE_BROKER_PORT="$broker_port" \
@@ -97,37 +131,7 @@ while [ ! -f "$peer_ready" ]; do
     sleep 1
 done
 
-HOST_AGENT_BROKER_MODE=$([ "$in_process" -eq 1 ] && printf in-process || printf external) \
-HOST_AGENT_CONTROL_DIR="$work/agent-control" \
-HOST_AGENT_ROLE=1 \
-HOST_AGENT_CLIENT_ID="axoloty-host-smoke-agent" \
-WIRE_BROKER_HOST="$broker_host" \
-WIRE_BROKER_PORT="$broker_port" \
-    "$bin_dir/HostSmokeAgent" >"$host_output" 2>"$work/host-stderr.log" &
-agent_pid=$!
-
-wait_for_marker() {
-    marker=$1
-    deadline=$(( $(date +%s) + 90 ))
-    while [ ! -f "$agent_control/$marker" ]; do
-        if [ -n "$peer_pid" ] && ! kill -0 "$peer_pid" 2>/dev/null; then
-            echo "run-host-agent-exchange: host peer exited while waiting for $marker" >&2
-            cat "$peer_output" >&2 || true
-            exit 1
-        fi
-        [ "$(date +%s)" -lt "$deadline" ] || {
-            echo "run-host-agent-exchange: timed out waiting for $marker" >&2
-            exit 1
-        }
-        sleep 1
-    done
-}
-
-wait_for_marker subscribed
-printf '%s\n' reconnect-requested > "$agent_control/reconnect-requested"
-wait_for_marker reconnected
-wait_for_marker advertised
-wait_for_marker resolved
+wait_for_marker resolved 15
 
 if [ "$in_process" -eq 1 ]; then
     printf '%s\n' inject-disconnect > "$control_dir/command"

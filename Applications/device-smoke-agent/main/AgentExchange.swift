@@ -48,15 +48,17 @@ private struct AgentExchangeDeadline {
     }
 }
 
-private func prepareAndPublishAgentMessage(
+private func prepareAgentMessage(
     role: DeviceAgentRole,
     kind: StaticAgentMessageKind,
     seam: DeviceSmokeSeam,
     topic: UnsafeMutablePointer<UInt8>,
-    payload: UnsafeMutablePointer<UInt8>
+    payload: UnsafeMutablePointer<UInt8>,
+    topicLength: inout Int32,
+    payloadLength: inout Int32
 ) -> Bool {
-    var topicLength: Int32 = 0
-    var payloadLength: Int32 = 0
+    topicLength = 0
+    payloadLength = 0
     guard prepareStaticAgentMessage(
         role: role.staticAgentRole,
         kind: kind,
@@ -66,10 +68,42 @@ private func prepareAndPublishAgentMessage(
         payloadCapacity: Int32(WireBufferConfig.maxPayloadSize),
         topicLength: &topicLength,
         payloadLength: &payloadLength
-    ), topicLength > 0, payloadLength >= 0 else { return false }
+    ) else { return false }
+    return topicLength > 0 && payloadLength >= 0
+}
+
+private func publishAgentMessage(
+    seam: DeviceSmokeSeam,
+    topic: UnsafePointer<UInt8>,
+    topicLength: Int32,
+    payload: UnsafePointer<UInt8>,
+    payloadLength: Int32
+) -> Bool {
+    guard topicLength > 0, payloadLength >= 0 else { return false }
     return seam.carrier.publish(
         topic, topicLength, payload, payloadLength
     ) != 0
+}
+
+private func prepareAndPublishAgentMessage(
+    role: DeviceAgentRole,
+    kind: StaticAgentMessageKind,
+    seam: DeviceSmokeSeam,
+    topic: UnsafeMutablePointer<UInt8>,
+    payload: UnsafeMutablePointer<UInt8>
+) -> Bool {
+    var topicLength: Int32 = 0
+    var payloadLength: Int32 = 0
+    guard prepareAgentMessage(
+        role: role, kind: kind, seam: seam,
+        topic: topic, payload: payload,
+        topicLength: &topicLength, payloadLength: &payloadLength
+    ) else { return false }
+    return publishAgentMessage(
+        seam: seam,
+        topic: topic, topicLength: topicLength,
+        payload: payload, payloadLength: payloadLength
+    )
 }
 
 private func publishControlMessage(
@@ -270,6 +304,19 @@ private func runAgentMessageSequence(
                 withUnsafeTemporaryAllocation(of: UInt8.self, capacity: WireBufferConfig.maxPayloadSize) { responsePayload in
                     withUnsafeTemporaryAllocation(of: UInt8.self, capacity: WireBufferConfig.maxTopicLength) { actorRoute in
                         var actorRouteLength: Int32 = 0
+                        var advertisedTopicLength: Int32 = 0
+                        var advertisedPayloadLength: Int32 = 0
+                        var advertisementPrepared = role != .roleA
+                        if role == .roleA {
+                            // The processor records the outbound transition during encoding.
+                            // Keep one encoded Advertise and retry those bytes until a peer responds.
+                            advertisementPrepared = prepareAgentMessage(
+                                role: role, kind: .advertise, seam: seam,
+                                topic: responseTopic.baseAddress!, payload: responsePayload.baseAddress!,
+                                topicLength: &advertisedTopicLength,
+                                payloadLength: &advertisedPayloadLength
+                            )
+                        }
                         var nextAdvertiseMS: UInt64 = 0
                         var exchangeComplete = false
                         var deadvertiseDelayStarted = false
@@ -283,9 +330,10 @@ private func runAgentMessageSequence(
                             if role == .roleA &&
                                 (shouldRepeatAdvertise || !result.contains(.discovered)) &&
                                 nowMS >= nextAdvertiseMS {
-                                if prepareAndPublishAgentMessage(
-                                    role: role, kind: .advertise, seam: seam,
-                                    topic: responseTopic.baseAddress!, payload: responsePayload.baseAddress!
+                                if advertisementPrepared && publishAgentMessage(
+                                    seam: seam,
+                                    topic: responseTopic.baseAddress!, topicLength: advertisedTopicLength,
+                                    payload: responsePayload.baseAddress!, payloadLength: advertisedPayloadLength
                                 ) {
                                     let firstAdvertise = !result.contains(.advertised)
                                     result.insert(.advertised)
