@@ -59,7 +59,7 @@ idf_root=${IDF_PATH:-/opt/esp/idf}
 
 mkdir -p "$evidence_dir"
 set +e
-chip_info=$(esptool.py --port "$device" chip_id 2>&1)
+chip_info=$(esptool.py --chip esp32c6 --port "$device" --after no_reset chip_id 2>&1)
 chip_status=$?
 set -e
 printf '%s\n' "$chip_info" > "$evidence_dir/device-info-raw.txt"
