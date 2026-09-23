@@ -7,6 +7,9 @@
 // struct stays allocation-free and the application receives plain C function
 // pointers.
 
+@inline(__always)
+private func ignoreExchangeMilestone(_: UInt32) {}
+
 /// Builds the seam this platform installs before starting the application.
 func esp32c6SmokeSeam() -> DeviceSmokeSeam {
     DeviceSmokeSeam(
@@ -29,10 +32,21 @@ func esp32c6SmokeSeam() -> DeviceSmokeSeam {
         networkRole: { axoloty_network_role() },
         networkScenario: { axoloty_network_scenario() },
         networkPrepare: { axoloty_network_prepare($0) },
+        networkReconnect: { axoloty_network_reconnect_wait($0) },
         networkCopyTopic: { axoloty_network_copy_topic($0, $1) },
         networkCopyPayload: { axoloty_network_copy_payload($0, $1) },
         networkCleanup: { axoloty_network_cleanup() },
-        agentTest: { axoloty_agent_test($0, $1, $2) },
+        carrier: DeviceSmokeCarrierOperations(
+            configureLastWill: embeddedExchangeConfigureLastWill,
+            connect: embeddedExchangeConnect,
+            subscribe: embeddedExchangeSubscribe,
+            unsubscribe: embeddedExchangeUnsubscribe,
+            publish: embeddedExchangePublish,
+            pollOneEvent: embeddedExchangePollOneEvent,
+            waitForReconnect: embeddedExchangeWaitForReconnect,
+            disconnect: embeddedExchangeDisconnect
+        ),
+        exchangeMilestone: ignoreExchangeMilestone,
         deviceDisplayName: { axoloty_device_display_name($0, $1) }
     )
 }

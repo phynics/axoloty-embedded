@@ -98,6 +98,12 @@ fileprivate struct HostMQTTMessage: Sendable {
     let payload: [UInt8]
 }
 
+private enum HostMQTTLimits {
+    static let messageCount = 4
+    static let topicBytes = 256
+    static let payloadBytes = 2_048
+}
+
 /// A synchronous façade over one real MQTTNIO client.
 final class HostMQTTSession: @unchecked Sendable {
     static let shared = HostMQTTSession()
@@ -108,8 +114,8 @@ final class HostMQTTSession: @unchecked Sendable {
     private var client: MQTTClient?
     private var subscriptions: [String] = []
     private var messages: [HostMQTTMessage] = []
+    private var messageOverflowed = false
     private var configuredWill: (topic: String, payload: [UInt8])?
-    private var reconnectWill: (topic: String, payload: [UInt8])?
     private var forceDisconnected = false
 
     private init() {}
@@ -123,10 +129,6 @@ final class HostMQTTSession: @unchecked Sendable {
         guard !topicText.isEmpty else { return false }
         stateLock.withLock { configuredWill = (topicText, payloadBytes) }
         return true
-    }
-
-    func armReconnectWill(topic: String, payload: [UInt8]) {
-        stateLock.withLock { reconnectWill = (topic, payload) }
     }
 
     func connect() -> Bool {
@@ -164,6 +166,18 @@ final class HostMQTTSession: @unchecked Sendable {
         return false
     }
 
+    func unsubscribe(topic: UnsafePointer<UInt8>, topicLength: Int32) -> Bool {
+        guard let topicText = decode(topic, length: topicLength),
+              let client = stateLock.withLock({ self.client }) else { return false }
+        do {
+            _ = try client.unsubscribe(from: [topicText]).wait()
+            stateLock.withLock { subscriptions.removeAll { $0 == topicText } }
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func publish(topic: UnsafePointer<UInt8>, topicLength: Int32,
                  payload: UnsafePointer<UInt8>, payloadLength: Int32) -> Bool {
         guard let topicText = decode(topic, length: topicLength), payloadLength >= 0 else { return false }
@@ -196,7 +210,7 @@ final class HostMQTTSession: @unchecked Sendable {
         _ = try? oldClient.disconnect().wait()
         shutdownClient(oldClient)
 
-        let will = stateLock.withLock { reconnectWill ?? configuredWill }
+        let will = stateLock.withLock { configuredWill }
         for attempt in 0..<3 {
             let candidate = makeClient()
             do {
@@ -217,22 +231,41 @@ final class HostMQTTSession: @unchecked Sendable {
         return false
     }
 
-    fileprivate func nextMessage(matching predicate: (HostMQTTMessage) -> Bool, deadlineMS: UInt32) -> HostMQTTMessage? {
-        let deadline = Date().addingTimeInterval(Double(deadlineMS) / 1_000.0)
-        while true {
-            messageCondition.lock()
-            if let index = messages.firstIndex(where: predicate) {
-                let message = messages.remove(at: index)
-                messageCondition.unlock()
-                return message
-            }
-            if Date() >= deadline {
-                messageCondition.unlock()
-                return nil
-            }
-            _ = messageCondition.wait(until: Date().addingTimeInterval(0.05))
-            messageCondition.unlock()
+    func pollOneEvent(
+        topic: UnsafeMutablePointer<UInt8>, topicCapacity: Int32,
+        topicLength: UnsafeMutablePointer<Int32>,
+        payload: UnsafeMutablePointer<UInt8>, payloadCapacity: Int32,
+        payloadLength: UnsafeMutablePointer<Int32>
+    ) -> Int32 {
+        if HostAgentConfiguration.inProcess &&
+            HostAgentConfiguration.markerExists("disconnect-requested") {
+            markInjectedDisconnect()
+            return -2
         }
+        if stateLock.withLock({ forceDisconnected }) { return -2 }
+
+        messageCondition.lock()
+        if messageOverflowed {
+            messageOverflowed = false
+            messageCondition.unlock()
+            return -1
+        }
+        guard !messages.isEmpty else {
+            messageCondition.unlock()
+            return 0
+        }
+        let message = messages.removeFirst()
+        messageCondition.unlock()
+
+        let topicBytes = Array(message.topic.utf8)
+        guard !topicBytes.isEmpty, topicCapacity > 0, payloadCapacity >= 0,
+              topicBytes.count <= Int(topicCapacity),
+              message.payload.count <= Int(payloadCapacity) else { return -1 }
+        for index in topicBytes.indices { topic[index] = topicBytes[index] }
+        for index in message.payload.indices { payload[index] = message.payload[index] }
+        topicLength.pointee = Int32(topicBytes.count)
+        payloadLength.pointee = Int32(message.payload.count)
+        return 1
     }
 
     func disconnect() -> Bool {
@@ -277,7 +310,13 @@ final class HostMQTTSession: @unchecked Sendable {
             var payload = info.payload
             let bytes = payload.readBytes(length: payload.readableBytes) ?? []
             self.messageCondition.lock()
-            self.messages.append(HostMQTTMessage(topic: info.topicName, payload: bytes))
+            if info.topicName.utf8.count > HostMQTTLimits.topicBytes ||
+                bytes.count > HostMQTTLimits.payloadBytes ||
+                self.messages.count >= HostMQTTLimits.messageCount {
+                self.messageOverflowed = true
+            } else {
+                self.messages.append(HostMQTTMessage(topic: info.topicName, payload: bytes))
+            }
             self.messageCondition.broadcast()
             self.messageCondition.unlock()
         }
@@ -332,6 +371,11 @@ func hostMQTTSubscribeWait(
     return HostMQTTSession.shared.subscribe(topic: topic, topicLength: topicLength) ? 1 : 0
 }
 
+@_cdecl("axoloty_mqtt_unsubscribe")
+func hostMQTTUnsubscribe(_ topic: UnsafePointer<UInt8>, _ topicLength: Int32) -> Int32 {
+    HostMQTTSession.shared.unsubscribe(topic: topic, topicLength: topicLength) ? 1 : 0
+}
+
 @_cdecl("axoloty_mqtt_publish")
 func hostMQTTPublish(
     _ topic: UnsafePointer<UInt8>, _ topicLength: Int32,
@@ -354,160 +398,78 @@ func hostMQTTReconnectWait(_ deadlineMS: UInt32) -> Int32 {
     HostMQTTSession.shared.waitForReconnect(deadlineMS: deadlineMS) ? 1 : 0
 }
 
+@_cdecl("axoloty_mqtt_poll_one_event")
+func hostMQTTPollOneEvent(
+    _ topic: UnsafeMutablePointer<UInt8>, _ topicCapacity: Int32, _ topicLength: UnsafeMutablePointer<Int32>,
+    _ payload: UnsafeMutablePointer<UInt8>, _ payloadCapacity: Int32, _ payloadLength: UnsafeMutablePointer<Int32>
+) -> Int32 {
+    HostMQTTSession.shared.pollOneEvent(
+        topic: topic, topicCapacity: topicCapacity, topicLength: topicLength,
+        payload: payload, payloadCapacity: payloadCapacity, payloadLength: payloadLength
+    )
+}
+
 @_cdecl("axoloty_mqtt_disconnect")
 func hostMQTTDisconnect() -> Int32 {
     HostMQTTSession.shared.disconnect() ? 1 : 0
 }
 
-@_silgen_name("axoloty_static_agent_prepare")
-private func hostStaticAgentPrepare(
-    _ role: Int32, _ kind: Int32,
-    _ topic: UnsafeMutablePointer<UInt8>, _ topicCapacity: Int32,
-    _ payload: UnsafeMutablePointer<UInt8>, _ payloadCapacity: Int32,
-    _ topicLength: UnsafeMutablePointer<Int32>, _ payloadLength: UnsafeMutablePointer<Int32>
-) -> Int32
+nonisolated(unsafe) private var hostApplicationExchangeClient = EmbeddedMQTTClient()
 
-@_silgen_name("axoloty_static_agent_receive")
-private func hostStaticAgentReceive(
-    _ role: Int32,
+private func hostExchangeConfigureLastWill(
     _ topic: UnsafePointer<UInt8>, _ topicLength: Int32,
-    _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32,
-    _ outputTopic: UnsafeMutablePointer<UInt8>, _ outputTopicCapacity: Int32,
-    _ outputPayload: UnsafeMutablePointer<UInt8>, _ outputPayloadCapacity: Int32,
-    _ outputTopicLength: UnsafeMutablePointer<Int32>, _ outputPayloadLength: UnsafeMutablePointer<Int32>
-) -> Int32
-
-private func preparedMessage(role: UInt32, kind: Int32) -> (topic: [UInt8], payload: [UInt8])? {
-    var topic = Array(repeating: UInt8(0), count: 256)
-    var payload = Array(repeating: UInt8(0), count: 2_048)
-    var topicLength: Int32 = 0
-    var payloadLength: Int32 = 0
-    let prepared = topic.withUnsafeMutableBufferPointer { topicBuffer in
-        payload.withUnsafeMutableBufferPointer { payloadBuffer in
-            hostStaticAgentPrepare(
-                Int32(role), kind,
-                topicBuffer.baseAddress!, Int32(topicBuffer.count),
-                payloadBuffer.baseAddress!, Int32(payloadBuffer.count),
-                &topicLength, &payloadLength
-            )
-        }
-    }
-    guard prepared != 0, topicLength > 0, payloadLength >= 0 else { return nil }
-    topic.removeSubrange(Int(topicLength)..<topic.count)
-    payload.removeSubrange(Int(payloadLength)..<payload.count)
-    return (topic, payload)
+    _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32
+) -> Int32 {
+    hostApplicationExchangeClient.configureLastWill(
+        topic: topic, topicLength: topicLength, payload: payload, payloadLength: payloadLength
+    ) ? 1 : 0
 }
 
-private func receiveMessage(role: UInt32, _ message: HostMQTTMessage) -> (action: Int32, response: (topic: [UInt8], payload: [UInt8])?) {
-    var outputTopic = Array(repeating: UInt8(0), count: 256)
-    var outputPayload = Array(repeating: UInt8(0), count: 2_048)
-    var outputTopicLength: Int32 = 0
-    var outputPayloadLength: Int32 = 0
-    let action = message.topic.utf8.withContiguousStorageIfAvailable { topicBytes in
-        message.payload.withUnsafeBufferPointer { payloadBytes in
-            outputTopic.withUnsafeMutableBufferPointer { topicOutput in
-                outputPayload.withUnsafeMutableBufferPointer { payloadOutput in
-                    hostStaticAgentReceive(
-                        Int32(role),
-                        topicBytes.baseAddress!, Int32(topicBytes.count),
-                        payloadBytes.baseAddress!, Int32(payloadBytes.count),
-                        topicOutput.baseAddress!, Int32(topicOutput.count),
-                        payloadOutput.baseAddress!, Int32(payloadOutput.count),
-                        &outputTopicLength, &outputPayloadLength
-                    )
-                }
-            }
-        }
-    } ?? -1
-    guard action == 1, outputTopicLength > 0, outputPayloadLength >= 0 else {
-        return (action, nil)
-    }
-    outputTopic.removeSubrange(Int(outputTopicLength)..<outputTopic.count)
-    outputPayload.removeSubrange(Int(outputPayloadLength)..<outputPayload.count)
-    return (action, (outputTopic, outputPayload))
+private func hostExchangeConnect(_ deadlineMS: UInt32) -> Int32 {
+    hostApplicationExchangeClient.connect(deadlineMS: deadlineMS) ? 1 : 0
 }
 
-private func runHostAgentExchange(_ deadlineMS: UInt32, filter: UnsafePointer<UInt8>, length: Int32) -> UInt32 {
-    let session = HostMQTTSession.shared
-    let role = HostAgentConfiguration.role
-    let filterText = String(decoding: UnsafeBufferPointer(start: filter, count: Int(length)), as: UTF8.self)
-    var client = EmbeddedMQTTClient()
-    var result: UInt32 = 1 | 2
+private func hostExchangeSubscribe(
+    _ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ deadlineMS: UInt32
+) -> Int32 {
+    hostApplicationExchangeClient.subscribe(
+        topic: topic, topicLength: topicLength, deadlineMS: deadlineMS
+    ) ? 1 : 0
+}
 
-    guard let deadvertise = preparedMessage(role: role, kind: 4) else { return result }
-    let configured = deadvertise.topic.withUnsafeBufferPointer { topic in
-        deadvertise.payload.withUnsafeBufferPointer { payload in
-            client.configureLastWill(
-                topic: topic.baseAddress!, topicLength: Int32(topic.count),
-                payload: payload.baseAddress!, payloadLength: Int32(payload.count)
-            )
-        }
-    }
-    guard configured, client.connect(deadlineMS: deadlineMS) else { return 0 }
-    result |= 4
+private func hostExchangeUnsubscribe(
+    _ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ deadlineMS: UInt32
+) -> Int32 {
+    hostApplicationExchangeClient.unsubscribe(
+        topic: topic, topicLength: topicLength, deadlineMS: deadlineMS
+    ) ? 1 : 0
+}
 
-    let subscribed = filterText.utf8.withContiguousStorageIfAvailable { bytes in
-        client.subscribe(topic: bytes.baseAddress!, topicLength: Int32(bytes.count), deadlineMS: deadlineMS)
-    } ?? false
-    guard subscribed else { return result }
-    result |= 8
+private func hostExchangePublish(
+    _ topic: UnsafePointer<UInt8>, _ topicLength: Int32,
+    _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32
+) -> Int32 {
+    hostApplicationExchangeClient.publish(
+        topic: topic, topicLength: topicLength, payload: payload, payloadLength: payloadLength
+    ) ? 1 : 0
+}
 
-    session.armReconnectWill(topic: String(decoding: deadvertise.topic, as: UTF8.self), payload: deadvertise.payload)
-    guard client.waitForReconnect(deadlineMS: deadlineMS) else { return result }
-    result |= 512
+private func hostExchangePollOneEvent(
+    _ topic: UnsafeMutablePointer<UInt8>, _ topicCapacity: Int32, _ topicLength: UnsafeMutablePointer<Int32>,
+    _ payload: UnsafeMutablePointer<UInt8>, _ payloadCapacity: Int32, _ payloadLength: UnsafeMutablePointer<Int32>
+) -> Int32 {
+    hostApplicationExchangeClient.pollOneEvent(
+        topic: topic, topicCapacity: topicCapacity, topicLength: topicLength,
+        payload: payload, payloadCapacity: payloadCapacity, payloadLength: payloadLength
+    )
+}
 
-    guard role == 1, let advertise = preparedMessage(role: role, kind: 1) else {
-        let disconnected = client.disconnect()
-        return result | (disconnected ? 256 : 0)
-    }
-    let advertisePublished = advertise.topic.withUnsafeBufferPointer { topic in
-        advertise.payload.withUnsafeBufferPointer { payload in
-            client.publish(
-                topic: topic.baseAddress!, topicLength: Int32(topic.count),
-                payload: payload.baseAddress!, payloadLength: Int32(payload.count)
-            )
-        }
-    }
-    guard advertisePublished else { return result }
-    result |= 16
-    HostAgentConfiguration.mark("advertised")
+private func hostExchangeWaitForReconnect(_ deadlineMS: UInt32) -> Int32 {
+    hostApplicationExchangeClient.waitForReconnect(deadlineMS: deadlineMS) ? 1 : 0
+}
 
-    guard let discover = session.nextMessage(matching: { $0.topic.contains("/DSC/") }, deadlineMS: deadlineMS) else {
-        return result
-    }
-    let response = receiveMessage(role: role, discover)
-    guard response.action == 1, let responsePayload = response.response else { return result }
-    result |= 32
-    let resolved = responsePayload.topic.withUnsafeBufferPointer { topic in
-        responsePayload.payload.withUnsafeBufferPointer { payload in
-            client.publish(
-                topic: topic.baseAddress!, topicLength: Int32(topic.count),
-                payload: payload.baseAddress!, payloadLength: Int32(payload.count)
-            )
-        }
-    }
-    guard resolved else { return result }
-    result |= 64
-    HostAgentConfiguration.mark("resolved")
-
-    if HostAgentConfiguration.inProcess {
-        guard HostAgentConfiguration.waitForMarker("disconnect-requested", deadlineMS: deadlineMS) else { return result }
-        session.markInjectedDisconnect()
-    } else {
-        let published = deadvertise.topic.withUnsafeBufferPointer { topic in
-            deadvertise.payload.withUnsafeBufferPointer { payload in
-                client.publish(
-                    topic: topic.baseAddress!, topicLength: Int32(topic.count),
-                    payload: payload.baseAddress!, payloadLength: Int32(payload.count)
-                )
-            }
-        }
-        guard published else { return result }
-    }
-    result |= 128
-
-    if client.disconnect() { result |= 256 }
-    return result
+private func hostExchangeDisconnect() -> Int32 {
+    hostApplicationExchangeClient.disconnect() ? 1 : 0
 }
 
 @inline(__always)
@@ -545,8 +507,19 @@ private func hostRestart() {
 
 @inline(__always) private func hostNetworkConfigured() -> Int32 { 1 }
 @inline(__always) private func hostNetworkRole() -> UInt32 { HostAgentConfiguration.role }
-@inline(__always) private func hostNetworkScenario() -> UInt32 { 0 }
+@inline(__always) private func hostNetworkScenario() -> UInt32 {
+    HostAgentConfiguration.inProcess ? 3 : 0
+}
 @inline(__always) private func hostNetworkPrepare(_ deadline: UInt32) -> UInt32 { _ = deadline; return 3 }
+@inline(__always) private func hostNetworkReconnect(_ deadline: UInt32) -> UInt32 { _ = deadline; return 3 }
+@inline(__always) private func hostExchangeMilestone(_ value: UInt32) {
+    guard let milestone = DeviceSmokeExchangeMilestone(rawValue: value) else { return }
+    switch milestone {
+    case .advertised: HostAgentConfiguration.mark("advertised")
+    case .resolved: HostAgentConfiguration.mark("resolved")
+    case .connected, .subscribed, .reconnected: break
+    }
+}
 @inline(__always) private func hostNetworkCopyTopic(_ buffer: UnsafeMutablePointer<UInt8>, _ capacity: Int32) -> Int32 {
     let value = Array("axoloty/host/loopback".utf8)
     guard capacity > Int32(value.count) else { return 0 }
@@ -568,12 +541,6 @@ private func hostRestart() {
 @inline(__always) private func hostResetReason() -> UInt32 { 0 }
 @inline(__always) private func hostHeapTraceBegin() -> Int32 { 1 }
 @inline(__always) private func hostHeapTraceEnd() -> UInt32 { 0 }
-
-private func hostAgentTest(
-    _ deadline: UInt32, _ filter: UnsafePointer<UInt8>, _ length: Int32
-) -> UInt32 {
-    runHostAgentExchange(deadline, filter: filter, length: length)
-}
 
 private func hostDeviceDisplayName(_ buffer: UnsafeMutablePointer<UInt8>, _ capacity: Int32) -> Int32 {
     let value = Array("Host Smoke".utf8)
@@ -601,10 +568,21 @@ func hostAgentSmokeSeam() -> DeviceSmokeSeam {
         networkRole: hostNetworkRole,
         networkScenario: hostNetworkScenario,
         networkPrepare: hostNetworkPrepare,
+        networkReconnect: hostNetworkReconnect,
         networkCopyTopic: hostNetworkCopyTopic,
         networkCopyPayload: hostNetworkCopyPayload,
         networkCleanup: hostNetworkCleanup,
-        agentTest: hostAgentTest,
+        carrier: DeviceSmokeCarrierOperations(
+            configureLastWill: hostExchangeConfigureLastWill,
+            connect: hostExchangeConnect,
+            subscribe: hostExchangeSubscribe,
+            unsubscribe: hostExchangeUnsubscribe,
+            publish: hostExchangePublish,
+            pollOneEvent: hostExchangePollOneEvent,
+            waitForReconnect: hostExchangeWaitForReconnect,
+            disconnect: hostExchangeDisconnect
+        ),
+        exchangeMilestone: hostExchangeMilestone,
         deviceDisplayName: hostDeviceDisplayName
     )
 }

@@ -26,6 +26,29 @@ enum StaticDeviceDispatchResult: Equatable {
     case ioValueDelivered
 }
 
+enum StaticAgentRole: Int32 {
+    case roleA = 1
+    case roleB = 2
+}
+
+enum StaticAgentMessageKind: Int32 {
+    case advertise = 1
+    case discover = 2
+    case resolve = 3
+    case deadvertise = 4
+}
+
+enum StaticAgentAction: Int32 {
+    case rejected = -1
+    case ignored = 0
+    case response = 1
+    case resolved = 2
+    case deadvertised = 3
+    case actorAssociated = 4
+    case actorDisassociated = 5
+    case ioValueDelivered = 6
+}
+
 private extension BorrowedProtocolDeliveryKey {
     func isActor(actorId: UUID16) -> Bool {
         if case .ioActor(let candidate) = self { return candidate == actorId }
@@ -315,6 +338,10 @@ func resetStaticDeviceAgents() {
     phase4AgentB.resetTransportState()
 }
 
+func expireStaticAgentRequest(role: StaticAgentRole) -> Bool {
+    role == .roleB && phase4AgentB.expireDiscover(nowMS: phase4NowMS())
+}
+
 @inline(__always)
 func phase4NowMS() -> UInt32 {
     UInt32(truncatingIfNeeded: deviceSmokeSeam().nowMicroseconds() / 1_000)
@@ -349,20 +376,31 @@ private func phase4Encode<T: WireEncodable>(
 
 @_cdecl("axoloty_static_agent_expire")
 func axolotyStaticAgentExpire(_ role: Int32) -> Int32 {
-    role == 2 && phase4AgentB.expireDiscover(nowMS: phase4NowMS()) ? 1 : 0
+    guard let role = StaticAgentRole(rawValue: role) else { return 0 }
+    return expireStaticAgentRequest(role: role) ? 1 : 0
 }
 
 /// Copies the active actor route for the selected static endpoint profile.
 /// The carrier adapter invokes this only to subscribe or re-subscribe; route
 /// bytes never escape into asynchronous Swift state.
+func copyStaticAgentActorRoute(
+    role: StaticAgentRole,
+    to output: UnsafeMutablePointer<UInt8>,
+    capacity: Int
+) -> Int? {
+    guard capacity > 0 else { return nil }
+    let length = role == .roleA
+        ? phase4AgentA.copyActorRoute(to: output, capacity: capacity)
+        : phase4AgentB.copyActorRoute(to: output, capacity: capacity)
+    return length
+}
+
 @_cdecl("axoloty_static_agent_copy_actor_route")
 func axolotyStaticAgentCopyActorRoute(
     _ role: Int32, _ output: UnsafeMutablePointer<UInt8>, _ capacity: Int32
 ) -> Int32 {
-    guard capacity > 0 else { return -1 }
-    let length = role == 1
-        ? phase4AgentA.copyActorRoute(to: output, capacity: Int(capacity))
-        : phase4AgentB.copyActorRoute(to: output, capacity: Int(capacity))
+    guard let role = StaticAgentRole(rawValue: role) else { return -1 }
+    let length = copyStaticAgentActorRoute(role: role, to: output, capacity: Int(capacity))
     return Int32(length ?? -1)
 }
 
@@ -515,6 +553,25 @@ private func preparePhase4Message(
     }
 }
 
+func prepareStaticAgentMessage(
+    role: StaticAgentRole,
+    kind: StaticAgentMessageKind,
+    responseCorrelationId: UUID16? = nil,
+    topicBuffer: UnsafeMutablePointer<UInt8>,
+    topicCapacity: Int32,
+    payloadBuffer: UnsafeMutablePointer<UInt8>,
+    payloadCapacity: Int32,
+    topicLength: UnsafeMutablePointer<Int32>,
+    payloadLength: UnsafeMutablePointer<Int32>
+) -> Bool {
+    preparePhase4Message(
+        role: role.rawValue, kind: kind.rawValue, responseCorrelationId: responseCorrelationId,
+        topicBuffer: topicBuffer, topicCapacity: topicCapacity,
+        payloadBuffer: payloadBuffer, payloadCapacity: payloadCapacity,
+        topicLength: topicLength, payloadLength: payloadLength
+    )
+}
+
 @_cdecl("axoloty_static_agent_prepare")
 func axolotyStaticAgentPrepare(
     _ role: Int32,
@@ -526,12 +583,85 @@ func axolotyStaticAgentPrepare(
     _ topicLength: UnsafeMutablePointer<Int32>,
     _ payloadLength: UnsafeMutablePointer<Int32>
 ) -> Int32 {
-    preparePhase4Message(
+    guard let role = StaticAgentRole(rawValue: role),
+          let kind = StaticAgentMessageKind(rawValue: kind) else { return 0 }
+    return prepareStaticAgentMessage(
         role: role, kind: kind,
         topicBuffer: topicBuffer, topicCapacity: topicCapacity,
         payloadBuffer: payloadBuffer, payloadCapacity: payloadCapacity,
         topicLength: topicLength, payloadLength: payloadLength
     ) ? 1 : 0
+}
+
+func receiveStaticAgentMessage(
+    role: StaticAgentRole,
+    _ topicBytes: UnsafePointer<UInt8>,
+    _ topicLength: Int32,
+    _ payloadBytes: UnsafePointer<UInt8>,
+    _ payloadLength: Int32,
+    _ outputTopic: UnsafeMutablePointer<UInt8>,
+    _ outputTopicCapacity: Int32,
+    _ outputPayload: UnsafeMutablePointer<UInt8>,
+    _ outputPayloadCapacity: Int32,
+    _ outputTopicLength: UnsafeMutablePointer<Int32>,
+    _ outputPayloadLength: UnsafeMutablePointer<Int32>
+) -> StaticAgentAction {
+    guard let message = try? BorrowedMessage.validated(
+        topicBytes: topicBytes, topicLength: Int(topicLength),
+        payloadBytes: payloadBytes, payloadLength: Int(payloadLength)
+    ) else { return .rejected }
+
+    let nowMS = phase4NowMS()
+    if role == .roleA && message.eventType == .discover {
+        guard phase4AgentA.dispatch(message, nowMS: nowMS) == .discover else { return .rejected }
+        guard let correlationId = message.topic.correlationIdLevel.flatMap(UUID16.init(parsing:)) else { return .rejected }
+        return preparePhase4Message(
+            role: role.rawValue, kind: StaticAgentMessageKind.resolve.rawValue, responseCorrelationId: correlationId,
+            topicBuffer: outputTopic, topicCapacity: outputTopicCapacity,
+            payloadBuffer: outputPayload, payloadCapacity: outputPayloadCapacity,
+            topicLength: outputTopicLength, payloadLength: outputPayloadLength
+        ) ? .response : .rejected
+    }
+    if role == .roleB && message.eventType == .advertise {
+        guard phase4AgentB.dispatch(message, nowMS: nowMS) == .advertise else { return .rejected }
+        let prepared = preparePhase4Message(
+            role: role.rawValue, kind: StaticAgentMessageKind.discover.rawValue,
+            topicBuffer: outputTopic, topicCapacity: outputTopicCapacity,
+            payloadBuffer: outputPayload, payloadCapacity: outputPayloadCapacity,
+            topicLength: outputTopicLength, payloadLength: outputPayloadLength
+        )
+        return prepared ? .response : .rejected
+    }
+    if role == .roleB && message.eventType == .resolve {
+        return phase4AgentB.dispatch(message, nowMS: nowMS) == .resolve ? .resolved : .rejected
+    }
+    if role == .roleB && message.eventType == .deadvertise {
+        return phase4AgentB.dispatch(message, nowMS: nowMS) == .deadvertise ? .deadvertised : .rejected
+    }
+    if message.eventType == .associate {
+    let result: StaticDeviceDispatchResult
+    if role == .roleA {
+        result = phase4AgentA.dispatch(message, nowMS: nowMS)
+    } else {
+        result = phase4AgentB.dispatch(message, nowMS: nowMS)
+    }
+        switch result {
+        case .ioActorAssociated: return .actorAssociated
+        case .ioActorDisassociated: return .actorDisassociated
+        case .ioSourceAssociated, .ioSourceDisassociated: return .ignored
+        default: return .rejected
+        }
+    }
+    if message.eventType == .ioValue {
+        let result: StaticDeviceDispatchResult
+        if role == .roleA {
+            result = phase4AgentA.dispatch(message, nowMS: nowMS)
+        } else {
+            result = phase4AgentB.dispatch(message, nowMS: nowMS)
+        }
+        return result == .ioValueDelivered ? .ioValueDelivered : .rejected
+    }
+    return .ignored
 }
 
 @_cdecl("axoloty_static_agent_receive")
@@ -548,60 +678,13 @@ func axolotyStaticAgentReceive(
     _ outputTopicLength: UnsafeMutablePointer<Int32>,
     _ outputPayloadLength: UnsafeMutablePointer<Int32>
 ) -> Int32 {
-    guard let message = try? BorrowedMessage.validated(
-        topicBytes: topicBytes, topicLength: Int(topicLength),
-        payloadBytes: payloadBytes, payloadLength: Int(payloadLength)
-    ) else { return -1 }
-
-    let nowMS = phase4NowMS()
-    if role == 1 && message.eventType == .discover {
-        guard phase4AgentA.dispatch(message, nowMS: nowMS) == .discover else { return -1 }
-        guard let correlationId = message.topic.correlationIdLevel.flatMap(UUID16.init(parsing:)) else { return -1 }
-        return preparePhase4Message(
-            role: role, kind: 3, responseCorrelationId: correlationId,
-            topicBuffer: outputTopic, topicCapacity: outputTopicCapacity,
-            payloadBuffer: outputPayload, payloadCapacity: outputPayloadCapacity,
-            topicLength: outputTopicLength, payloadLength: outputPayloadLength
-        ) ? 1 : -1
-    }
-    if role == 2 && message.eventType == .advertise {
-        guard phase4AgentB.dispatch(message, nowMS: nowMS) == .advertise else { return -1 }
-        let prepared = preparePhase4Message(
-            role: role, kind: 2,
-            topicBuffer: outputTopic, topicCapacity: outputTopicCapacity,
-            payloadBuffer: outputPayload, payloadCapacity: outputPayloadCapacity,
-            topicLength: outputTopicLength, payloadLength: outputPayloadLength
-        )
-        return prepared ? 1 : -1
-    }
-    if role == 2 && message.eventType == .resolve {
-        return phase4AgentB.dispatch(message, nowMS: nowMS) == .resolve ? 2 : -1
-    }
-    if role == 2 && message.eventType == .deadvertise {
-        return phase4AgentB.dispatch(message, nowMS: nowMS) == .deadvertise ? 3 : -1
-    }
-    if message.eventType == .associate {
-    let result: StaticDeviceDispatchResult
-    if role == 1 {
-        result = phase4AgentA.dispatch(message, nowMS: nowMS)
-    } else {
-        result = phase4AgentB.dispatch(message, nowMS: nowMS)
-    }
-        switch result {
-        case .ioActorAssociated: return 4
-        case .ioActorDisassociated: return 5
-        case .ioSourceAssociated, .ioSourceDisassociated: return 0
-        default: return -1
-        }
-    }
-    if message.eventType == .ioValue {
-        let result: StaticDeviceDispatchResult
-        if role == 1 {
-            result = phase4AgentA.dispatch(message, nowMS: nowMS)
-        } else {
-            result = phase4AgentB.dispatch(message, nowMS: nowMS)
-        }
-        return result == .ioValueDelivered ? 6 : -1
-    }
-    return 0
+    guard let role = StaticAgentRole(rawValue: role) else { return StaticAgentAction.rejected.rawValue }
+    return receiveStaticAgentMessage(
+        role: role,
+        topicBytes, topicLength,
+        payloadBytes, payloadLength,
+        outputTopic, outputTopicCapacity,
+        outputPayload, outputPayloadCapacity,
+        outputTopicLength, outputPayloadLength
+    ).rawValue
 }

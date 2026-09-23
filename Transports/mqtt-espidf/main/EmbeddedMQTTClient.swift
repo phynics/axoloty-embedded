@@ -20,8 +20,15 @@ private func axoloty_mqtt_configure_last_will(_ topic: UnsafePointer<UInt8>, _ t
 private func axoloty_mqtt_connect_wait(_ deadlineMS: UInt32) -> Int32
 @_silgen_name("axoloty_mqtt_subscribe_wait")
 private func axoloty_mqtt_subscribe_wait(_ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ deadlineMS: UInt32) -> Int32
+@_silgen_name("axoloty_mqtt_unsubscribe")
+private func axoloty_mqtt_unsubscribe(_ topic: UnsafePointer<UInt8>, _ topicLength: Int32) -> Int32
 @_silgen_name("axoloty_mqtt_publish")
 private func axoloty_mqtt_publish(_ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32) -> Int32
+@_silgen_name("axoloty_mqtt_poll_one_event")
+private func axoloty_mqtt_poll_one_event(
+    _ topic: UnsafeMutablePointer<UInt8>, _ topicCapacity: Int32, _ topicLength: UnsafeMutablePointer<Int32>,
+    _ payload: UnsafeMutablePointer<UInt8>, _ payloadCapacity: Int32, _ payloadLength: UnsafeMutablePointer<Int32>
+) -> Int32
 @_silgen_name("axoloty_mqtt_wait_loopback")
 private func axoloty_mqtt_wait_loopback(_ deadlineMS: UInt32) -> Int32
 @_silgen_name("axoloty_mqtt_reconnect_wait")
@@ -83,6 +90,38 @@ public struct EmbeddedMQTTClient {
         return axoloty_mqtt_publish(topic, topicLength, payload, payloadLength) != 0
     }
 
+    public func unsubscribe(
+        topic: UnsafePointer<UInt8>, topicLength: Int32,
+        deadlineMS: UInt32
+    ) -> Bool {
+        guard state == .subscribed, topicLength > 0,
+              topicLength <= Int32(WireBufferConfig.maxTopicLength) else { return false }
+        _ = deadlineMS
+        return axoloty_mqtt_unsubscribe(topic, topicLength) != 0
+    }
+
+    /// Copies one complete queued carrier frame into caller-owned fixed storage.
+    /// Returns one for a frame, zero when the queue is empty, and a negative
+    /// status for overflow, invalid storage, or a closed carrier.
+    public func pollOneEvent(
+        topic: UnsafeMutablePointer<UInt8>, topicCapacity: Int32,
+        topicLength: UnsafeMutablePointer<Int32>,
+        payload: UnsafeMutablePointer<UInt8>, payloadCapacity: Int32,
+        payloadLength: UnsafeMutablePointer<Int32>
+    ) -> Int32 {
+        guard state == .subscribed,
+              topicCapacity > 0, topicCapacity <= Int32(WireBufferConfig.maxTopicLength),
+              payloadCapacity >= 0, payloadCapacity <= Int32(WireBufferConfig.maxPayloadSize) else { return -1 }
+        let result = axoloty_mqtt_poll_one_event(
+            topic, topicCapacity, topicLength, payload, payloadCapacity, payloadLength
+        )
+        if result == 1 && (topicLength.pointee <= 0 || topicLength.pointee > topicCapacity ||
+                           payloadLength.pointee < 0 || payloadLength.pointee > payloadCapacity) {
+            return -1
+        }
+        return result
+    }
+
     public func waitForLoopback(deadlineMS: UInt32) -> Bool {
         state == .subscribed && axoloty_mqtt_wait_loopback(deadlineMS) != 0
     }
@@ -97,4 +136,61 @@ public struct EmbeddedMQTTClient {
         state = .disconnected
         return true
     }
+}
+
+// The application owns one synchronous agent exchange at a time. This
+// transport-owned adapter keeps the stateful client behind the application's
+// carrier function table without making the application import this module.
+nonisolated(unsafe) private var applicationExchangeClient = EmbeddedMQTTClient()
+
+func embeddedExchangeConfigureLastWill(
+    _ topic: UnsafePointer<UInt8>, _ topicLength: Int32,
+    _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32
+) -> Int32 {
+    applicationExchangeClient.configureLastWill(
+        topic: topic, topicLength: topicLength, payload: payload, payloadLength: payloadLength
+    ) ? 1 : 0
+}
+
+func embeddedExchangeConnect(_ deadlineMS: UInt32) -> Int32 {
+    applicationExchangeClient.connect(deadlineMS: deadlineMS) ? 1 : 0
+}
+
+func embeddedExchangeSubscribe(
+    _ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ deadlineMS: UInt32
+) -> Int32 {
+    applicationExchangeClient.subscribe(topic: topic, topicLength: topicLength, deadlineMS: deadlineMS) ? 1 : 0
+}
+
+func embeddedExchangeUnsubscribe(
+    _ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ deadlineMS: UInt32
+) -> Int32 {
+    applicationExchangeClient.unsubscribe(topic: topic, topicLength: topicLength, deadlineMS: deadlineMS) ? 1 : 0
+}
+
+func embeddedExchangePublish(
+    _ topic: UnsafePointer<UInt8>, _ topicLength: Int32,
+    _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32
+) -> Int32 {
+    applicationExchangeClient.publish(
+        topic: topic, topicLength: topicLength, payload: payload, payloadLength: payloadLength
+    ) ? 1 : 0
+}
+
+func embeddedExchangePollOneEvent(
+    _ topic: UnsafeMutablePointer<UInt8>, _ topicCapacity: Int32, _ topicLength: UnsafeMutablePointer<Int32>,
+    _ payload: UnsafeMutablePointer<UInt8>, _ payloadCapacity: Int32, _ payloadLength: UnsafeMutablePointer<Int32>
+) -> Int32 {
+    applicationExchangeClient.pollOneEvent(
+        topic: topic, topicCapacity: topicCapacity, topicLength: topicLength,
+        payload: payload, payloadCapacity: payloadCapacity, payloadLength: payloadLength
+    )
+}
+
+func embeddedExchangeWaitForReconnect(_ deadlineMS: UInt32) -> Int32 {
+    applicationExchangeClient.waitForReconnect(deadlineMS: deadlineMS) ? 1 : 0
+}
+
+func embeddedExchangeDisconnect() -> Int32 {
+    applicationExchangeClient.disconnect() ? 1 : 0
 }

@@ -12,7 +12,6 @@ typedef int AxolotyAtomicInt;
 // when both contexts set or clear bits concurrently.
 typedef struct {
     AxolotyAtomicUInt mqtt_bits;
-    AxolotyAtomicUInt agent_connect_count;
     AxolotyAtomicUInt network_connect_count;
     AxolotyAtomicUInt wifi_retry_count;
     AxolotyAtomicInt forced_wifi_disconnect;
