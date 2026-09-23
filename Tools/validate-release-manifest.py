@@ -124,9 +124,12 @@ def validate_evidence(record, path):
 def validate(repo_root, manifest_path, require_qualified, allow_revoked):
     repo_root = os.path.abspath(repo_root)
     manifest_path = os.path.abspath(manifest_path)
-    problems = []
     manifest = load(manifest_path)
     revocation, revocation_problems = load_revocation(repo_root, manifest_path)
+    if allow_revoked and revocation is not None:
+        return revocation_problems, revocation
+
+    problems = []
     problems.extend(revocation_problems)
 
     if manifest.get("schemaVersion") != 1:
@@ -226,7 +229,7 @@ def validate(repo_root, manifest_path, require_qualified, allow_revoked):
             problems.append("VERSION base %s does not match the lock version %s" % (match.group(1), lock_core.get("version")))
     if not HEX40.fullmatch(str(embedded.get("sha", ""))):
         problems.append("embedded.sha must be a full 40-character commit SHA")
-    if embedded.get("dirty") is not False and not (allow_revoked and revocation is not None):
+    if embedded.get("dirty") is not False:
         problems.append("embedded.dirty must be false; a release is built from a clean firmware checkout")
 
     # --- Toolchain, configuration, image. ------------------------------------

@@ -76,7 +76,8 @@ A certificate is immutable. If later validation finds that its provenance is
 invalid, add `releases/revocations/<profile>/<embedded-version>.json` rather
 than editing the certificate. The revocation names the certificate path and a
 specific reason. Default validation then rejects the certificate. Repository
-invariants report a tracked revocation as skipped, not qualified.
+invariants report a valid tracked revocation as skipped without treating the
+historical certificate as a current qualification claim.
 
 ## Manifest schema
 

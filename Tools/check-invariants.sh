@@ -560,7 +560,15 @@ PY
     [ "$version_bad" -eq 0 ] && pass release "VERSION ${version_value} tracks the locked Axoloty version"
 fi
 
-manifest_files="$(tracked 'releases/*/*.json' || true)"
+# Revocation records share the release tree but are not compatibility
+# certificates. Validate them only through their certificate's revocation
+# lookup, not as manifests themselves.
+manifest_files="$(tracked 'releases/*/*.json' | while IFS= read -r manifest; do
+    case "$manifest" in
+        releases/revocations/*) ;;
+        *) printf '%s\n' "$manifest" ;;
+    esac
+done || true)"
 if [ -z "$manifest_files" ]; then
     skip release 'no tracked release manifest exists yet'
 else

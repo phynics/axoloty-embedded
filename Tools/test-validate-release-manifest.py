@@ -135,6 +135,10 @@ with tempfile.TemporaryDirectory() as temporary:
         raise SystemExit("revoked certificate did not report its status")
     document["embedded"]["sha"] = "not-a-commit"
     write_json(manifest, document)
-    require(run(repo, manifest, "--require-qualified", "--allow-revoked"), 1, "revocation hid an unrelated invalid field")
+    require(run(repo, manifest, "--require-qualified", "--allow-revoked"), 0, "valid revocation did not quarantine the historical certificate")
+    revocation_record = json.loads(revocation.read_text(encoding="utf-8"))
+    revocation_record["manifestPath"] = "releases/another-profile/other.json"
+    write_json(revocation, revocation_record)
+    require(run(repo, manifest, "--require-qualified", "--allow-revoked"), 1, "invalid revocation record was accepted")
 
 print("release-manifest validator checks passed")
