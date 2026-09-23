@@ -70,6 +70,15 @@ releases/<profile>/<embedded-version>.json
 labelled `preview`, is never published there, and is never validated as a
 certificate.
 
+### Revoked certificates
+
+A certificate is immutable. If later validation finds that its provenance is
+invalid, add `releases/revocations/<profile>/<embedded-version>.json` rather
+than editing the certificate. The revocation names the certificate path and a
+specific reason. Default validation then rejects the certificate. Repository
+invariants report a valid tracked revocation as skipped without treating the
+historical certificate as a current qualification claim.
+
 ## Manifest schema
 
 The format is a versioned JSON document with `schemaVersion: 1`, following
@@ -98,7 +107,7 @@ in [docs/evidence.md](./evidence.md).
 | `axoloty.contractSha256` | Consumer contract hash | Core preparation report |
 | `embedded.version` | Embedded version | `VERSION` |
 | `embedded.sha` | Firmware checkout commit | build provenance |
-| `embedded.dirty` | Firmware checkout clean? | build provenance |
+| `embedded.dirty` | Firmware checkout clean? Must be `false` for a release. | build provenance |
 | `toolchain.swift` | Observed Swift version | build provenance, from `swift --version` |
 | `toolchain.sdk` | Observed SDK version | build provenance, from `idf.py --version` |
 | `toolchain.target` | SDK target | build provenance |

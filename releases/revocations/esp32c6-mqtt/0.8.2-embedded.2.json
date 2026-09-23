@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "status": "revoked",
+  "manifestPath": "releases/esp32c6-mqtt/0.8.2-embedded.2.json",
+  "reason": "The certificate records embedded.dirty=true, and its device evidence was relabeled to Core 4956298 without a hardware rerun. It cannot prove a clean, qualified release at the current lock."
+}

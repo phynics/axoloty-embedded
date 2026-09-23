@@ -3,11 +3,7 @@
   "profile": "esp32c6-mqtt",
   "check": "broker-restart",
   "tier": "device",
-  "status": "passed",
-  "recordedAt": "2026-09-20",
-  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8",
-  "firmwareSHA256": "0b89d38c34589c930b5c7b5e8297d576246cca93af41d9409dad61ecf9fd90e9",
-  "coreRevision": "4956298afb4a087147713fce73bb481cf7c59cab",
-  "protocol": "11 deterministic broker-restart cases over serial JSON Lines",
-  "result": "11/11 passed"
+  "status": "unexecuted",
+  "recordedAt": "2026-09-23",
+  "reason": "No physical run was recorded against the locked Core revision 4956298afb4a087147713fce73bb481cf7c59cab. The previous result was recorded at Core e065a7b9c0a690db22c71499ee482d163eb36261 and is not evidence for this revision; rerun the check on hardware before qualification."
 }

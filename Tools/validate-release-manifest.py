@@ -15,7 +15,7 @@
 # runs on every tracked manifest and on the manifest a release path is about to
 # publish.
 #
-# Usage: validate-release-manifest.py <repo-root> <manifest.json> [--require-qualified]
+# Usage: validate-release-manifest.py <repo-root> <manifest.json> [--require-qualified] [--allow-revoked]
 # Exit:  0 valid, 1 invalid, 2 usage.
 
 import json
@@ -39,6 +39,40 @@ def load(path):
 
 def is_nonempty_string(value):
     return isinstance(value, str) and value.strip() != ""
+
+
+def is_within(candidate, directory):
+    return os.path.commonpath([candidate, directory]) == directory and candidate != directory
+
+
+def load_revocation(repo_root, manifest_path):
+    """Return the immutable revocation record for a tracked certificate."""
+    releases_dir = os.path.join(repo_root, "releases")
+    if not is_within(manifest_path, releases_dir):
+        return None, []
+    relative_manifest = os.path.relpath(manifest_path, releases_dir)
+    if relative_manifest.startswith("revocations" + os.sep):
+        return None, []
+    revocation_path = os.path.join(releases_dir, "revocations", relative_manifest)
+    if not os.path.isfile(revocation_path):
+        return None, []
+    try:
+        record = load(revocation_path)
+    except ValueError as error:
+        return None, ["revocation %s is invalid: %s" % (revocation_path, error)]
+    if not isinstance(record, dict):
+        return None, ["revocation %s must be a JSON object" % revocation_path]
+    expected_manifest_path = os.path.relpath(manifest_path, repo_root)
+    problems = []
+    if record.get("schemaVersion") != 1:
+        problems.append("revocation %s: schemaVersion must be 1" % revocation_path)
+    if record.get("status") != "revoked":
+        problems.append("revocation %s: status must be revoked" % revocation_path)
+    if record.get("manifestPath") != expected_manifest_path:
+        problems.append("revocation %s: manifestPath must be %r" % (revocation_path, expected_manifest_path))
+    if not is_nonempty_string(record.get("reason")):
+        problems.append("revocation %s: reason is required" % revocation_path)
+    return record, problems
 
 
 def validate_evidence(record, path):
@@ -87,9 +121,16 @@ def validate_evidence(record, path):
     return problems
 
 
-def validate(repo_root, manifest_path, require_qualified):
-    problems = []
+def validate(repo_root, manifest_path, require_qualified, allow_revoked):
+    repo_root = os.path.abspath(repo_root)
+    manifest_path = os.path.abspath(manifest_path)
     manifest = load(manifest_path)
+    revocation, revocation_problems = load_revocation(repo_root, manifest_path)
+    if allow_revoked and revocation is not None:
+        return revocation_problems, revocation
+
+    problems = []
+    problems.extend(revocation_problems)
 
     if manifest.get("schemaVersion") != 1:
         problems.append("schemaVersion must be 1, found %r" % manifest.get("schemaVersion"))
@@ -188,8 +229,8 @@ def validate(repo_root, manifest_path, require_qualified):
             problems.append("VERSION base %s does not match the lock version %s" % (match.group(1), lock_core.get("version")))
     if not HEX40.fullmatch(str(embedded.get("sha", ""))):
         problems.append("embedded.sha must be a full 40-character commit SHA")
-    if embedded.get("dirty") not in {True, False}:
-        problems.append("embedded.dirty must be a boolean")
+    if embedded.get("dirty") is not False:
+        problems.append("embedded.dirty must be false; a release is built from a clean firmware checkout")
 
     # --- Toolchain, configuration, image. ------------------------------------
     toolchain = manifest.get("toolchain")
@@ -234,14 +275,14 @@ def validate(repo_root, manifest_path, require_qualified):
         problems.append("qualification.evidence must be a list")
         entries = []
     matching = 0
-    evidence_dir = os.path.join(repo_root, "docs", "evidence")
+    evidence_dir = os.path.abspath(os.path.join(repo_root, "docs", "evidence"))
     for entry in entries:
         if not isinstance(entry, dict) or not is_nonempty_string(entry.get("path")):
             problems.append("each qualification.evidence entry must name a path")
             continue
         relative = entry["path"]
-        candidate = os.path.normpath(os.path.join(repo_root, relative))
-        if os.path.commonpath([candidate, evidence_dir]) != evidence_dir or candidate == evidence_dir:
+        candidate = os.path.abspath(os.path.join(repo_root, relative))
+        if not is_within(candidate, evidence_dir):
             problems.append("evidence path %r is outside docs/evidence" % relative)
             continue
         if not os.path.isfile(candidate):
@@ -257,6 +298,8 @@ def validate(repo_root, manifest_path, require_qualified):
         problems.append("a qualified manifest needs a passed evidence record for this Core revision and image checksum")
     if require_qualified and status != "qualified":
         problems.append("this manifest is not qualified; a published release must be")
+    if revocation is not None and not allow_revoked:
+        problems.append("this release certificate is revoked: %s" % revocation["reason"])
 
     # --- Compatibility statement. --------------------------------------------
     compatibility = manifest.get("compatibility")
@@ -271,18 +314,19 @@ def validate(repo_root, manifest_path, require_qualified):
     if not is_nonempty_string(compatibility.get("description")):
         problems.append("compatibility.description is required")
 
-    return problems
+    return problems, revocation
 
 
 def main(argv):
-    args = [argument for argument in argv if argument != "--require-qualified"]
+    args = [argument for argument in argv if argument not in {"--require-qualified", "--allow-revoked"}]
     require_qualified = "--require-qualified" in argv
+    allow_revoked = "--allow-revoked" in argv
     if len(args) != 3:
-        sys.stderr.write("usage: validate-release-manifest.py <repo-root> <manifest.json> [--require-qualified]\n")
+        sys.stderr.write("usage: validate-release-manifest.py <repo-root> <manifest.json> [--require-qualified] [--allow-revoked]\n")
         return 2
     repo_root, manifest_path = args[1], args[2]
     try:
-        problems = validate(repo_root, manifest_path, require_qualified)
+        problems, revocation = validate(repo_root, manifest_path, require_qualified, allow_revoked)
     except ValueError as error:
         sys.stderr.write("VIOLATION [release-manifest] %s\n" % error)
         return 1
@@ -291,7 +335,9 @@ def main(argv):
     if problems:
         return 1
     mode = load(manifest_path).get("mode")
-    if mode == "release":
+    if revocation is not None:
+        print("revoked  [release-manifest] %s: %s" % (manifest_path, revocation["reason"]))
+    elif mode == "release":
         print("ok       [release-manifest] %s is a valid profile compatibility certificate" % manifest_path)
     else:
         print("ok       [release-manifest] %s is a well-formed compatibility preview (not a claim)" % manifest_path)

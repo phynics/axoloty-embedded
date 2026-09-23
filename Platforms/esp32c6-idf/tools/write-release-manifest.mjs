@@ -67,6 +67,9 @@ if (preparation.core.sha !== provenance.core?.sha) {
 if (!/^[0-9a-f]{40}$/.test(provenance.firmware?.revision ?? "")) {
   throw new Error("firmware revision is not a full commit SHA");
 }
+if (provenance.firmware?.dirty !== false) {
+  throw new Error("cannot write a release manifest from a dirty firmware checkout");
+}
 if (!/^[0-9a-f]{64}$/.test(provenance.artifact?.sha256 ?? "")) {
   throw new Error("build artifact checksum is not a SHA-256");
 }

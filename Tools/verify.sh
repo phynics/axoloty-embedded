@@ -81,6 +81,8 @@ if wanted repo; then
     printf '\n== repo: repository invariants\n'
     repo_failed=0
     bash Tools/check-invariants.sh || repo_failed=1
+    printf '\n== repo: release manifest validator\n'
+    python3 Tools/test-validate-release-manifest.py || repo_failed=1
     # The smoke case set is pinned separately: a validator that expects fewer
     # cases still reports a clean pass on a board, so nothing downstream can
     # catch it shrinking.
