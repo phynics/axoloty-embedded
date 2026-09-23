@@ -291,15 +291,15 @@ else
     for variable in AXOLOTY_WIRE_SOURCE_DIR AXOLOTY_OBJECT_MODEL_SOURCE_DIR AXOLOTY_PROTOCOL_SOURCE_DIR AXOLOTY_COATY_MODELS_SOURCE_DIR AXOLOTY_STATIC_RUNTIME_SOURCE_DIR; do
         require_component_text "$source_resolver" "$variable" "$source_resolver does not resolve $variable from the preparation report"
     done
-    require_component_text "$component_root/axoloty_wire/CMakeLists.txt" '"${AXOLOTY_WIRE_SOURCE_DIR}/*.swift"' 'the wire component does not compile the prepared AxolotyWire sources'
+    require_component_text "$component_root/axoloty_wire/CMakeLists.txt" "\"\${AXOLOTY_WIRE_SOURCE_DIR}/*.swift\"" 'the wire component does not compile the prepared AxolotyWire sources'
     require_component_text "$component_root/axoloty_wire/CMakeLists.txt" 'add_custom_target(axoloty_wire_module_alias' 'the wire component does not publish its importable module alias'
-    require_component_text "$component_root/axoloty_object_model/CMakeLists.txt" '"${AXOLOTY_OBJECT_MODEL_SOURCE_DIR}/*.swift"' 'the object-model component does not compile the prepared sources'
+    require_component_text "$component_root/axoloty_object_model/CMakeLists.txt" "\"\${AXOLOTY_OBJECT_MODEL_SOURCE_DIR}/*.swift\"" 'the object-model component does not compile the prepared sources'
     require_component_text "$component_root/axoloty_object_model/CMakeLists.txt" 'axoloty_wire_module_alias' 'the object-model component does not wait for AxolotyWire'
     require_component_text "$component_root/axoloty_object_model/CMakeLists.txt" 'add_custom_target(axoloty_object_model_module_alias' 'the object-model component does not publish its importable module alias'
-    require_component_text "$component_root/axoloty_protocol/CMakeLists.txt" '"${AXOLOTY_PROTOCOL_SOURCE_DIR}/*.swift"' 'the protocol component does not compile the prepared sources'
+    require_component_text "$component_root/axoloty_protocol/CMakeLists.txt" "\"\${AXOLOTY_PROTOCOL_SOURCE_DIR}/*.swift\"" 'the protocol component does not compile the prepared sources'
     require_component_text "$component_root/axoloty_protocol/CMakeLists.txt" 'axoloty_object_model_module_alias' 'the protocol component does not wait for AxolotyObjectModel'
     require_component_text "$component_root/axoloty_protocol/CMakeLists.txt" 'add_custom_target(axoloty_protocol_module_alias' 'the protocol component does not publish its importable module alias'
-    require_component_text "$component_root/axoloty_coaty_models/CMakeLists.txt" '"${AXOLOTY_COATY_MODELS_SOURCE_DIR}/*.swift"' 'the Coaty-model component does not compile the prepared sources'
+    require_component_text "$component_root/axoloty_coaty_models/CMakeLists.txt" "\"\${AXOLOTY_COATY_MODELS_SOURCE_DIR}/*.swift\"" 'the Coaty-model component does not compile the prepared sources'
     require_component_text "$component_root/axoloty_coaty_models/CMakeLists.txt" 'axoloty_object_model_module_alias' 'the Coaty-model component does not wait for AxolotyObjectModel'
     require_component_text "$component_root/axoloty_static_runtime/CMakeLists.txt" 'AXOLOTY_STATIC_RUNTIME_SOURCE_DIR' 'the static-runtime component does not compile prepared sources'
     require_component_text "$component_root/axoloty_static_runtime/CMakeLists.txt" 'axoloty_protocol_module_alias' 'the static-runtime component does not wait for AxolotyProtocol'
