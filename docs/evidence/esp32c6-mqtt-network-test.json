@@ -3,7 +3,11 @@
   "profile": "esp32c6-mqtt",
   "check": "network-test",
   "tier": "device",
-  "status": "unexecuted",
-  "recordedAt": "2026-09-23",
-  "reason": "No physical run was recorded against the locked Core revision 4956298afb4a087147713fce73bb481cf7c59cab. The previous result was recorded at Core e065a7b9c0a690db22c71499ee482d163eb36261 and is not evidence for this revision; rerun the check on hardware before qualification."
+  "status": "passed",
+  "recordedAt": "2026-09-24",
+  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8",
+  "firmwareSHA256": "d494e47a85f8baf0a90ded89496bdc0ac6662ae0f28b4987ef78dfe5c6832a79",
+  "coreRevision": "4956298afb4a087147713fce73bb481cf7c59cab",
+  "protocol": "323 deterministic cases over serial JSON Lines",
+  "result": "323/323 passed"
 }
