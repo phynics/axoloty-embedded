@@ -25,6 +25,9 @@ become their own issues.
 - **Why out of scope:** deciding whether the JavaScript copy is still needed
   requires reviewing the upstream test that used it; removing it is unrelated
   cleanup.
+- **Resolved:** the upstream test that used it was removed from
+  `phynics/axoloty` in axoloty#914, leaving no caller. The JavaScript copy was
+  deleted; `patch-swift-got.cmake` is the only implementation.
 
 ## 3. Stale top-level project comment
 
