@@ -43,6 +43,10 @@ lock afterwards.
   a parent directory.
 - An application names no board, SDK, or broker. A transport contains no
   protocol rule.
+- Every Swift `throws` names its error type: write `throws(SomeError)`.
+  Embedded Swift rejects untyped `throws`, and host-only code here must not
+  drift from what the device can compile. At a boundary with an untyped
+  Foundation or Core host API, catch and map the error into a local type.
 - A profile claims a Core revision only with device evidence for that
   revision. Compatibility is per profile.
 - Migration from Axoloty is behavior-preserving. File unrelated discoveries as

@@ -57,7 +57,7 @@ struct EmbeddedHostPeer {
         FileHandle.standardError.write(Data("step: \(message)\n".utf8))
     }
 
-    static func hostDiscoversEmbeddedAgent(_ environment: [String: String]) async throws {
+    static func hostDiscoversEmbeddedAgent(_ environment: [String: String]) async throws(HostPeerError) {
         let (runtime, advertiseStream, resolveStream, deadvertiseStream) = try makeRuntime(
             environment: environment,
             selectors: [
@@ -71,8 +71,8 @@ struct EmbeddedHostPeer {
                 .family(.deadvertise),
             ]
         )
-        do {
-            try await runtime.start()
+        do throws(HostPeerError) {
+            try await start(runtime)
             try signalReadiness(environment)
             trace("host-requester ready")
 
@@ -128,14 +128,14 @@ struct EmbeddedHostPeer {
         }
     }
 
-    static func embeddedAgentDiscoversHost(_ environment: [String: String]) async throws {
+    static func embeddedAgentDiscoversHost(_ environment: [String: String]) async throws(HostPeerError) {
         let (runtime, discoverStream, _, _) = try makeRuntime(
             environment: environment,
             selectors: [.family(.discover)]
         )
         var advertiser: Task<Void, Never>?
-        do {
-            try await runtime.start()
+        do throws(HostPeerError) {
+            try await start(runtime)
             try signalReadiness(environment)
             trace("host-responder ready")
 
@@ -191,29 +191,34 @@ struct EmbeddedHostPeer {
     static func makeRuntime(
         environment: [String: String],
         selectors: [RuntimeEventSelector]
-    ) throws -> (AxolotyRuntime, RuntimeEventStream?, RuntimeEventStream?, RuntimeEventStream?) {
-        let host = environment["WIRE_BROKER_HOST"] ?? "127.0.0.1"
-        let port = UInt16(environment["WIRE_BROKER_PORT"] ?? "1883") ?? 1883
-        let namespace = environment["WIRE_NAMESPACE"] ?? "axoloty-embedded"
-        let identity = try RuntimeIdentity(id: hostID, name: "axoloty-embedded-host")
-        var builder = try RuntimeBuilder(identity: identity, namespace: namespace)
-        var streams = [RuntimeEventStream]()
-        for selector in selectors {
-            streams.append(try builder.events(
-                matching: selector,
-                buffering: RuntimeBufferingPolicy.failAfterDrop(capacity: 8)
-            ))
+    ) throws(HostPeerError) -> (AxolotyRuntime, RuntimeEventStream?, RuntimeEventStream?, RuntimeEventStream?) {
+        // Core's host composition API throws untyped errors; this is the typed boundary.
+        do {
+            let host = environment["WIRE_BROKER_HOST"] ?? "127.0.0.1"
+            let port = UInt16(environment["WIRE_BROKER_PORT"] ?? "1883") ?? 1883
+            let namespace = environment["WIRE_NAMESPACE"] ?? "axoloty-embedded"
+            let identity = try RuntimeIdentity(id: hostID, name: "axoloty-embedded-host")
+            var builder = try RuntimeBuilder(identity: identity, namespace: namespace)
+            var streams = [RuntimeEventStream]()
+            for selector in selectors {
+                streams.append(try builder.events(
+                    matching: selector,
+                    buffering: RuntimeBufferingPolicy.failAfterDrop(capacity: 8)
+                ))
+            }
+            let definition = try builder.finish()
+            let binding = try MQTTBinding(
+                configuration: try MQTTBindingConfiguration(host: host, port: port)
+            )
+            return (
+                AxolotyRuntime(definition: definition, transport: binding),
+                streams.indices.contains(0) ? streams[0] : nil,
+                streams.indices.contains(1) ? streams[1] : nil,
+                streams.indices.contains(2) ? streams[2] : nil
+            )
+        } catch {
+            throw HostPeerError.underlying("runtime composition failed: \(error)")
         }
-        let definition = try builder.finish()
-        let binding = try MQTTBinding(
-            configuration: try MQTTBindingConfiguration(host: host, port: port)
-        )
-        return (
-            AxolotyRuntime(definition: definition, transport: binding),
-            streams.indices.contains(0) ? streams[0] : nil,
-            streams.indices.contains(1) ? streams[1] : nil,
-            streams.indices.contains(2) ? streams[2] : nil
-        )
     }
 
     // MARK: - Wire shapes (frozen; the device firmware matches these)
@@ -230,8 +235,8 @@ struct EmbeddedHostPeer {
         Array("{\"objectIds\":[\"\(embeddedObjectID)\"]}".utf8)
     }
 
-    static func expectDevice(_ payload: [UInt8]) throws {
-        guard let root = try JSONSerialization.jsonObject(with: Data(payload)) as? [String: Any],
+    static func expectDevice(_ payload: [UInt8]) throws(HostPeerError) {
+        guard let root = (try? JSONSerialization.jsonObject(with: Data(payload))) as? [String: Any],
               let object = root["object"] as? [String: Any] else {
             throw HostPeerError.mismatch("Advertise/Resolve payload object")
         }
@@ -243,8 +248,8 @@ struct EmbeddedHostPeer {
         }
     }
 
-    static func expectObjectIDs(_ payload: [UInt8]) throws {
-        guard let root = try JSONSerialization.jsonObject(with: Data(payload)) as? [String: Any],
+    static func expectObjectIDs(_ payload: [UInt8]) throws(HostPeerError) {
+        guard let root = (try? JSONSerialization.jsonObject(with: Data(payload))) as? [String: Any],
               let objectIDs = root["objectIds"] as? [String] else {
             throw HostPeerError.mismatch("Deadvertise payload objectIds")
         }
@@ -257,22 +262,35 @@ struct EmbeddedHostPeer {
         _ iterator: AsyncStream<RuntimeEventValue>.Iterator,
         label: String,
         runtime: AxolotyRuntime
-    ) async throws -> RuntimeEventValue {
+    ) async throws(HostPeerError) -> RuntimeEventValue {
         do {
             return try await nextValue(iterator, timeout: .seconds(60))
         } catch {
             let state = await runtime.state()
             let diagnostics = await runtime.diagnosticsSnapshot()
-            throw AxolotyError.runtime(
-                code: .timedOut,
-                reason: "Timed out waiting for \(label); state=\(state); diagnostics=\(diagnostics); cause=\(error)"
+            throw HostPeerError.timedOut(
+                "Timed out waiting for \(label); state=\(state); diagnostics=\(diagnostics); cause=\(error.description)"
             )
         }
     }
 
-    static func signalReadiness(_ environment: [String: String]) throws {
+    /// Starts the runtime, mapping Core's untyped start failure onto the
+    /// peer's typed error.
+    static func start(_ runtime: AxolotyRuntime) async throws(HostPeerError) {
+        do {
+            try await runtime.start()
+        } catch {
+            throw HostPeerError.underlying("runtime start failed: \(error)")
+        }
+    }
+
+    static func signalReadiness(_ environment: [String: String]) throws(HostPeerError) {
         guard let path = environment["WIRE_READY_FILE"] else { return }
-        try Data("ready\n".utf8).write(to: URL(fileURLWithPath: path), options: .atomic)
+        do {
+            try Data("ready\n".utf8).write(to: URL(fileURLWithPath: path), options: .atomic)
+        } catch {
+            throw HostPeerError.underlying("cannot write WIRE_READY_FILE: \(error)")
+        }
     }
 
     static func emitState(_ direction: String, sourceID: UUID16) {
@@ -285,12 +303,19 @@ enum HostPeerError: Error, CustomStringConvertible {
     case usage(String)
     case missingStream(String)
     case mismatch(String)
+    case timedOut(String)
+    case cancelled
+    /// A failure from an untyped Foundation or Core host API, described.
+    case underlying(String)
 
     var description: String {
         switch self {
         case .usage(let message): return message
         case .missingStream(let name): return "the \(name) stream was not configured"
         case .mismatch(let detail): return "unexpected \(detail)"
+        case .timedOut(let message): return message
+        case .cancelled: return "cancelled"
+        case .underlying(let message): return message
         }
     }
 }
@@ -303,7 +328,7 @@ enum HostPeerError: Error, CustomStringConvertible {
 // the first outcome atomically.
 
 private enum NextValueResolution<Value: Sendable>: Sendable {
-    case operation(Result<Value, Error>)
+    case operation(Result<Value, HostPeerError>)
     case timeout
     case cancelled
 }
@@ -348,13 +373,13 @@ private final class NextValueStreamBox<Element: Sendable>: @unchecked Sendable {
 private func nextValue<E: Sendable>(
     _ iterator: AsyncStream<E>.Iterator,
     timeout: Duration
-) async throws -> E {
-    try Task.checkCancellation()
+) async throws(HostPeerError) -> E {
+    if Task.isCancelled { throw HostPeerError.cancelled }
     let box = NextValueStreamBox(iterator)
     let resultBox = NextValueResultBox<E>()
     let operationTask = Task {
         guard let value = await box.iterator.next() else {
-            resultBox.resolve(.operation(.failure(CancellationError())))
+            resultBox.resolve(.operation(.failure(.cancelled)))
             return
         }
         resultBox.resolve(.operation(.success(value)))
@@ -389,6 +414,6 @@ private func nextValue<E: Sendable>(
         throw HostPeerError.mismatch("timed out after \(timeout)")
     case .cancelled:
         operationTask.cancel()
-        throw CancellationError()
+        throw HostPeerError.cancelled
     }
 }

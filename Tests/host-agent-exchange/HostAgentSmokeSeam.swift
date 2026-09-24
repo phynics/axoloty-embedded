@@ -31,7 +31,7 @@ enum HostAgentConfiguration {
     static let objectID = "32400000-0000-4000-8000-000000000002"
     static let namespace = "axoloty-embedded"
 
-    static func load(from environment: [String: String]) throws {
+    static func load(from environment: [String: String]) throws(HostAgentError) {
         brokerHost = environment["WIRE_BROKER_HOST"] ?? "127.0.0.1"
         brokerPort = try parsePort(environment["WIRE_BROKER_PORT"] ?? "1883")
         role = try parseRole(environment["HOST_AGENT_ROLE"] ?? "1")
@@ -39,17 +39,21 @@ enum HostAgentConfiguration {
         guard !clientID.isEmpty else { throw HostAgentError.configuration("HOST_AGENT_CLIENT_ID is empty") }
         controlDirectory = URL(fileURLWithPath: environment["HOST_AGENT_CONTROL_DIR"] ?? "/tmp/axoloty-host-agent")
         inProcess = environment["HOST_AGENT_BROKER_MODE"] == "in-process"
-        try FileManager.default.createDirectory(at: controlDirectory, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: controlDirectory, withIntermediateDirectories: true)
+        } catch {
+            throw HostAgentError.configuration("cannot create HOST_AGENT_CONTROL_DIR: \(error)")
+        }
     }
 
-    static func parsePort(_ value: String) throws -> Int {
+    static func parsePort(_ value: String) throws(HostAgentError) -> Int {
         guard let port = Int(value), (1...65_535).contains(port) else {
             throw HostAgentError.configuration("invalid WIRE_BROKER_PORT")
         }
         return port
     }
 
-    static func parseRole(_ value: String) throws -> UInt32 {
+    static func parseRole(_ value: String) throws(HostAgentError) -> UInt32 {
         guard let role = UInt32(value), role == 1 || role == 2 else {
             throw HostAgentError.configuration("HOST_AGENT_ROLE must be 1 or 2")
         }
