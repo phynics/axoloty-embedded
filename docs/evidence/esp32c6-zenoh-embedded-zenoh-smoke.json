@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "profile": "esp32c6-zenoh",
   "check": "embedded-zenoh-smoke",
+  "tier": "device",
   "status": "unexecuted",
-  "recordedAt": "2026-09-20",
-  "coreRevision": "4956298afb4a087147713fce73bb481cf7c59cab",
-  "reason": "No physical ESP32-C6 board or reachable Zenoh router is attached in this environment, and no linkable Zenoh image exists yet (see esp32c6-zenoh-firmware-build.json). The device smoke protocol and the Zenoh network scenario are owned by the embedded Zenoh qualification issue. This record carries the gate forward until a board and a linkable Zenoh backend exist."
+  "recordedAt": "2026-09-24",
+  "reason": "Not rerun against locked Core 0579663a9d33c0a017cbb3ad5d74dd1b80a8853f; no physical ESP32-C6 or reachable Zenoh router is attached, and the profile has no linkable image."
 }

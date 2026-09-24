@@ -12,20 +12,19 @@ anything is unverifiable.**
 
 | Image | Contents |
 |---|---|
-| `axoloty-embedded-dev` | Swift 6.3 and ESP-IDF v5.4 (`idf.py`, `esptool.py`, `riscv32-esp-elf-gcc`), built from this repository's `.devcontainer/Dockerfile` |
-| `swift:6.4.0-noble` | Swift 6.4, for the adopt-6.4 epic |
-| `swift:6.3-jammy` | the current CI base |
+| `axoloty-embedded-dev` | Swift 6.4 and ESP-IDF v5.4 (`idf.py`, `esptool.py`, `riscv32-esp-elf-gcc`), built from this repository's `.devcontainer/Dockerfile` |
+| `swift:6.4-jammy` | the current CI base and Core preparation toolchain |
 
 CI publishes the image to GHCR whenever `.devcontainer/Dockerfile` changes on
 `main` (`.github/workflows/dev-image.yml`). Pull it and tag it with the local
 name the commands below use:
 
 ```bash
-docker pull ghcr.io/phynics/axoloty-embedded-dev:swift-6.3
-docker tag ghcr.io/phynics/axoloty-embedded-dev:swift-6.3 axoloty-embedded-dev
+docker pull ghcr.io/phynics/axoloty-embedded-dev:swift-6.4
+docker tag ghcr.io/phynics/axoloty-embedded-dev:swift-6.4 axoloty-embedded-dev
 ```
 
-`swift-6.3` follows the latest recipe; `swift-6.3-<Dockerfile SHA-256>` names
+`swift-6.4` follows the latest recipe; `swift-6.4-<Dockerfile SHA-256>` names
 one recipe immutably, and each publishing run's summary records its digest.
 Or build it yourself; the checkout is bind-mounted, so editing source never
 requires a rebuild:
@@ -42,7 +41,7 @@ Hardware tooling lives here, not in Core. Axoloty's `axoloty-dev` image carries
 only host development tools since
 [axoloty#914](https://github.com/phynics/axoloty/pull/914). An ESP-IDF v5.4
 installation in your own environment works as well, provided `IDF_PATH` points
-at it and Swift 6.3 is on `PATH`.
+at it and Swift 6.4 is on `PATH`.
 
 ## The working invocation
 

@@ -4,9 +4,9 @@ name: Development Container Image
 # ghcr.io/<owner>/axoloty-embedded-dev. Tags are keyed by the Dockerfile's
 # content, so an unchanged recipe is never rebuilt:
 #
-#   swift-6.3-<sha256>          one immutable tag per recipe
-#   swift-6.3                   moves to the latest recipe on main
-#   swift-6.3-pr-<n>-<sha256>   a same-repository pull request's recipe
+#   swift-6.4-<sha256>          one immutable tag per recipe
+#   swift-6.4                   moves to the latest recipe on main
+#   swift-6.4-pr-<n>-<sha256>   a same-repository pull request's recipe
 #
 # The Dockerfile pins every tool version, but base images and ESP-IDF's tool
 # downloads can still change underneath a rebuild, so each run records the
@@ -35,7 +35,7 @@ concurrency:
 
 env:
   IMAGE_BASE: ghcr.io/${{ github.repository_owner }}/axoloty-embedded-dev
-  SWIFT_TAG: swift-6.3
+  SWIFT_TAG: swift-6.4
 
 jobs:
   publish:

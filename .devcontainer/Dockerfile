@@ -13,7 +13,7 @@
 #
 # An operator may instead provide ESP-IDF in their own environment: nothing in
 # this repository requires this image, only the tools it installs.
-ARG SWIFT_VERSION=6.3
+ARG SWIFT_VERSION=6.4
 ARG ESP_IDF_VERSION=v5.4
 ARG ESPFLASH_VERSION=3.3.0
 ARG NODE_VERSION=22.17.1

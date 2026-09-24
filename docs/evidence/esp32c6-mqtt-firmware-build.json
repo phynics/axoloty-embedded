@@ -4,9 +4,21 @@
   "check": "firmware-build",
   "tier": "build",
   "status": "passed",
-  "recordedAt": "2026-09-20",
-  "result": "The esp32c6-mqtt profile remains qualified at Core 4956298, whose merge adds the in-process test broker without changing runtime/product sources. The existing release artifact and device qualification remain the same (axoloty-swift.bin, 752624 bytes); the release certificate carries the qualification.",
-  "firmwareSHA256": "966a43899c08e5e815672a03805fa858bd1176ba40e966c6111101e12e231aaa",
-  "coreRevision": "4956298afb4a087147713fce73bb481cf7c59cab",
-  "toolchain": "axoloty-dev:latest container — Swift 6.3.3 (swift-6.3.3-RELEASE), ESP-IDF v5.4, target esp32c6"
+  "recordedAt": "2026-09-24",
+  "result": "ESP32-C6 MQTT firmware compiled and linked with Swift 6.4 against the locked Core revision. The 675856-byte image is 76768 bytes smaller than the previous 752624-byte Swift 6.3.3 image (10.2% decrease). Device-only free/minimum heap and stack high-water metrics were not measured because no board is attached.",
+  "firmwareSHA256": "bd9bb37fe2440cc461616e5da29b3f03e13abc829f5117cf1cf8ed54bb27a93f",
+  "firmwareSizeBytes": 675856,
+  "previousFirmwareSizeBytes": 752624,
+  "firmwareSizeDeltaBytes": -76768,
+  "coreRevision": "0579663a9d33c0a017cbb3ad5d74dd1b80a8853f",
+  "toolchain": "axoloty-embedded-dev image sha256:300977549cef51e03728784ab59d3a351c5eb4d60e9b5f3a47fb6d16462b2994 — Swift version 6.4 (swift-6.4-RELEASE)\nTarget: x86_64-unknown-linux-gnu, ESP-IDF v5.4, target esp32c6",
+  "dockerfileSHA256": "34c2b624b658ca77e06444cc23025d387fd9c84f624928aa6b0ed7a7036469e4",
+  "runtimeResourceMetrics": {
+    "status": "unexecuted",
+    "freeHeapBytes": null,
+    "minimumFreeHeapBytes": null,
+    "mainStackHighWaterMarkBytes": null,
+    "workerStackHighWaterMarkBytes": null,
+    "reason": "No ESP32-C6 board was attached, so runtime heap and stack metrics could not be measured."
+  }
 }

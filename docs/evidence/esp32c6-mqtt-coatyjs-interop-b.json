@@ -3,11 +3,7 @@
   "profile": "esp32c6-mqtt",
   "check": "coatyjs-interop",
   "tier": "device",
-  "status": "passed",
+  "status": "unexecuted",
   "recordedAt": "2026-09-24",
-  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
-  "firmwareSHA256": "1e4f2c6babf6a5450b9f52603f41e8f4e092a8fc03acbb31958856b772efb048",
-  "coreRevision": "4956298afb4a087147713fce73bb481cf7c59cab",
-  "protocol": "10 deterministic exchange cases against the pinned CoatyJS reference agent",
-  "result": "10/10 passed"
+  "reason": "Not rerun against locked Core 0579663a9d33c0a017cbb3ad5d74dd1b80a8853f; no device is attached. The prior passed run was against Core 4956298afb4a087147713fce73bb481cf7c59cab."
 }

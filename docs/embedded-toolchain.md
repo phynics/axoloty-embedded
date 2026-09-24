@@ -35,7 +35,7 @@ the pinned build environment. Core's development image no longer carries them
 
 | Component | Version | Source |
 |---|---|---|
-| Swift | `6.3` | `swift:6.3-jammy` base image |
+| Swift | `6.4` | `swift:6.4-jammy` base image |
 | ESP-IDF | `v5.4` (pinned tag) | `git clone --depth 1 --branch v5.4` |
 | RISC-V GCC | ESP-IDF v5.4 bundled | installed by `./install.sh esp32c6` |
 | OpenOCD | Espressif build, bundled with ESP-IDF | installed by `./install.sh esp32c6` |
@@ -91,7 +91,7 @@ The lock file `axoloty-core.lock.json` names the exact Core revision this
 repository builds against. Core's root `.build` directory is never a build
 input; the only boundary is `Tools/prepare-core.sh` and its report.
 
-Swift 6.3 compiles `AxolotyWire` for `riscv32-none-none-eabi` using
+Swift 6.4 compiles `AxolotyWire` for `riscv32-none-none-eabi` using
 `-enable-experimental-feature Embedded`. The `espressif/idf_swift` ESP-IDF
 component (v1.0.1) integrates the Swift compiler into the ESP-IDF build system
 via `idf_component_register_swift()`.
