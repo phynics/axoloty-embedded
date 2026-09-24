@@ -1,0 +1,154 @@
+name: Development Container Image
+
+# Builds .devcontainer/Dockerfile (Swift + ESP-IDF) and publishes it to GHCR as
+# ghcr.io/<owner>/axoloty-embedded-dev. Tags are keyed by the Dockerfile's
+# content, so an unchanged recipe is never rebuilt:
+#
+#   swift-6.3-<sha256>          one immutable tag per recipe
+#   swift-6.3                   moves to the latest recipe on main
+#   swift-6.3-pr-<n>-<sha256>   a same-repository pull request's recipe
+#
+# The Dockerfile pins every tool version, but base images and ESP-IDF's tool
+# downloads can still change underneath a rebuild, so each run records the
+# published digest in its summary. Cite that digest with any evidence built
+# from the image.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .devcontainer/Dockerfile
+      - .github/workflows/dev-image.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - .devcontainer/Dockerfile
+      - .github/workflows/dev-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-image-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE_BASE: ghcr.io/${{ github.repository_owner }}/axoloty-embedded-dev
+  SWIFT_TAG: swift-6.3
+
+jobs:
+  publish:
+    # A fork's pull request cannot write packages; its recipe is built after
+    # merge instead.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    name: Build and publish the development image
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    # A cold build clones ESP-IDF with every submodule and installs the
+    # esp32c6 toolchain; the registry cache makes later builds much faster.
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Login to GHCR
+        shell: bash
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$REGISTRY_TOKEN" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+
+      # The default docker buildx driver cannot emit provenance or SBOM
+      # attestations; use the docker-container driver.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - name: Build and publish content-keyed image
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          recipe_hash=$(sha256sum .devcontainer/Dockerfile | awk '{print $1}')
+          canonical="$IMAGE_BASE:$SWIFT_TAG-$recipe_hash"
+          if [ "$EVENT_NAME" = pull_request ]; then
+            target="$IMAGE_BASE:$SWIFT_TAG-pr-$PR_NUMBER-$recipe_hash"
+            moving=""
+          else
+            target="$canonical"
+            moving="$IMAGE_BASE:$SWIFT_TAG"
+          fi
+
+          # Returns 0 when the tag exists, 1 when the registry reports it
+          # missing, and fails the job on any other registry error.
+          exists() {
+            local error="$RUNNER_TEMP/inspect-error"
+            if docker buildx imagetools inspect "$1" >/dev/null 2>"$error"; then
+              return 0
+            elif grep -Fqi 'manifest unknown' "$error" || grep -Fqi "$1: not found" "$error"; then
+              return 1
+            fi
+            cat "$error" >&2
+            exit 1
+          }
+
+          if exists "$target"; then
+            echo "Reusing $target"
+          elif [ "$target" != "$canonical" ] && exists "$canonical"; then
+            echo "Promoting $canonical to $target"
+            docker buildx imagetools create --tag "$target" "$canonical"
+          else
+            docker buildx build \
+              --file .devcontainer/Dockerfile \
+              --tag "$target" \
+              --cache-from "type=registry,ref=$IMAGE_BASE:buildcache" \
+              --cache-to "type=registry,ref=$IMAGE_BASE:buildcache,mode=max" \
+              --provenance=true \
+              --sbom=true \
+              --push \
+              .devcontainer
+          fi
+          if [ -n "$moving" ]; then
+            docker buildx imagetools create --tag "$moving" "$target"
+          fi
+
+          digest=$(docker buildx imagetools inspect "$target" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          {
+            echo "## Development image"
+            echo
+            echo "- Tag: \`$target\`"
+            [ -z "$moving" ] || echo "- Also tagged: \`$moving\`"
+            echo "- Digest: \`$digest\`"
+            echo "- Dockerfile SHA-256: \`$recipe_hash\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Proves the published image carries a working toolchain, as the
+      # non-root build user, before anything depends on it.
+      - name: Smoke-test the published toolchain
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          recipe_hash=$(sha256sum .devcontainer/Dockerfile | awk '{print $1}')
+          if [ "$EVENT_NAME" = pull_request ]; then
+            target="$IMAGE_BASE:$SWIFT_TAG-pr-$PR_NUMBER-$recipe_hash"
+          else
+            target="$IMAGE_BASE:$SWIFT_TAG-$recipe_hash"
+          fi
+          docker run --rm --user esp -e HOME=/tmp "$target" bash -c '
+            set -e
+            swift --version
+            . "$IDF_PATH/export.sh" >/dev/null
+            idf.py --version
+            riscv32-esp-elf-gcc --version | head -1
+            node --version
+            cmake --version | head -1
+            espflash --version
+          '

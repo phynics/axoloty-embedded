@@ -140,6 +140,9 @@ is [check-inventory.md](./check-inventory.md).
   `--require`, so the host firmware checks run and the image build reports
   `UNAVAILABLE`. Publishing the pinned image (or a CI build of it) is a separate
   decision.
+- **Partly resolved:** `.github/workflows/dev-image.yml` now builds
+  `.devcontainer/Dockerfile` and publishes it to GHCR as
+  `axoloty-embedded-dev`. The `build` job does not use it yet.
 
 ### 11. The Axoloty copies of the embedded docs and checks still exist
 

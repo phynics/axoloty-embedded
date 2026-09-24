@@ -16,8 +16,19 @@ anything is unverifiable.**
 | `swift:6.4.0-noble` | Swift 6.4, for the adopt-6.4 epic |
 | `swift:6.3-jammy` | the current CI base |
 
-Build the firmware image once; the checkout is bind-mounted, so editing source
-never requires a rebuild:
+CI publishes the image to GHCR whenever `.devcontainer/Dockerfile` changes on
+`main` (`.github/workflows/dev-image.yml`). Pull it and tag it with the local
+name the commands below use:
+
+```bash
+docker pull ghcr.io/phynics/axoloty-embedded-dev:swift-6.3
+docker tag ghcr.io/phynics/axoloty-embedded-dev:swift-6.3 axoloty-embedded-dev
+```
+
+`swift-6.3` follows the latest recipe; `swift-6.3-<Dockerfile SHA-256>` names
+one recipe immutably, and each publishing run's summary records its digest.
+Or build it yourself; the checkout is bind-mounted, so editing source never
+requires a rebuild:
 
 ```bash
 docker build -t axoloty-embedded-dev .devcontainer
@@ -25,7 +36,7 @@ docker build -t axoloty-embedded-dev .devcontainer
 
 `.devcontainer/devcontainer.json` opens the same image in an editor. The
 Dockerfile pins every tool version as an `ARG`; the image digest is not locked
-yet, so record the digest you built with alongside any evidence.
+yet, so record the digest you built or pulled alongside any evidence.
 
 Hardware tooling lives here, not in Core. Axoloty's `axoloty-dev` image carries
 only host development tools since
