@@ -24,20 +24,15 @@ set -eu
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH='' cd -- "$script_dir/../.." && pwd)
+device_runner_name=run-network-test
+. "$script_dir/device-common.sh"
 profile=esp32c6-mqtt
 
 if [ -z "${AXOLOTY_DEVICE_PORT:-}" ]; then
     echo "run-network-test: AXOLOTY_DEVICE_PORT is unset; no board is attached" >&2
     exit 69
 fi
-if [ -z "${AXOLOTY_WIFI_SSID:-}" ] || [ -z "${AXOLOTY_WIFI_PASSWORD:-}" ]; then
-    echo "run-network-test: AXOLOTY_WIFI_SSID and AXOLOTY_WIFI_PASSWORD are required; they are never guessed" >&2
-    exit 69
-fi
-if [ -z "${AXOLOTY_MQTT_HOST:-}" ]; then
-    echo "run-network-test: AXOLOTY_MQTT_HOST is required; the broker is never guessed" >&2
-    exit 69
-fi
+require_network_env
 
 scratch=${AXOLOTY_SCRATCH:-"$repo_root/.axoloty"}
 proof_run_id=${AXOLOTY_PROOF_RUN_ID:-network-test}

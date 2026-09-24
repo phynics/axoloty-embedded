@@ -20,20 +20,15 @@ set -eu
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH='' cd -- "$script_dir/../.." && pwd)
+device_runner_name=run-last-will-test
+. "$script_dir/device-common.sh"
 profile=esp32c6-mqtt
 
 if [ -z "${AXOLOTY_DEVICE_PORT:-}" ] || [ -z "${EMBEDDED_DEVICE_B:-}" ]; then
     echo "run-last-will-test: AXOLOTY_DEVICE_PORT and EMBEDDED_DEVICE_B must name two boards" >&2
     exit 69
 fi
-if [ -z "${AXOLOTY_WIFI_SSID:-}" ] || [ -z "${AXOLOTY_WIFI_PASSWORD:-}" ]; then
-    echo "run-last-will-test: AXOLOTY_WIFI_SSID and AXOLOTY_WIFI_PASSWORD are required; they are never guessed" >&2
-    exit 69
-fi
-if [ -z "${AXOLOTY_MQTT_HOST:-}" ]; then
-    echo "run-last-will-test: AXOLOTY_MQTT_HOST is required; the broker is never guessed" >&2
-    exit 69
-fi
+require_network_env
 
 device_a=$AXOLOTY_DEVICE_PORT
 device_b=$EMBEDDED_DEVICE_B
@@ -72,27 +67,12 @@ AXOLOTY_PROOF_RUN_ID="$proof_run_id-b" \
     AXOLOTY_NETWORK_CONFIG_HEADER="$config_b" \
     "$repo_root/Profiles/$profile/build.sh"
 
-idf_root=${IDF_PATH:-/opt/esp/idf}
-# shellcheck source=/dev/null
-. "$idf_root/export.sh" >/dev/null 2>&1
-esptool="$idf_root/components/esptool_py/esptool/esptool.py"
-write_unit_manifest() {
-    unit_device=$1
-    unit_root=$2
-    unit_evidence="$unit_root/working-evidence"
-    mkdir -p "$unit_evidence"
-    python3 "$esptool" --port "$unit_device" chip_id > "$unit_evidence/device-info-raw.txt" 2>&1 || {
-        echo "run-last-will-test: could not query $unit_device" >&2
-        exit 1
-    }
-    node "$repo_root/Platforms/esp32c6-idf/tools/write-device-manifest.mjs" \
-        "$unit_device" "$unit_evidence/device-info-raw.txt" "$unit_evidence/device-manifest.json"
-}
-
-write_unit_manifest "$device_a" "$root_a"
-write_unit_manifest "$device_b" "$root_b"
+load_esptool
+write_device_manifest "$device_a" "$root_a/working-evidence"
+write_device_manifest "$device_b" "$root_b/working-evidence"
 
 SERIAL_TOOLS="$script_dir/serial-tools.mjs" \
+ESPTOOL_TOOLS="$script_dir/esptool-tools.mjs" \
 AGENT_VALIDATOR="$script_dir/agent-validator.mjs" \
 EVIDENCE_WRITER="$script_dir/write-device-evidence.mjs" \
 ESPTOOL="$esptool" \
@@ -104,20 +84,16 @@ FORCE_RESETS="${EMBEDDED_LAST_WILL_FORCE_RESETS:-3}" \
 node --input-type=module - "$device_a" "$device_b" "$root_a" "$root_b" <<'JS'
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 
 const { captureSerial, drainSerial } = await import(process.env.SERIAL_TOOLS);
 const { createEmbeddedAgentValidator, expectedLastWillTests } = await import(process.env.AGENT_VALIDATOR);
-const { deviceEvidenceRecord, writeDeviceEvidence } = await import(process.env.EVIDENCE_WRITER);
+const { writePassedDeviceEvidence } = await import(process.env.EVIDENCE_WRITER);
+const { flashFirmware, runFirmware } = await import(process.env.ESPTOOL_TOOLS);
 
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
-const run = device => execFileSync("python3",
-  [process.env.ESPTOOL, "--chip", "esp32c6", "--port", device, "run"], { stdio: "inherit" });
-const flash = root => execFileSync("python3", [
-  process.env.ESPTOOL, "--chip", "esp32c6", "--port", root.device,
-  "--before", "default_reset", "--after", "no_reset", "write_flash", "@flash_args",
-], { cwd: path.join(root.root, "build"), stdio: "inherit" });
+const run = device => runFirmware(process.env.ESPTOOL, device);
+const flash = unit => flashFirmware(process.env.ESPTOOL, unit.device, unit.root);
 
 const [deviceA, deviceB, rootA, rootB] = process.argv.slice(2);
 const unitA = { role: "a", device: deviceA, root: rootA };
@@ -166,21 +142,14 @@ if (!validation.passed) {
   throw new Error(`device b: ${validation.reason ?? "unknown"}`);
 }
 
-const provenance = JSON.parse(fs.readFileSync(path.join(evidenceDir, "build-provenance.json"), "utf8"));
-const device = JSON.parse(fs.readFileSync(unitB.devicePath, "utf8"));
-const proof = {
-  result: "passed",
-  smoke: { validation },
-  firmwareSha256: provenance.artifact.sha256,
-  coreSha: provenance.core.sha,
-};
-const record = deviceEvidenceRecord(proof, device, {
+writePassedDeviceEvidence({
+  evidenceDir,
+  devicePath: unitB.devicePath,
+  validation,
   profile: process.env.PROFILE_NAME,
   check: "last-will",
   cases: "deterministic last-will cases over serial JSON Lines",
+  output: path.join(process.env.EVIDENCE_DIR, `${process.env.PROFILE_NAME}-last-will-b.json`),
 });
-const output = path.join(process.env.EVIDENCE_DIR, `${process.env.PROFILE_NAME}-last-will-b.json`);
-writeDeviceEvidence(record, output);
-console.log(`device evidence written: ${output}`);
 console.log("EMBEDDED LAST WILL OK");
 JS

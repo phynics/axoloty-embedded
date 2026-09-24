@@ -26,6 +26,8 @@ set -eu
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH='' cd -- "$script_dir/../.." && pwd)
+device_runner_name=run-host-interop-test
+. "$script_dir/device-common.sh"
 profile=esp32c6-mqtt
 
 role=${EMBEDDED_HOST_ROLE:-A}
@@ -42,14 +44,7 @@ if [ -z "${AXOLOTY_DEVICE_PORT:-}" ]; then
     echo "run-host-interop-test: AXOLOTY_DEVICE_PORT must name a board" >&2
     exit 69
 fi
-if [ -z "${AXOLOTY_WIFI_SSID:-}" ] || [ -z "${AXOLOTY_WIFI_PASSWORD:-}" ]; then
-    echo "run-host-interop-test: AXOLOTY_WIFI_SSID and AXOLOTY_WIFI_PASSWORD are required; they are never guessed" >&2
-    exit 69
-fi
-if [ -z "${AXOLOTY_MQTT_HOST:-}" ]; then
-    echo "run-host-interop-test: AXOLOTY_MQTT_HOST is required; the broker is never guessed" >&2
-    exit 69
-fi
+require_network_env
 if ! command -v swift >/dev/null 2>&1; then
     echo "run-host-interop-test: swift is required to build the host peer" >&2
     exit 69
@@ -91,20 +86,12 @@ host_peer="$swift_build/debug/EmbeddedHostPeer"
     exit 1
 }
 
-idf_root=${IDF_PATH:-/opt/esp/idf}
-# shellcheck source=/dev/null
-. "$idf_root/export.sh" >/dev/null 2>&1
-esptool="$idf_root/components/esptool_py/esptool/esptool.py"
+load_esptool
 evidence="$root/working-evidence"
-mkdir -p "$evidence"
-python3 "$esptool" --port "$device" chip_id > "$evidence/device-info-raw.txt" 2>&1 || {
-    echo "run-host-interop-test: could not query $device" >&2
-    exit 1
-}
-node "$repo_root/Platforms/esp32c6-idf/tools/write-device-manifest.mjs" \
-    "$device" "$evidence/device-info-raw.txt" "$evidence/device-manifest.json"
+write_device_manifest "$device" "$evidence"
 
 SERIAL_TOOLS="$script_dir/serial-tools.mjs" \
+ESPTOOL_TOOLS="$script_dir/esptool-tools.mjs" \
 AGENT_VALIDATOR="$script_dir/agent-validator.mjs" \
 EVIDENCE_WRITER="$script_dir/write-device-evidence.mjs" \
 ESPTOOL="$esptool" \
@@ -120,17 +107,15 @@ DEVICE_SETTLE_MS="${EMBEDDED_HOST_DEVICE_SETTLE_MS:-40000}" \
 node --input-type=module - "$device" "$root" <<'JS'
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 
 const { captureSerial, drainSerial } = await import(process.env.SERIAL_TOOLS);
 const { createEmbeddedAgentValidator } = await import(process.env.AGENT_VALIDATOR);
-const { deviceEvidenceRecord, writeDeviceEvidence } = await import(process.env.EVIDENCE_WRITER);
+const { writePassedDeviceEvidence } = await import(process.env.EVIDENCE_WRITER);
+const { flashFirmware, runFirmware } = await import(process.env.ESPTOOL_TOOLS);
 
 const [device, root] = process.argv.slice(2);
-execFileSync("python3", [
-  process.env.ESPTOOL, "--chip", "esp32c6", "--port", device,
-  "--before", "default_reset", "--after", "no_reset", "write_flash", "@flash_args",
-], { cwd: path.join(root, "build"), stdio: "inherit" });
+flashFirmware(process.env.ESPTOOL, device, root);
 await drainSerial(device);
 
 const validator = createEmbeddedAgentValidator();
@@ -146,7 +131,7 @@ const capture = captureSerial(device, Number(process.env.SERIAL_DEADLINE), line 
 // host-requester waits for the device's repeated Advertise; a host-responder
 // advertises once, because the runtime rejects a second identical Advertise as
 // a duplicate, so the device must already be listening when it does.
-execFileSync("python3", [process.env.ESPTOOL, "--chip", "esp32c6", "--port", device, "run"], { stdio: "inherit" });
+runFirmware(process.env.ESPTOOL, device);
 await new Promise(resolve => setTimeout(resolve, Number(process.env.DEVICE_SETTLE_MS)));
 
 let peer = null;
@@ -191,22 +176,15 @@ try {
     throw new Error(`device ${process.env.ROLE}: host exit ${exit.code}; ${validation.reason ?? "unknown"}`);
   }
 
-  const provenance = JSON.parse(fs.readFileSync(path.join(evidenceDir, "build-provenance.json"), "utf8"));
-  const deviceRecord = JSON.parse(fs.readFileSync(path.join(evidenceDir, "device-manifest.json"), "utf8"));
-  const proof = {
-    result: "passed",
-    smoke: { validation },
-    firmwareSha256: provenance.artifact.sha256,
-    coreSha: provenance.core.sha,
-  };
-  const record = deviceEvidenceRecord(proof, deviceRecord, {
+  writePassedDeviceEvidence({
+    evidenceDir,
+    devicePath: path.join(evidenceDir, "device-manifest.json"),
+    validation,
     profile: process.env.PROFILE_NAME,
     check: "host-interop",
     cases: "deterministic exchange cases against the Axoloty host runtime",
+    output: path.join(process.env.EVIDENCE_DIR, `${process.env.PROFILE_NAME}-host-interop-${process.env.ROLE.toLowerCase()}.json`),
   });
-  const output = path.join(process.env.EVIDENCE_DIR, `${process.env.PROFILE_NAME}-host-interop-${process.env.ROLE.toLowerCase()}.json`);
-  writeDeviceEvidence(record, output);
-  console.log(`device evidence written: ${output}`);
   console.log("EMBEDDED HOST INTEROPERABILITY OK");
 } finally {
   controller.abort();

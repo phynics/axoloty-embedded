@@ -28,6 +28,8 @@ set -eu
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH='' cd -- "$script_dir/../.." && pwd)
+device_runner_name=run-coatyjs-interop-test
+. "$script_dir/device-common.sh"
 profile=esp32c6-mqtt
 
 role=${EMBEDDED_COATY_ROLE:-}
@@ -44,14 +46,7 @@ if [ -z "${AXOLOTY_DEVICE_PORT:-}" ]; then
     echo "run-coatyjs-interop-test: AXOLOTY_DEVICE_PORT must name a board" >&2
     exit 69
 fi
-if [ -z "${AXOLOTY_WIFI_SSID:-}" ] || [ -z "${AXOLOTY_WIFI_PASSWORD:-}" ]; then
-    echo "run-coatyjs-interop-test: AXOLOTY_WIFI_SSID and AXOLOTY_WIFI_PASSWORD are required; they are never guessed" >&2
-    exit 69
-fi
-if [ -z "${AXOLOTY_MQTT_HOST:-}" ]; then
-    echo "run-coatyjs-interop-test: AXOLOTY_MQTT_HOST is required; the broker is never guessed" >&2
-    exit 69
-fi
+require_network_env
 
 agent_dir=${COATYJS_AGENT_DIR:-/coatyjs-agent}
 runner="$agent_dir/embedded-interoperability-runner.js"
@@ -81,20 +76,12 @@ AXOLOTY_PROOF_RUN_ID="$proof_run_id-$(printf '%s' "$role" | tr '[:upper:]' '[:lo
     AXOLOTY_NETWORK_CONFIG_HEADER="$config" \
     "$repo_root/Profiles/$profile/build.sh"
 
-idf_root=${IDF_PATH:-/opt/esp/idf}
-# shellcheck source=/dev/null
-. "$idf_root/export.sh" >/dev/null 2>&1
-esptool="$idf_root/components/esptool_py/esptool/esptool.py"
+load_esptool
 evidence="$root/working-evidence"
-mkdir -p "$evidence"
-python3 "$esptool" --port "$device" chip_id > "$evidence/device-info-raw.txt" 2>&1 || {
-    echo "run-coatyjs-interop-test: could not query $device" >&2
-    exit 1
-}
-node "$repo_root/Platforms/esp32c6-idf/tools/write-device-manifest.mjs" \
-    "$device" "$evidence/device-info-raw.txt" "$evidence/device-manifest.json"
+write_device_manifest "$device" "$evidence"
 
 SERIAL_TOOLS="$script_dir/serial-tools.mjs" \
+ESPTOOL_TOOLS="$script_dir/esptool-tools.mjs" \
 AGENT_VALIDATOR="$script_dir/agent-validator.mjs" \
 EVIDENCE_WRITER="$script_dir/write-device-evidence.mjs" \
 ESPTOOL="$esptool" \
@@ -106,17 +93,15 @@ EVIDENCE_DIR="$repo_root/docs/evidence" \
 node --input-type=module - "$device" "$root" <<'JS'
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 
 const { captureSerial, drainSerial } = await import(process.env.SERIAL_TOOLS);
 const { createEmbeddedAgentValidator } = await import(process.env.AGENT_VALIDATOR);
-const { deviceEvidenceRecord, writeDeviceEvidence } = await import(process.env.EVIDENCE_WRITER);
+const { writePassedDeviceEvidence } = await import(process.env.EVIDENCE_WRITER);
+const { flashFirmware, runFirmware } = await import(process.env.ESPTOOL_TOOLS);
 
 const [device, root] = process.argv.slice(2);
-execFileSync("python3", [
-  process.env.ESPTOOL, "--chip", "esp32c6", "--port", device,
-  "--before", "default_reset", "--after", "no_reset", "write_flash", "@flash_args",
-], { cwd: path.join(root, "build"), stdio: "inherit" });
+flashFirmware(process.env.ESPTOOL, device, root);
 await drainSerial(device);
 
 const validator = createEmbeddedAgentValidator();
@@ -150,7 +135,7 @@ const runnerExit = new Promise((resolve, reject) => {
 });
 await Promise.race([ready, new Promise((_, reject) => setTimeout(() => reject(new Error("CoatyJS runner did not become ready")), 15000))]);
 
-execFileSync("python3", [process.env.ESPTOOL, "--chip", "esp32c6", "--port", device, "run"], { stdio: "inherit" });
+runFirmware(process.env.ESPTOOL, device);
 const [lines, exit] = await Promise.all([capture, runnerExit]);
 const validation = validator.result();
 const evidenceDir = path.join(root, "working-evidence");
@@ -162,21 +147,14 @@ if (exit.code !== 0 || !validation.passed) {
   throw new Error(`device ${process.env.ROLE}: runner exit ${exit.code}; ${validation.reason ?? "unknown"}`);
 }
 
-const provenance = JSON.parse(fs.readFileSync(path.join(evidenceDir, "build-provenance.json"), "utf8"));
-const deviceRecord = JSON.parse(fs.readFileSync(path.join(evidenceDir, "device-manifest.json"), "utf8"));
-const proof = {
-  result: "passed",
-  smoke: { validation },
-  firmwareSha256: provenance.artifact.sha256,
-  coreSha: provenance.core.sha,
-};
-const record = deviceEvidenceRecord(proof, deviceRecord, {
+writePassedDeviceEvidence({
+  evidenceDir,
+  devicePath: path.join(evidenceDir, "device-manifest.json"),
+  validation,
   profile: process.env.PROFILE_NAME,
   check: "coatyjs-interop",
   cases: "deterministic exchange cases against the pinned CoatyJS reference agent",
+  output: path.join(process.env.EVIDENCE_DIR, `${process.env.PROFILE_NAME}-coatyjs-interop-${process.env.ROLE.toLowerCase()}.json`),
 });
-const output = path.join(process.env.EVIDENCE_DIR, `${process.env.PROFILE_NAME}-coatyjs-interop-${process.env.ROLE.toLowerCase()}.json`);
-writeDeviceEvidence(record, output);
-console.log(`device evidence written: ${output}`);
 console.log("EMBEDDED COATYJS INTEROPERABILITY OK");
 JS
