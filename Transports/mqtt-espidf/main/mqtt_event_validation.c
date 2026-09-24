@@ -2,16 +2,13 @@
 
 #include "mqtt_event_validation.h"
 
-#define NETWORK_MAX_TOPIC 257
-#define NETWORK_MAX_PAYLOAD 2049
-
 int axoloty_mqtt_event_data_is_valid(
     const void *topic, int topic_length,
     const void *data, int data_length,
     int total_data_length, int current_data_offset) {
-    if (!topic || !data || topic_length <= 0 || topic_length >= NETWORK_MAX_TOPIC ||
-        data_length < 0 || data_length >= NETWORK_MAX_PAYLOAD ||
-        total_data_length < 0 || total_data_length >= NETWORK_MAX_PAYLOAD ||
+    if (!topic || !data || topic_length <= 0 || topic_length >= AXOLOTY_MQTT_TOPIC_CAPACITY ||
+        data_length < 0 || data_length >= AXOLOTY_MQTT_PAYLOAD_CAPACITY ||
+        total_data_length < 0 || total_data_length >= AXOLOTY_MQTT_PAYLOAD_CAPACITY ||
         current_data_offset < 0 || current_data_offset > total_data_length ||
         data_length > total_data_length - current_data_offset) {
         return 0;
