@@ -40,6 +40,25 @@ export function writeDeviceEvidence(record, outputPath) {
   return outputPath;
 }
 
+/**
+ * Writes the record for a run whose validation passed, taking the firmware
+ * checksum and Core revision from the build provenance the profile build wrote
+ * into `evidenceDir`. Throws, writing nothing, when the validation failed.
+ */
+export function writePassedDeviceEvidence({ evidenceDir, devicePath, validation, profile, check, cases, output }) {
+  const provenance = JSON.parse(fs.readFileSync(path.join(evidenceDir, "build-provenance.json"), "utf8"));
+  const device = JSON.parse(fs.readFileSync(devicePath, "utf8"));
+  const proof = {
+    result: "passed",
+    smoke: { validation },
+    firmwareSha256: provenance.artifact.sha256,
+    coreSha: provenance.core.sha,
+  };
+  writeDeviceEvidence(deviceEvidenceRecord(proof, device, { profile, check, cases }), output);
+  console.log(`device evidence written: ${output}`);
+  return output;
+}
+
 function runCLI() {
   const proofPath = process.env.PROOF;
   const devicePath = process.env.DEVICE_MANIFEST;

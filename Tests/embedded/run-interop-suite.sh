@@ -28,6 +28,8 @@ set -eu
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH='' cd -- "$script_dir/../.." && pwd)
+device_runner_name=run-interop-suite
+. "$script_dir/device-common.sh"
 
 # Single-board steps run first. The two-board harnesses leave both boards
 # running their images, and a looping board would contaminate a later
@@ -46,14 +48,7 @@ if [ -z "${AXOLOTY_DEVICE_PORT:-}" ] || [ -z "${EMBEDDED_DEVICE_B:-}" ]; then
     echo "run-interop-suite: AXOLOTY_DEVICE_PORT and EMBEDDED_DEVICE_B must name two boards" >&2
     exit 69
 fi
-if [ -z "${AXOLOTY_WIFI_SSID:-}" ] || [ -z "${AXOLOTY_WIFI_PASSWORD:-}" ]; then
-    echo "run-interop-suite: AXOLOTY_WIFI_SSID and AXOLOTY_WIFI_PASSWORD are required; they are never guessed" >&2
-    exit 69
-fi
-if [ -z "${AXOLOTY_MQTT_HOST:-}" ]; then
-    echo "run-interop-suite: AXOLOTY_MQTT_HOST is required; the broker is never guessed" >&2
-    exit 69
-fi
+require_network_env
 
 scratch=${AXOLOTY_SCRATCH:-"$repo_root/.axoloty"}
 suite_root="$scratch/interop-suite"
