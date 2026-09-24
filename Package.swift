@@ -1,4 +1,4 @@
-// swift-tools-version:6.3
+// swift-tools-version:6.4
 // Copyright (c) 2026 Atakan DULKER. Licensed under the MIT License.
 
 import PackageDescription
@@ -22,7 +22,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/phynics/axoloty.git",
-            revision: "4956298afb4a087147713fce73bb481cf7c59cab"
+            revision: "0579663a9d33c0a017cbb3ad5d74dd1b80a8853f"
         ),
         .package(
             url: "https://github.com/swift-server-community/mqtt-nio.git",

@@ -34,10 +34,10 @@ jobs:
     name: Locked Core preparation
     runs-on: ubuntu-latest
     needs: repo
-    # The Core manifests are swift-tools-version 6.3, and the release list
+    # The Core manifests are swift-tools-version 6.4, and the release list
     # setup-swift bundles stops at 6.2.1. Run the job in the documented CI
     # base instead, the same way a developer prepares Core locally.
-    container: swift:6.3-jammy
+    container: swift:6.4-jammy
     env:
       # Axoloty's tooling selects its Linux execution context from this
       # variable. Unset, it takes its host path and preparation fails with a
@@ -64,7 +64,7 @@ jobs:
     name: Firmware host checks and image
     runs-on: ubuntu-latest
     needs: repo
-    container: swift:6.3-jammy
+    container: swift:6.4-jammy
     steps:
       - uses: actions/checkout@v4
 
@@ -83,7 +83,7 @@ jobs:
       # each profile image build. This runner has no pinned ESP-IDF + Swift
       # image, so the image build reports UNAVAILABLE, which is honest and is
       # never a pass. The tier is deliberately not required: requiring it would
-      # demand a toolchain CI does not have.
+      # demand an ESP-IDF toolchain CI does not have.
       - name: Host firmware checks and profile image
         run: Tools/verify.sh --tier build
 

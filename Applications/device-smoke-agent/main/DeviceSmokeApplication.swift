@@ -522,7 +522,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
 
     let pADV: StaticString = #"{"object":{"objectId":"33333333-3333-4333-8333-333333333333","name":"test","objectType":"coaty.Identity","coreType":"Identity"}}"#
     let rADV = WireReader(bytes: pADV.utf8Start, length: pADV.utf8CodeUnitCount)
-    record("dtoDecode:advertise", rADV.readRaw("object") != nil)
+    record("dtoDecode:advertise", rADV.readField("object") != nil)
 
     let pUUID: StaticString = #"{"objectId":"33333333-3333-4333-8333-333333333333"}"#
     let rUUID = WireReader(bytes: pUUID.utf8Start, length: pUUID.utf8CodeUnitCount)
@@ -616,7 +616,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     record("malformed:duplicate", reader(#"{"name":1,"name":2}"#).readString("name") == nil)
     record("malformed:reordered", reader(#"{"value":1,"name":"x"}"#).readString("name") != nil)
     record("malformed:trailing", reader(#"{"value":1}x"#).readInt("value") == nil)
-    record("malformed:nesting", reader(#"{"value":{"x":[1,2]}}"#).readRaw("value") != nil)
+    record("malformed:nesting", reader(#"{"value":{"x":[1,2]}}"#).readField("value") != nil)
 
     runRegistryVectors(record)
 

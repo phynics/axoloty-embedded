@@ -65,6 +65,16 @@ Those fields are what make the claim checkable by someone who was not there.
 `tier` defaults to `device` when absent, because a device claim is the stricter
 one and should never be the accidental default.
 
+## Firmware resource comparisons
+
+A build record may include `firmwareSizeBytes`, `previousFirmwareSizeBytes`,
+and `firmwareSizeDeltaBytes` when comparing a toolchain change with a prior
+build. These values describe the generated image only; they do not prove runtime
+heap or stack usage. Put runtime measurements in `runtimeResourceMetrics` with
+the board/run details. If no device run occurred, set its status to
+`unexecuted`, leave unmeasured values `null`, and give a reason. Never infer
+free/minimum heap or stack high-water marks from the image size.
+
 `device` names the **unit that ran**, not the port it was attached to.
 `write-device-manifest.mjs` derives it from the probe's chip description and
 MAC (for example `ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:4d:8c:e8`).

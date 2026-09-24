@@ -3,11 +3,7 @@
   "profile": "esp32c6-zenoh",
   "check": "zenoh-pico-compile",
   "tier": "component",
-  "status": "passed",
-  "recordedAt": "2026-09-20",
-  "component": "eclipse-zenoh/zenoh-pico 1.10.0 (96006957fddef401c20c8c2d813c2a630b666974)",
-  "artifactSHA256": "fe03a7aacfe193a6df98e12145f5a8e7fa1265dafe202e3744b3448c5badd86b",
-  "coreRevision": "4956298afb4a087147713fce73bb481cf7c59cab",
-  "toolchain": "axoloty-dev:latest container — ESP-IDF v5.4, RISC-V GCC 14.2.0, target esp32c6",
-  "result": "The pinned zenoh-pico component configured and compiled for esp32c6 against the locked Core, producing libzenoh_pico.a with the recorded SHA-256. The esp32c6-zenoh image still does not build as an application at this revision: the application calls runCarrierNetworkProbe and emitAgentExchange, which only the MQTT transport defines. This is a component-only pass; no firmware artifact exists to name."
+  "status": "unexecuted",
+  "recordedAt": "2026-09-24",
+  "reason": "Not rerun against locked Core 0579663a9d33c0a017cbb3ad5d74dd1b80a8853f. The prior component compile used the ESP-IDF v5.4 toolchain with Core 4956298afb4a087147713fce73bb481cf7c59cab."
 }

@@ -3,11 +3,7 @@
   "profile": "esp32c6-mqtt",
   "check": "network-test",
   "tier": "device",
-  "status": "passed",
+  "status": "unexecuted",
   "recordedAt": "2026-09-24",
-  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8",
-  "firmwareSHA256": "d494e47a85f8baf0a90ded89496bdc0ac6662ae0f28b4987ef78dfe5c6832a79",
-  "coreRevision": "4956298afb4a087147713fce73bb481cf7c59cab",
-  "protocol": "323 deterministic cases over serial JSON Lines",
-  "result": "323/323 passed"
+  "reason": "Not rerun against locked Core 0579663a9d33c0a017cbb3ad5d74dd1b80a8853f; no device is attached. The prior passed run was against Core 4956298afb4a087147713fce73bb481cf7c59cab."
 }

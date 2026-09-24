@@ -3,11 +3,7 @@
   "profile": "esp32c6-mqtt",
   "check": "embedded-swift-smoke-v2",
   "tier": "device",
-  "status": "passed",
-  "recordedAt": "2026-09-23",
-  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8",
-  "firmwareSHA256": "6fcf4f128ceab9c7d0e6ab6f82fba3895cb733bf431c8476c58858a8074137af",
-  "coreRevision": "4956298afb4a087147713fce73bb481cf7c59cab",
-  "protocol": "312 deterministic cases over serial JSON Lines",
-  "result": "312/312 passed"
+  "status": "unexecuted",
+  "recordedAt": "2026-09-24",
+  "reason": "Not rerun against locked Core 0579663a9d33c0a017cbb3ad5d74dd1b80a8853f; no ESP32-C6 board is attached. The prior 312/312 run was against Core 4956298afb4a087147713fce73bb481cf7c59cab."
 }
