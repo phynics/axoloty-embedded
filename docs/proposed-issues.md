@@ -1,9 +1,10 @@
 # Proposed embedded Zenoh issues
 
-These are the exact issues `phynics/axoloty#853` asks the maintainer to create
-in `phynics/axoloty-embedded`. **Nothing here was filed, edited, or closed.**
-`AGENTS.md` says to ask before creating an issue the user did not request, so
-this file is the proposal and the maintainer files it.
+These are the issues `phynics/axoloty#853` proposed for
+`phynics/axoloty-embedded`. They were not filed separately:
+[#8](https://github.com/phynics/axoloty-embedded/issues/8) is the single
+implementation and qualification issue and uses ZP-1 … ZP-8 below as its
+checklist. Split one out only if #8 grows unmanageable.
 
 Each issue is the embedded-side replacement for the Axoloty-side Zenoh ticket
 named in `#853`. The public `axoloty_zenoh_*` facade contract stays defined by

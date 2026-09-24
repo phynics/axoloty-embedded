@@ -77,7 +77,7 @@ repository the equivalents are:
 | `make embedded-swift-flash` / `-test` | `Profiles/esp32c6-mqtt/qualify.sh`, tier `device` |
 | `make embedded-reproducible-build` | `Tests/embedded/check-reproducible-build.sh`, tier `build` |
 | `make check-embedded-swift-linker` | `Tests/embedded/check-swift-linker.sh`, tier `build` |
-| `make check-embedded-swift` / `check-static-io-macro-embedded` | stays in `phynics/axoloty` (hardware-free Core portability) |
+| `make check-embedded-swift` / `check-static-io-macro-embedded` | stays in `phynics/axoloty` as `make check-embedded-core-consumer` (hardware-free Core portability); both aliases were removed in [axoloty#918](https://github.com/phynics/axoloty/pull/918) |
 | `make embedded-network-test` and the other device/broker gates | **unmigrated**; see [check-inventory.md](./check-inventory.md), note A |
 | `make embedded-toolchain-doctor`, `make embedded-device-smoke` | superseded; see [check-inventory.md](./check-inventory.md) |
 
