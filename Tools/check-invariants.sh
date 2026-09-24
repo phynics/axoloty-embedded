@@ -610,6 +610,66 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 11. Every Swift throw is typed.
+# ---------------------------------------------------------------------------
+# Embedded Swift rejects untyped `throws` because it needs an `any Error`
+# existential. Host-only code here (the peers and seams under Tests/) compiles
+# either way, so without this rule an untyped throw survives until someone
+# moves the code toward the device. Spell every error type: `throws(E)`.
+# `rethrows` is unaffected. Comments and string literals are ignored.
+
+swift_files="$(tracked '*.swift')"
+if [ -z "$swift_files" ]; then
+    skip typed-throws 'no tracked Swift source'
+else
+    untyped_report="$(printf '%s\n' "$swift_files" | python3 -c '
+import re, sys
+untyped = re.compile(r"\bthrows\b(?!\s*\()")
+for path in sys.stdin.read().split():
+    in_block = in_multiline = False
+    for number, line in enumerate(open(path, encoding="utf-8"), 1):
+        text = ""
+        index = 0
+        while index < len(line):
+            if in_block:
+                end = line.find("*/", index)
+                if end < 0:
+                    index = len(line)
+                else:
+                    in_block, index = False, end + 2
+            elif in_multiline:
+                end = line.find("\"\"\"", index)
+                if end < 0:
+                    index = len(line)
+                else:
+                    in_multiline, index = False, end + 3
+            elif line.startswith("//", index):
+                break
+            elif line.startswith("/*", index):
+                in_block, index = True, index + 2
+            elif line.startswith("\"\"\"", index):
+                in_multiline, index = True, index + 3
+            elif line[index] == "\"":
+                index += 1
+                while index < len(line) and line[index] != "\"":
+                    index += 2 if line[index] == "\\" else 1
+                index += 1
+            else:
+                text += line[index]
+                index += 1
+        if untyped.search(text):
+            print(f"{path}:{number}: {line.strip()}")
+')"
+    if [ -z "$untyped_report" ]; then
+        pass typed-throws 'every Swift throws clause names its error type'
+    else
+        while IFS= read -r line; do
+            fail typed-throws "untyped throws, spell throws(ErrorType): $line"
+        done <<< "$untyped_report"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 
 printf '\ncheck-invariants: %d passed, %d skipped, %d violation(s)\n' "$checked" "$skipped" "$violations"
 [ "$violations" -eq 0 ] || exit 1
