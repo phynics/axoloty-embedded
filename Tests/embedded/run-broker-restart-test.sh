@@ -122,30 +122,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync, spawn } from "node:child_process";
 
-const { captureSerial, configureSerial } = await import(process.env.SERIAL_TOOLS);
+const { captureSerial, drainSerial } = await import(process.env.SERIAL_TOOLS);
 const { createEmbeddedAgentValidator, expectedBrokerRestartTests } = await import(process.env.AGENT_VALIDATOR);
 const { deviceEvidenceRecord, writeDeviceEvidence } = await import(process.env.EVIDENCE_WRITER);
 
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-const drain = async device => {
-  configureSerial(device);
-  const descriptor = fs.openSync(device, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK);
-  const until = Date.now() + 400;
-  try {
-    while (Date.now() < until) {
-      const buffer = Buffer.alloc(4096);
-      try {
-        fs.readSync(descriptor, buffer, 0, buffer.length, null);
-      } catch (error) {
-        if (error.code !== "EAGAIN" && error.code !== "EWOULDBLOCK") throw error;
-      }
-      await new Promise(resolve => setTimeout(resolve, 25));
-    }
-  } finally {
-    fs.closeSync(descriptor);
-  }
-};
-
 const startBroker = () => spawn(process.env.MOSQUITTO_BIN, ["-c", process.env.MOSQUITTO_CONFIG], { stdio: ["ignore", "ignore", "pipe"] });
 const stopBroker = async broker => {
   if (!broker || broker.exitCode !== null || broker.signalCode !== null) return;
@@ -172,7 +153,7 @@ for (const unit of units) {
     "--before", "default_reset", "--after", "no_reset", "write_flash", "@flash_args",
   ], { cwd: flashDirectory, stdio: "inherit" });
 }
-for (const unit of units) await drain(unit.device);
+for (const unit of units) await drainSerial(unit.device);
 
 const controller = new AbortController();
 const capture = unit => {
