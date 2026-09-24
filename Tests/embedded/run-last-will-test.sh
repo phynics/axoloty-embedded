@@ -106,32 +106,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
-const { captureSerial, configureSerial } = await import(process.env.SERIAL_TOOLS);
+const { captureSerial, drainSerial } = await import(process.env.SERIAL_TOOLS);
 const { createEmbeddedAgentValidator, expectedLastWillTests } = await import(process.env.AGENT_VALIDATOR);
 const { deviceEvidenceRecord, writeDeviceEvidence } = await import(process.env.EVIDENCE_WRITER);
 
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-
-// Drain whatever the previous run left in the kernel tty buffer before capture
-// so the validator's first line is the observer's own boot record.
-const drain = async device => {
-  configureSerial(device);
-  const descriptor = fs.openSync(device, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK);
-  const until = Date.now() + 400;
-  try {
-    while (Date.now() < until) {
-      const buffer = Buffer.alloc(4096);
-      try {
-        fs.readSync(descriptor, buffer, 0, buffer.length, null);
-      } catch (error) {
-        if (error.code !== "EAGAIN" && error.code !== "EWOULDBLOCK") throw error;
-      }
-      await new Promise(resolve => setTimeout(resolve, 25));
-    }
-  } finally {
-    fs.closeSync(descriptor);
-  }
-};
 
 const run = device => execFileSync("python3",
   [process.env.ESPTOOL, "--chip", "esp32c6", "--port", device, "run"], { stdio: "inherit" });
@@ -146,7 +125,7 @@ const unitB = { role: "b", device: deviceB, root: rootB, devicePath: path.join(r
 
 flash(unitA);
 flash(unitB);
-for (const unit of [unitA, unitB]) await drain(unit.device);
+for (const unit of [unitA, unitB]) await drainSerial(unit.device);
 
 const controller = new AbortController();
 const validator = createEmbeddedAgentValidator(expectedLastWillTests);

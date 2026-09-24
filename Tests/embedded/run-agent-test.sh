@@ -101,31 +101,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
-const { captureSerial, configureSerial } = await import(process.env.SERIAL_TOOLS);
+const { captureSerial, drainSerial } = await import(process.env.SERIAL_TOOLS);
 const { createEmbeddedAgentValidator } = await import(process.env.AGENT_VALIDATOR);
 const { deviceEvidenceRecord, writeDeviceEvidence } = await import(process.env.EVIDENCE_WRITER);
-
-// The kernel tty buffer can still hold output from whatever ran before this
-// test. Drain it after the flash left the chip in its bootloader and before
-// capture starts, or the validator reads a stale record as its first line.
-const drain = async device => {
-  configureSerial(device);
-  const descriptor = fs.openSync(device, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK);
-  const until = Date.now() + 400;
-  try {
-    while (Date.now() < until) {
-      const buffer = Buffer.alloc(4096);
-      try {
-        fs.readSync(descriptor, buffer, 0, buffer.length, null);
-      } catch (error) {
-        if (error.code !== "EAGAIN" && error.code !== "EWOULDBLOCK") throw error;
-      }
-      await new Promise(resolve => setTimeout(resolve, 25));
-    }
-  } finally {
-    fs.closeSync(descriptor);
-  }
-};
 
 const [deviceA, deviceB, rootA, rootB] = process.argv.slice(2);
 const units = [
@@ -160,7 +138,7 @@ for (const unit of units) {
   ], { cwd: flashDirectory, stdio: "inherit" });
 }
 for (const unit of units) {
-  await drain(unit.device);
+  await drainSerial(unit.device);
 }
 const captures = units.map(capture);
 for (const unit of units) {

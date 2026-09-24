@@ -13,6 +13,28 @@ export function configureSerial(device) {
   return true;
 }
 
+// Discards whatever the kernel tty buffer still holds from an earlier run.
+// Call it after flashing leaves the chip in its bootloader and before capture
+// starts, or a validator reads a stale record as its first line.
+export async function drainSerial(device, windowMs = 400) {
+  configureSerial(device);
+  const descriptor = fs.openSync(device, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK);
+  const until = Date.now() + windowMs;
+  try {
+    while (Date.now() < until) {
+      const buffer = Buffer.alloc(4096);
+      try {
+        fs.readSync(descriptor, buffer, 0, buffer.length, null);
+      } catch (error) {
+        if (error.code !== "EAGAIN" && error.code !== "EWOULDBLOCK") throw error;
+      }
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
 export async function captureSerial(device, deadline, onLine, signal, options = {}) {
   configureSerial(device);
   const descriptor = fs.openSync(device, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK);
