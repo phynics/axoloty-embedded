@@ -14,6 +14,11 @@ become their own issues.
   bound, so a future change to one silently diverges from the other.
 - **Why out of scope:** consolidating the bound would change a transport /
   platform interface, which is a design change, not a file move.
+- **Resolved:** `mqtt_event_validation.h` now owns the bounds as
+  `AXOLOTY_MQTT_TOPIC_CAPACITY` and `AXOLOTY_MQTT_PAYLOAD_CAPACITY`, and the
+  platform sizes its carrier buffers from them. The Zenoh transport keeps its
+  own bound in `zenoh_sample_validation.c`, because it validates a different
+  carrier.
 
 ## 2. Two implementations of the Swift GOT linker patch
 

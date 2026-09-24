@@ -39,8 +39,9 @@ static const char axoloty_runtime_identity[] = "";
 #define WIFI_BIT (1U << 0)
 #define IP_BIT (1U << 1)
 #define WIFI_FAIL_BIT (1U << 2)
-#define NETWORK_MAX_TOPIC 257
-#define NETWORK_MAX_PAYLOAD 2049
+// Carrier buffers hold exactly what the MQTT validator admits.
+#define NETWORK_MAX_TOPIC AXOLOTY_MQTT_TOPIC_CAPACITY
+#define NETWORK_MAX_PAYLOAD AXOLOTY_MQTT_PAYLOAD_CAPACITY
 #define NETWORK_SUBSCRIPTION_CAPACITY 4
 #define NETWORK_EVENT_CAPACITY 4
 #define NETWORK_EVENT_OVERFLOW_BIT (1U << 6)
