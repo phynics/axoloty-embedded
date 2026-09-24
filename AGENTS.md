@@ -87,9 +87,10 @@ checkout. Never disable it to make a release build pass.
 ## Building without a host toolchain
 
 `swift`, `cmake`, and `idf.py` are usually absent from the host. **That does
-not make a build unverifiable — check `docker images` first.** The pinned
-`axoloty-dev` image carries Swift and ESP-IDF, and a firmware image can be
-built from it. Only flashing needs hardware.
+not make a build unverifiable — check `docker images` first.** The
+`axoloty-embedded-dev` image, built from `.devcontainer/Dockerfile`, carries
+Swift and ESP-IDF, and a firmware image can be built from it. An ESP-IDF
+installation in your own environment works too. Only flashing needs hardware.
 
 Never tell anyone, or record in an evidence record, that a build could not be
 attempted without checking for the container first.

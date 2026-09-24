@@ -271,8 +271,9 @@ printf '\n---- verify summary ----\n%s' "$summary"
 # conclude the work is unverifiable.
 if printf '%s' "$summary" | grep -q '^SKIP'; then
     printf '\nA tier skipped. Before concluding anything is unverifiable, run\n'
-    printf '"docker images" and read docs/container-builds.md: axoloty-dev:latest\n'
-    printf 'carries Swift and ESP-IDF, and the build and core tiers run inside it.\n'
+    printf '"docker images" and read docs/container-builds.md: axoloty-embedded-dev,\n'
+    printf 'built from .devcontainer/Dockerfile, carries Swift and ESP-IDF, and the\n'
+    printf 'build and core tiers run inside it.\n'
 fi
 
 if [ "$failed" -ne 0 ]; then

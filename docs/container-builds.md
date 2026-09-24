@@ -12,13 +12,26 @@ anything is unverifiable.**
 
 | Image | Contents |
 |---|---|
-| `axoloty-dev:latest` | Swift 6.3.3 and ESP-IDF v5.4 (`idf.py`, `esptool.py`, `riscv32-esp-elf-gcc`) |
+| `axoloty-embedded-dev` | Swift 6.3 and ESP-IDF v5.4 (`idf.py`, `esptool.py`, `riscv32-esp-elf-gcc`), built from this repository's `.devcontainer/Dockerfile` |
 | `swift:6.4.0-noble` | Swift 6.4, for the adopt-6.4 epic |
 | `swift:6.3-jammy` | the current CI base |
 
-`.devcontainer/image-lock.json` in Axoloty names the reviewed image digest.
-Treat that lock the same way as `axoloty-core.lock.json`: the digest decides
-what ran.
+Build the firmware image once; the checkout is bind-mounted, so editing source
+never requires a rebuild:
+
+```bash
+docker build -t axoloty-embedded-dev .devcontainer
+```
+
+`.devcontainer/devcontainer.json` opens the same image in an editor. The
+Dockerfile pins every tool version as an `ARG`; the image digest is not locked
+yet, so record the digest you built with alongside any evidence.
+
+Hardware tooling lives here, not in Core. Axoloty's `axoloty-dev` image carries
+only host development tools since
+[axoloty#914](https://github.com/phynics/axoloty/pull/914). An ESP-IDF v5.4
+installation in your own environment works as well, provided `IDF_PATH` points
+at it and Swift 6.3 is on `PATH`.
 
 ## The working invocation
 
@@ -35,7 +48,7 @@ docker run --rm \
   -e AXOLOTY_STRICT_CORE=1 \
   -e AXOLOTY_SCRATCH=/tmp/h/scratch \
   -e AXOLOTY_PROOF_RUN_ID=<stable-id> \
-  axoloty-dev:latest \
+  axoloty-embedded-dev \
   bash -lc 'Profiles/esp32c6-mqtt/build.sh'
 ```
 

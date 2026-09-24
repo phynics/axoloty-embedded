@@ -20,7 +20,8 @@ Where a device or broker harness has not been migrated yet, the mapping in
 [check-inventory.md](./check-inventory.md) names it as **unmigrated**, and no
 result is claimed for it.
 
-The ESP32-C6 toolchain is included in the single dev image (`axoloty-dev`).
+The ESP32-C6 toolchain is included in this repository's dev image
+(`axoloty-embedded-dev`, built from `.devcontainer/Dockerfile`).
 Embedded Swift cross-compilation works: `AxolotyWire` compiles and runs
 on-device, and the portable `AxolotyProtocol` foundation, including its bounded
 correlation state, cross-compiles through the companion `axoloty_protocol`
@@ -28,8 +29,9 @@ component via the `espressif/idf_swift` component.
 
 ## Toolchain pinning
 
-All toolchain components are in the single `Dockerfile` of the Core development
-image, which this repository consumes as the pinned build environment:
+All toolchain components are in this repository's `.devcontainer/Dockerfile`,
+the pinned build environment. Core's development image no longer carries them
+([axoloty#914](https://github.com/phynics/axoloty/pull/914)):
 
 | Component | Version | Source |
 |---|---|---|
@@ -40,9 +42,8 @@ image, which this repository consumes as the pinned build environment:
 | espflash | `3.3.0` | prebuilt binary from `esp-rs/espflash` releases |
 | CMake | `3.29.6` (via pip) | required by the ESP-IDF project and `espressif/idf_swift` |
 | ccache | 4.5.1-1 | ESP-IDF-supported cross-worktree C/C++ compiler cache |
-| SwiftLint | `0.65.0` | prebuilt static binary |
 
-All versions are declared as `ARG`s at the top of the Core `.devcontainer/Dockerfile`
+All versions are declared as `ARG`s at the top of `.devcontainer/Dockerfile`
 and bumped deliberately. Rebuilding the image is required to change any of them.
 
 ## Build / flash / monitor workflow
