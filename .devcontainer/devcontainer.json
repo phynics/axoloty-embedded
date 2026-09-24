@@ -1,0 +1,23 @@
+{
+  "name": "axoloty-embedded",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "containerEnv": {
+    "AXOLOTY_DEVCONTAINER": "1",
+    "AXOLOTY_SCRATCH": "/workspace/.axoloty"
+  },
+  "runArgs": [
+    "--group-add=dialout"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "swiftlang.swift-vscode",
+        "espressif.esp-idf-extension"
+      ]
+    }
+  }
+}

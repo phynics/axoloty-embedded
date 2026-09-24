@@ -39,7 +39,7 @@ yourself hours.
 
 You need:
 
-- Docker, and the `axoloty-dev:latest` image (`docker images` to confirm)
+- Docker, and the `axoloty-embedded-dev` image (`docker images` to confirm; build it with `docker build -t axoloty-embedded-dev .devcontainer`)
 - An ESP32-C6-DevKitC-1 on a USB port
 - Your user in the `dialout` group, or equivalent access to the serial device
 - An MQTT broker reachable from the board, for the network portion
@@ -118,7 +118,7 @@ docker run --rm \
   -e AXOLOTY_SCRATCH=/tmp/h/scratch \
   -e AXOLOTY_PROOF_RUN_ID=device-qual-1 \
   -e CMAKE_BUILD_PARALLEL_LEVEL="$(nproc)" \
-  axoloty-dev:latest \
+  axoloty-embedded-dev \
   bash -lc 'Profiles/esp32c6-mqtt/build.sh'
 ```
 
@@ -157,7 +157,7 @@ docker run --rm \
   -e AXOLOTY_PROOF_RUN_ID=device-qual-1 \
   -e AXOLOTY_DEVICE_PORT="$DEVICE_NODE" \
   -e AXOLOTY_MQTT_HOST=<broker-host> \
-  axoloty-dev:latest \
+  axoloty-embedded-dev \
   bash -lc 'Profiles/esp32c6-mqtt/qualify.sh'
 ```
 
