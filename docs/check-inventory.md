@@ -31,9 +31,9 @@ Source: `phynics/axoloty` `Makefile` targets and the scripts they invoke.
 
 | Check | Where defined today | What it proves | Disposition | Where it lands | Confidence |
 |---|---|---|---|---|---|
-| `check-embedded-swift` | `Makefile` → `Tests/Support/checks/check-embedded-swift.sh` | `AxolotyWire` compiles and links under Embedded Swift for `riscv32-none-none-eabi`, and the parser behavior probe passes on the host | KEEP/REWRITE IN AXOLOTY | Stays; hardware-free | certain |
+| `check-embedded-swift` | `Makefile` → `Tests/Support/checks/check-embedded-swift.sh` | `AxolotyWire` compiles and links under Embedded Swift for `riscv32-none-none-eabi`, and the parser behavior probe passes on the host | KEEP/REWRITE IN AXOLOTY | Stays; hardware-free. Later folded into `check-embedded-core-consumer`, which keeps the link and parser probes; the target was removed in [axoloty#918](https://github.com/phynics/axoloty/pull/918) | certain |
 | `check-embedded-swift-linker` | `Makefile` → `axoloty-tool embedded verify` → `Tests/Support/checks/check-embedded-swift-linker.sh` | The ESP32-C6 firmware links Swift `UnicodeDataTables` and the `.got/.got.plt` handling survives ESP-IDF's `sections.ld` | MOVE TO AXOLOTY-EMBEDDED | `Tests/embedded/check-swift-linker.sh`, tier `build` (no board) | certain |
-| `check-static-io-macro-embedded` | `Makefile` alias → `check-embedded-core-consumer` → `check-embedded-swift-core.sh` | The production macro plugin expands a real `StaticIoActor` consumer | KEEP/REWRITE IN AXOLOTY | Stays; hardware-free | certain |
+| `check-static-io-macro-embedded` | `Makefile` alias → `check-embedded-core-consumer` → `check-embedded-swift-core.sh` | The production macro plugin expands a real `StaticIoActor` consumer | KEEP/REWRITE IN AXOLOTY | Stays as `check-embedded-core-consumer`; the alias was removed in [axoloty#918](https://github.com/phynics/axoloty/pull/918) | certain |
 | `check-embedded-core-consumer` | `Makefile` → `Tests/Support/checks/check-embedded-swift-core.sh` | All five portable modules plus `_JSONCore` compile and partially link under Embedded Swift with the real macro consumer | KEEP/REWRITE IN AXOLOTY | Stays; hardware-free | certain |
 | `embedded-swift-build` | `Makefile` → `axoloty-tool embedded build` → `Tests/Support/embedded/build-embedded-swift.sh` | The Embedded Swift firmware image is produced | MOVE TO AXOLOTY-EMBEDDED | Landed in #1 as `Platforms/esp32c6-idf/tools/build.sh` + `Profiles/esp32c6-mqtt/build.sh`; tier `build` | certain |
 | `embedded-swift-flash` | `Makefile` → `Tests/Support/embedded/embedded-swift-smoke.sh` | The firmware is flashed and the `embedded-swift-smoke-v2` JSONL protocol passes on a board | MOVE TO AXOLOTY-EMBEDDED | Landed in #1 as `Profiles/esp32c6-mqtt/qualify.sh` → `Platforms/esp32c6-idf/tools/flash.sh` + `validate-smoke.mjs`; tier `device` | certain |
@@ -70,7 +70,7 @@ Source: `phynics/axoloty` `Makefile` targets and the scripts they invoke.
 | build cache policy | `Tests/Support/embedded/embedded-build-cache.sh` | ESP-IDF incremental/ccache namespacing | MOVE TO AXOLOTY-EMBEDDED | **Unmigrated**: `build.sh` (landed in #1) builds explicitly and does not use a ccache policy | certain |
 | pre-split Core resolver | `Tests/Support/embedded/resolve-embedded-core.sh` | Resolves `AXOLOTY_SOURCE_DIR` into package source dirs and a SHA | SUPERSEDE/DELETE | Superseded by `Tools/prepare-core.sh` and its report; must never return to firmware | certain |
 | pre-split Core tool prep | `Tests/Support/embedded/prepare-embedded-core-tools.sh` | Builds the macro tool and locates `_JSONCore` in a firmware scratch dir | SUPERSEDE/DELETE | Superseded by the `Tools/prepare-core.sh` report | certain |
-| Swift link probe | `Tests/Support/embedded/embedded-swift-link-probe.swift` | Exercises public `AxolotyWire` APIs in the Core RISC-V link check | KEEP/REWRITE IN AXOLOTY | Stays with `check-embedded-swift` | certain |
+| Swift link probe | `Tests/Support/embedded/embedded-swift-link-probe.swift` | Exercises public `AxolotyWire` APIs in the Core RISC-V link check | KEEP/REWRITE IN AXOLOTY | Stays; now compiled by `check-embedded-core-consumer` | certain |
 | Swift parser probe | `Tests/Support/embedded/embedded-swift-parser-probe.swift` | Host Embedded-Swift parser behavior | KEEP/REWRITE IN AXOLOTY | Stays | certain |
 | host shims | `Tests/Support/embedded/embedded-swift-host-shims.c` | Host shims for the parser probe | KEEP/REWRITE IN AXOLOTY | Stays | certain |
 | MQTT host HAL | `Tests/Support/embedded/embedded-mqtt-host-hal.c` | Fake C HAL for the transport seam test | MOVE TO AXOLOTY-EMBEDDED | `Tests/embedded/mqtt-host-hal.c` | certain |
@@ -83,7 +83,7 @@ Source: `phynics/axoloty` `Makefile` targets and the scripts they invoke.
 
 | Check | Where defined today | What it proves | Disposition | Where it lands | Confidence |
 |---|---|---|---|---|---|
-| `test-check-embedded-swift.sh` | selftest | The Core compile/link checker passes on good input and rejects untyped `throws` | KEEP/REWRITE IN AXOLOTY | Stays | certain |
+| `test-check-embedded-swift.sh` | selftest | The Core compile/link checker passes on good input and rejects untyped `throws` | KEEP/REWRITE IN AXOLOTY | Retired in Core with `check-embedded-swift.sh` | certain |
 | `test-check-embedded-swift-core.sh` | selftest | The Core consumer gate passes and fails on a malformed consumer | KEEP/REWRITE IN AXOLOTY | Stays | certain |
 | `test-check-embedded-swift-linker.sh` | selftest | The linker probe check fails closed on a bad linker fragment | MOVE TO AXOLOTY-EMBEDDED | With `check-swift-linker.sh` | certain |
 | `test-build-embedded-swift.sh` | selftest | The pre-split firmware build wrapper respects Core SHA/dirty identity and CMake edges | MOVE TO AXOLOTY-EMBEDDED | Superseded by the platform build and Core-preparation report | certain |
