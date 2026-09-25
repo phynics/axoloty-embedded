@@ -13,22 +13,26 @@
 // All buffers are borrowed for the duration of one synchronous call. The
 // caller keeps ownership and the carrier never retains a pointer.
 
-#include <stddef.h>
+#include "../../../Interop/swift_c_interop.h"
 
 /// Opens a session to the configured locator within the deadline.
 int axoloty_zenoh_open(
-    const unsigned char *endpoint, int endpoint_length,
+    const unsigned char * AXOLOTY_NONNULL __counted_by(endpoint_length) AXOLOTY_C_NOESCAPE endpoint,
+    int endpoint_length,
     unsigned int deadline_ms);
 
 /// Installs one key-expression subscription within the deadline.
 int axoloty_zenoh_subscribe(
-    const unsigned char *key, int key_length,
+    const unsigned char * AXOLOTY_NONNULL __counted_by(key_length) AXOLOTY_C_NOESCAPE key,
+    int key_length,
     unsigned int deadline_ms);
 
 /// Publishes one payload on one key expression.
 int axoloty_zenoh_publish(
-    const unsigned char *key, int key_length,
-    const unsigned char *payload, int payload_length);
+    const unsigned char * AXOLOTY_NONNULL __counted_by(key_length) AXOLOTY_C_NOESCAPE key,
+    int key_length,
+    const unsigned char * AXOLOTY_NONNULL __counted_by(payload_length) AXOLOTY_C_NOESCAPE payload,
+    int payload_length);
 
 /// Copies the next inbound sample into caller storage within the deadline.
 ///
@@ -36,8 +40,10 @@ int axoloty_zenoh_publish(
 /// written; zero when no bounded sample arrived. The output capacities are
 /// never exceeded.
 int axoloty_zenoh_poll(
-    unsigned char *key, int key_capacity, int *key_length,
-    unsigned char *payload, int payload_capacity, int *payload_length,
+    unsigned char * AXOLOTY_NONNULL __counted_by(key_capacity) AXOLOTY_C_NOESCAPE key,
+    int key_capacity, int * AXOLOTY_NONNULL key_length,
+    unsigned char * AXOLOTY_NONNULL __counted_by(payload_capacity) AXOLOTY_C_NOESCAPE payload,
+    int payload_capacity, int * AXOLOTY_NONNULL payload_length,
     unsigned int deadline_ms);
 
 /// Removes the current subscription, keeping the session open.

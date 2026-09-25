@@ -1,0 +1,4 @@
+module ZenohHostTest {
+    header "zenoh_host_test.h"
+    export *
+}

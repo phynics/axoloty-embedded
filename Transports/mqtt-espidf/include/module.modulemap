@@ -1,0 +1,4 @@
+module MQTTCarrierInterop {
+    header "mqtt_carrier.h"
+    export *
+}

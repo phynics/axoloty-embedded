@@ -2,6 +2,9 @@
 
 import AxolotyWire
 import AxolotyProtocol
+#if canImport(StaticDeviceAgentInterop)
+import StaticDeviceAgentInterop
+#endif
 
 @inline(__always)
 private func staticDeviceAgentNoop(
@@ -374,8 +377,7 @@ private func phase4Encode<T: WireEncodable>(
     )
 }
 
-@_cdecl("axoloty_static_agent_expire")
-func axolotyStaticAgentExpire(_ role: Int32) -> Int32 {
+@c @implementation public func axoloty_static_agent_expire(_ role: Int32) -> Int32 {
     guard let role = StaticAgentRole(rawValue: role) else { return 0 }
     return expireStaticAgentRequest(role: role) ? 1 : 0
 }
@@ -395,8 +397,7 @@ func copyStaticAgentActorRoute(
     return length
 }
 
-@_cdecl("axoloty_static_agent_copy_actor_route")
-func axolotyStaticAgentCopyActorRoute(
+@c @implementation public func axoloty_static_agent_copy_actor_route(
     _ role: Int32, _ output: UnsafeMutablePointer<UInt8>, _ capacity: Int32
 ) -> Int32 {
     guard let role = StaticAgentRole(rawValue: role) else { return -1 }
@@ -572,8 +573,7 @@ func prepareStaticAgentMessage(
     )
 }
 
-@_cdecl("axoloty_static_agent_prepare")
-func axolotyStaticAgentPrepare(
+@c @implementation public func axoloty_static_agent_prepare(
     _ role: Int32,
     _ kind: Int32,
     _ topicBuffer: UnsafeMutablePointer<UInt8>,
@@ -664,8 +664,7 @@ func receiveStaticAgentMessage(
     return .ignored
 }
 
-@_cdecl("axoloty_static_agent_receive")
-func axolotyStaticAgentReceive(
+@c @implementation public func axoloty_static_agent_receive(
     _ role: Int32,
     _ topicBytes: UnsafePointer<UInt8>,
     _ topicLength: Int32,

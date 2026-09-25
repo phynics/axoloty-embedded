@@ -1,0 +1,4 @@
+module MQTTHostTest {
+    header "mqtt_host_test.h"
+    export *
+}

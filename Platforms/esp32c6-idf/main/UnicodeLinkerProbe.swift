@@ -4,12 +4,11 @@
 // the Embedded Swift Unicode data tables and reproduces the `.got.plt`
 // failure fixed by linker.lf.
 
-@_cdecl("axoloty_unicode_linker_probe")
-func axolotyUnicodeLinkerProbe(
+@c @implementation public func axoloty_unicode_linker_probe(
     _ bytes: UnsafePointer<UInt8>,
-    _ length: Int
+    _ length: Int32
 ) -> Int32 {
-    let buffer = UnsafeBufferPointer(start: bytes, count: length)
+    let buffer = UnsafeBufferPointer(start: bytes, count: Int(length))
     let value = String(decoding: buffer, as: UTF8.self)
     return value == "axoloty" ? 1 : 0
 }

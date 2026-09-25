@@ -14,6 +14,9 @@
 #include "runtime_identity.h"
 #include "embedded_shared_flags.h"
 #include "mqtt_event_validation.h"
+#if __has_include("mqtt_carrier.h")
+#include "mqtt_carrier.h"
+#endif
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/queue.h"

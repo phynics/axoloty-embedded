@@ -2,6 +2,7 @@
 
 #include "runtime_identity.h"
 #include "mqtt_event_validation.h"
+#include "mqtt_carrier.h"
 
 #include <stddef.h>
 #include <stdint.h>

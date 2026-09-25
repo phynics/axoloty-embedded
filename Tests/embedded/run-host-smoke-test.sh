@@ -106,6 +106,7 @@ node "$fixtures_dir/generate-embedded-corpus.mjs" \
 platform_main="$repo_root/Platforms/esp32c6-idf/main"
 transport_main="$repo_root/Transports/mqtt-espidf/main"
 clang -std=c11 -O2 -Wall -Wextra -Werror -I "$platform_main" -I "$transport_main" \
+    -I "$repo_root/Transports/mqtt-espidf/include" -I "$repo_root/Interop" \
     -c "$script_dir/mqtt-host-hal.c" -o "$work/hal.o"
 clang -std=c11 -O2 -Wall -Wextra -Werror -I "$platform_main" -I "$transport_main" \
     -c "$transport_main/mqtt_event_validation.c" -o "$work/validation.o"
@@ -117,6 +118,9 @@ clang -std=c11 -O2 -Wall -Wextra -Werror -I "$platform_main" -I "$transport_main
 swiftc -swift-version 5 -enable-experimental-feature Lifetimes \
     -D EMBEDDED_MQTT_HOST_TEST \
     -I "$work" \
+    -I "$repo_root/Applications/device-smoke-agent/include" \
+    -I "$repo_root/Transports/mqtt-espidf/include" \
+    -I "$repo_root/Interop" \
     $(sources "$app_dir") \
     "$transport_main/EmbeddedMQTTClient.swift" \
     "$transport_main/CarrierNetworkProbe.swift" \

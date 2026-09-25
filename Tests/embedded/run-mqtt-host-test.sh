@@ -33,7 +33,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
-    -I "$platform_main" -I "$transport_main" \
+    -I "$platform_main" -I "$transport_main" -I "$repo_root/Transports/mqtt-espidf/include" -I "$repo_root/Interop" \
     -c "$script_dir/mqtt-host-hal.c" -o "$tmp/hal.o"
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
     -I "$platform_main" -I "$transport_main" \
@@ -42,6 +42,10 @@ trap 'rm -rf "$tmp"' EXIT
     -I "$platform_main" -I "$transport_main" \
     -c "$platform_main/runtime_identity.c" -o "$tmp/identity.o"
 swiftc -D EMBEDDED_MQTT_HOST_TEST \
+    -I "$repo_root/Transports/mqtt-espidf/include" \
+    -I "$script_dir" \
+    -I "$repo_root/Interop" \
+    -Xcc -fmodule-map-file="$script_dir/mqtt_host_test.modulemap" \
     "$transport_main/EmbeddedMQTTClient.swift" \
     "$script_dir/mqtt-host-test.swift" \
     "$tmp/hal.o" "$tmp/validation.o" "$tmp/identity.o" \

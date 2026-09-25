@@ -1,0 +1,4 @@
+module StaticDeviceAgentInterop {
+    header "static_device_agent.h"
+    export *
+}

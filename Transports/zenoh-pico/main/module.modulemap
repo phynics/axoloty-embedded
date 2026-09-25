@@ -1,0 +1,4 @@
+module ZenohCarrierInterop {
+    header "zenoh_carrier.h"
+    export *
+}

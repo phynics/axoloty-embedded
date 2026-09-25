@@ -6,7 +6,6 @@
 // to the application, so no application source names the SDK entry point.
 
 /// ESP-IDF application entry point.
-@_cdecl("app_main")
-func axolotyEsp32c6AppMain() -> Int32 {
-    startDeviceSmoke(esp32c6SmokeSeam())
+@c @implementation public func app_main() {
+    _ = startDeviceSmoke(esp32c6SmokeSeam())
 }

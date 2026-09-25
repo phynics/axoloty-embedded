@@ -8,6 +8,7 @@
 // zenoh-pico. It is never part of a firmware image.
 
 #include "zenoh_sample_validation.h"
+#include "zenoh_carrier.h"
 
 #include <stddef.h>
 #include <stdint.h>
