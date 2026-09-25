@@ -9,6 +9,7 @@ import DeviceSmokeApplication
 import EmbeddedMQTTClient
 import Foundation
 import MQTTNIO
+import MQTTCarrierInterop
 import NIOConcurrencyHelpers
 import NIOCore
 import NIOPosix
@@ -350,8 +351,7 @@ final class HostMQTTSession: @unchecked Sendable {
     }
 }
 
-@_cdecl("axoloty_mqtt_configure_last_will")
-func hostMQTTConfigureLastWill(
+@c @implementation public func axoloty_mqtt_configure_last_will(
     _ topic: UnsafePointer<UInt8>, _ topicLength: Int32,
     _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32
 ) -> Int32 {
@@ -361,27 +361,23 @@ func hostMQTTConfigureLastWill(
     ) ? 1 : 0
 }
 
-@_cdecl("axoloty_mqtt_connect_wait")
-func hostMQTTConnectWait(_ deadlineMS: UInt32) -> Int32 {
+@c @implementation public func axoloty_mqtt_connect_wait(_ deadlineMS: UInt32) -> Int32 {
     _ = deadlineMS
     return HostMQTTSession.shared.connect() ? 1 : 0
 }
 
-@_cdecl("axoloty_mqtt_subscribe_wait")
-func hostMQTTSubscribeWait(
+@c @implementation public func axoloty_mqtt_subscribe_wait(
     _ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ deadlineMS: UInt32
 ) -> Int32 {
     _ = deadlineMS
     return HostMQTTSession.shared.subscribe(topic: topic, topicLength: topicLength) ? 1 : 0
 }
 
-@_cdecl("axoloty_mqtt_unsubscribe")
-func hostMQTTUnsubscribe(_ topic: UnsafePointer<UInt8>, _ topicLength: Int32) -> Int32 {
+@c @implementation public func axoloty_mqtt_unsubscribe(_ topic: UnsafePointer<UInt8>, _ topicLength: Int32) -> Int32 {
     HostMQTTSession.shared.unsubscribe(topic: topic, topicLength: topicLength) ? 1 : 0
 }
 
-@_cdecl("axoloty_mqtt_publish")
-func hostMQTTPublish(
+@c @implementation public func axoloty_mqtt_publish(
     _ topic: UnsafePointer<UInt8>, _ topicLength: Int32,
     _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32
 ) -> Int32 {
@@ -391,19 +387,16 @@ func hostMQTTPublish(
     ) ? 1 : 0
 }
 
-@_cdecl("axoloty_mqtt_wait_loopback")
-func hostMQTTWaitLoopback(_ deadlineMS: UInt32) -> Int32 {
+@c @implementation public func axoloty_mqtt_wait_loopback(_ deadlineMS: UInt32) -> Int32 {
     _ = deadlineMS
     return 1
 }
 
-@_cdecl("axoloty_mqtt_reconnect_wait")
-func hostMQTTReconnectWait(_ deadlineMS: UInt32) -> Int32 {
+@c @implementation public func axoloty_mqtt_reconnect_wait(_ deadlineMS: UInt32) -> Int32 {
     HostMQTTSession.shared.waitForReconnect(deadlineMS: deadlineMS) ? 1 : 0
 }
 
-@_cdecl("axoloty_mqtt_poll_one_event")
-func hostMQTTPollOneEvent(
+@c @implementation public func axoloty_mqtt_poll_one_event(
     _ topic: UnsafeMutablePointer<UInt8>, _ topicCapacity: Int32, _ topicLength: UnsafeMutablePointer<Int32>,
     _ payload: UnsafeMutablePointer<UInt8>, _ payloadCapacity: Int32, _ payloadLength: UnsafeMutablePointer<Int32>
 ) -> Int32 {
@@ -413,8 +406,7 @@ func hostMQTTPollOneEvent(
     )
 }
 
-@_cdecl("axoloty_mqtt_disconnect")
-func hostMQTTDisconnect() -> Int32 {
+@c @implementation public func axoloty_mqtt_disconnect() -> Int32 {
     HostMQTTSession.shared.disconnect() ? 1 : 0
 }
 
@@ -424,8 +416,11 @@ private func hostExchangeConfigureLastWill(
     _ topic: UnsafePointer<UInt8>, _ topicLength: Int32,
     _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32
 ) -> Int32 {
-    hostApplicationExchangeClient.configureLastWill(
-        topic: topic, topicLength: topicLength, payload: payload, payloadLength: payloadLength
+    guard topicLength > 0, topicLength <= 256,
+          payloadLength >= 0, payloadLength <= 2_048 else { return 0 }
+    return hostApplicationExchangeClient.configureLastWill(
+        topic: Span(_unsafeStart: topic, count: Int(topicLength)),
+        payload: Span(_unsafeStart: payload, count: Int(payloadLength))
     ) ? 1 : 0
 }
 
@@ -436,16 +431,18 @@ private func hostExchangeConnect(_ deadlineMS: UInt32) -> Int32 {
 private func hostExchangeSubscribe(
     _ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ deadlineMS: UInt32
 ) -> Int32 {
-    hostApplicationExchangeClient.subscribe(
-        topic: topic, topicLength: topicLength, deadlineMS: deadlineMS
+    guard topicLength > 0, topicLength <= 256 else { return 0 }
+    return hostApplicationExchangeClient.subscribe(
+        topic: Span(_unsafeStart: topic, count: Int(topicLength)), deadlineMS: deadlineMS
     ) ? 1 : 0
 }
 
 private func hostExchangeUnsubscribe(
     _ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ deadlineMS: UInt32
 ) -> Int32 {
-    hostApplicationExchangeClient.unsubscribe(
-        topic: topic, topicLength: topicLength, deadlineMS: deadlineMS
+    guard topicLength > 0, topicLength <= 256 else { return 0 }
+    return hostApplicationExchangeClient.unsubscribe(
+        topic: Span(_unsafeStart: topic, count: Int(topicLength)), deadlineMS: deadlineMS
     ) ? 1 : 0
 }
 
@@ -453,8 +450,11 @@ private func hostExchangePublish(
     _ topic: UnsafePointer<UInt8>, _ topicLength: Int32,
     _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32
 ) -> Int32 {
-    hostApplicationExchangeClient.publish(
-        topic: topic, topicLength: topicLength, payload: payload, payloadLength: payloadLength
+    guard topicLength > 0, topicLength <= 256,
+          payloadLength >= 0, payloadLength <= 2_048 else { return 0 }
+    return hostApplicationExchangeClient.publish(
+        topic: Span(_unsafeStart: topic, count: Int(topicLength)),
+        payload: Span(_unsafeStart: payload, count: Int(payloadLength))
     ) ? 1 : 0
 }
 

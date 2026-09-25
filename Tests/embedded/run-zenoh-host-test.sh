@@ -33,12 +33,16 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
-    -I "$transport_main" \
+    -I "$transport_main" -I "$repo_root/Interop" \
     -c "$script_dir/zenoh-host-hal.c" -o "$tmp/hal.o"
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
     -I "$transport_main" \
     -c "$transport_main/zenoh_sample_validation.c" -o "$tmp/validation.o"
 swiftc -D EMBEDDED_ZENOH_HOST_TEST \
+    -I "$transport_main" \
+    -I "$script_dir" \
+    -I "$repo_root/Interop" \
+    -Xcc -fmodule-map-file="$script_dir/zenoh_host_test.modulemap" \
     "$transport_main/EmbeddedZenohClient.swift" \
     "$script_dir/zenoh-host-test.swift" \
     "$tmp/hal.o" "$tmp/validation.o" \

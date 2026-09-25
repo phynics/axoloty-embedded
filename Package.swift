@@ -38,6 +38,7 @@ let package = Package(
             name: "DeviceSmokeApplication",
             dependencies: [
                 "DeviceSmokeHostSupport",
+                "StaticDeviceAgentInterop",
                 .product(name: "AxolotyWire", package: "Axoloty"),
                 .product(name: "AxolotyProtocol", package: "Axoloty"),
                 .product(name: "AxolotyObjectModel", package: "Axoloty"),
@@ -50,10 +51,23 @@ let package = Package(
             ]
         ),
         .target(
+            name: "StaticDeviceAgentInterop",
+            path: "Applications/device-smoke-agent",
+            sources: ["interop/static_device_agent_interop.c"],
+            publicHeadersPath: "include"
+        ),
+        .target(
             name: "EmbeddedMQTTClient",
+            dependencies: ["MQTTCarrierInterop"],
             path: "Transports/mqtt-espidf/main",
             sources: ["EmbeddedMQTTClient.swift", "CarrierNetworkProbe.swift"],
             swiftSettings: [.define("EMBEDDED_MQTT_HOST_TEST")]
+        ),
+        .target(
+            name: "MQTTCarrierInterop",
+            path: "Transports/mqtt-espidf",
+            sources: ["main/mqtt_event_validation.c"],
+            publicHeadersPath: "include"
         ),
         .target(
             name: "DeviceSmokeHostSupport",
@@ -74,6 +88,7 @@ let package = Package(
             dependencies: [
                 "DeviceSmokeApplication",
                 "EmbeddedMQTTClient",
+                "MQTTCarrierInterop",
                 .product(name: "MQTTNIO", package: "mqtt-nio"),
                 .product(name: "NIOConcurrencyHelpers", package: "swift-nio"),
                 .product(name: "NIOCore", package: "swift-nio"),

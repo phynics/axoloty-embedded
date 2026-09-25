@@ -21,6 +21,7 @@
 // profile decision.
 
 #if EMBEDDED_ZENOH_HOST_TEST
+import ZenohCarrierInterop
 // Host self-tests compile this firmware-local overlay without resolving the
 // Embedded Swift package graph. Keep the production limits in sync here.
 private enum WireBufferConfig {
@@ -29,28 +30,6 @@ private enum WireBufferConfig {
 }
 #else
 import AxolotyWire
-#endif
-
-#if EMBEDDED_ZENOH_HOST_TEST
-// The host fixture supplies these symbols. The production build receives the
-// same declarations from `zenoh_carrier.h` through BridgingHeader.h, so the
-// seam adds no runtime layer.
-@_silgen_name("axoloty_zenoh_open")
-private func axoloty_zenoh_open(_ endpoint: UnsafePointer<UInt8>, _ endpointLength: Int32, _ deadlineMS: UInt32) -> Int32
-@_silgen_name("axoloty_zenoh_subscribe")
-private func axoloty_zenoh_subscribe(_ key: UnsafePointer<UInt8>, _ keyLength: Int32, _ deadlineMS: UInt32) -> Int32
-@_silgen_name("axoloty_zenoh_publish")
-private func axoloty_zenoh_publish(_ key: UnsafePointer<UInt8>, _ keyLength: Int32, _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32) -> Int32
-@_silgen_name("axoloty_zenoh_poll")
-private func axoloty_zenoh_poll(
-    _ key: UnsafeMutablePointer<UInt8>, _ keyCapacity: Int32, _ keyLength: UnsafeMutablePointer<Int32>,
-    _ payload: UnsafeMutablePointer<UInt8>, _ payloadCapacity: Int32, _ payloadLength: UnsafeMutablePointer<Int32>,
-    _ deadlineMS: UInt32
-) -> Int32
-@_silgen_name("axoloty_zenoh_unsubscribe")
-private func axoloty_zenoh_unsubscribe() -> Int32
-@_silgen_name("axoloty_zenoh_close")
-private func axoloty_zenoh_close() -> Int32
 #endif
 
 /// Bounded, synchronous Zenoh operations for the embedded device gate.
@@ -70,35 +49,35 @@ struct EmbeddedZenohClient {
     init() {}
 
     mutating func open(
-        endpoint: UnsafePointer<UInt8>, endpointLength: Int32,
+        endpoint: Span<UInt8>,
         deadlineMS: UInt32
     ) -> Bool {
-        guard state == .idle, endpointLength > 0,
-              endpointLength <= Int32(WireBufferConfig.maxTopicLength),
-              axoloty_zenoh_open(endpoint, endpointLength, deadlineMS) != 0 else { return false }
+        guard state == .idle, !endpoint.isEmpty,
+              endpoint.count <= WireBufferConfig.maxTopicLength,
+              axoloty_zenoh_open(endpoint, deadlineMS) != 0 else { return false }
         state = .opened
         return true
     }
 
     mutating func subscribe(
-        key: UnsafePointer<UInt8>, keyLength: Int32,
+        key: Span<UInt8>,
         deadlineMS: UInt32
     ) -> Bool {
-        guard state == .opened, keyLength > 0,
-              keyLength <= Int32(WireBufferConfig.maxTopicLength),
-              axoloty_zenoh_subscribe(key, keyLength, deadlineMS) != 0 else { return false }
+        guard state == .opened, !key.isEmpty,
+              key.count <= WireBufferConfig.maxTopicLength,
+              axoloty_zenoh_subscribe(key, deadlineMS) != 0 else { return false }
         state = .subscribed
         return true
     }
 
     func publish(
-        key: UnsafePointer<UInt8>, keyLength: Int32,
-        payload: UnsafePointer<UInt8>, payloadLength: Int32
+        key: Span<UInt8>,
+        payload: Span<UInt8>
     ) -> Bool {
-        guard state == .subscribed, keyLength > 0,
-              keyLength <= Int32(WireBufferConfig.maxTopicLength),
-              payloadLength >= 0, payloadLength <= Int32(WireBufferConfig.maxPayloadSize) else { return false }
-        return axoloty_zenoh_publish(key, keyLength, payload, payloadLength) != 0
+        guard state == .subscribed, !key.isEmpty,
+              key.count <= WireBufferConfig.maxTopicLength,
+              payload.count <= WireBufferConfig.maxPayloadSize else { return false }
+        return axoloty_zenoh_publish(key, payload) != 0
     }
 
     /// Copies the next inbound sample into caller storage.

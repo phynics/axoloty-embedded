@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Atakan DULKER. Licensed under the MIT License.
 
 #if EMBEDDED_MQTT_HOST_TEST
+import MQTTCarrierInterop
 // Host self-tests compile this firmware-local overlay without resolving the
 // Embedded Swift package graph. Keep the production limits in sync here.
 private enum WireBufferConfig {
@@ -9,32 +10,6 @@ private enum WireBufferConfig {
 }
 #else
 import AxolotyWire
-#endif
-
-#if EMBEDDED_MQTT_HOST_TEST
-// The host fixture supplies these symbols. The production build receives the
-// same declarations from BridgingHeader.h, so the seam adds no runtime layer.
-@_silgen_name("axoloty_mqtt_configure_last_will")
-private func axoloty_mqtt_configure_last_will(_ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32) -> Int32
-@_silgen_name("axoloty_mqtt_connect_wait")
-private func axoloty_mqtt_connect_wait(_ deadlineMS: UInt32) -> Int32
-@_silgen_name("axoloty_mqtt_subscribe_wait")
-private func axoloty_mqtt_subscribe_wait(_ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ deadlineMS: UInt32) -> Int32
-@_silgen_name("axoloty_mqtt_unsubscribe")
-private func axoloty_mqtt_unsubscribe(_ topic: UnsafePointer<UInt8>, _ topicLength: Int32) -> Int32
-@_silgen_name("axoloty_mqtt_publish")
-private func axoloty_mqtt_publish(_ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32) -> Int32
-@_silgen_name("axoloty_mqtt_poll_one_event")
-private func axoloty_mqtt_poll_one_event(
-    _ topic: UnsafeMutablePointer<UInt8>, _ topicCapacity: Int32, _ topicLength: UnsafeMutablePointer<Int32>,
-    _ payload: UnsafeMutablePointer<UInt8>, _ payloadCapacity: Int32, _ payloadLength: UnsafeMutablePointer<Int32>
-) -> Int32
-@_silgen_name("axoloty_mqtt_wait_loopback")
-private func axoloty_mqtt_wait_loopback(_ deadlineMS: UInt32) -> Int32
-@_silgen_name("axoloty_mqtt_reconnect_wait")
-private func axoloty_mqtt_reconnect_wait(_ deadlineMS: UInt32) -> Int32
-@_silgen_name("axoloty_mqtt_disconnect")
-private func axoloty_mqtt_disconnect() -> Int32
 #endif
 
 /// Bounded, synchronous MQTT operations for the single-device embedded gate.
@@ -54,13 +29,13 @@ public struct EmbeddedMQTTClient {
     public init() {}
 
     public mutating func configureLastWill(
-        topic: UnsafePointer<UInt8>, topicLength: Int32,
-        payload: UnsafePointer<UInt8>, payloadLength: Int32
+        topic: Span<UInt8>,
+        payload: Span<UInt8>
     ) -> Bool {
-        guard state == .idle, topicLength > 0,
-              topicLength <= Int32(WireBufferConfig.maxTopicLength),
-              payloadLength >= 0, payloadLength <= Int32(WireBufferConfig.maxPayloadSize) else { return false }
-        return axoloty_mqtt_configure_last_will(topic, topicLength, payload, payloadLength) != 0
+        guard state == .idle, !topic.isEmpty,
+              topic.count <= WireBufferConfig.maxTopicLength,
+              payload.count <= WireBufferConfig.maxPayloadSize else { return false }
+        return axoloty_mqtt_configure_last_will(topic, payload) != 0
     }
 
     public mutating func connect(deadlineMS: UInt32) -> Bool {
@@ -70,34 +45,34 @@ public struct EmbeddedMQTTClient {
     }
 
     public mutating func subscribe(
-        topic: UnsafePointer<UInt8>, topicLength: Int32,
+        topic: Span<UInt8>,
         deadlineMS: UInt32
     ) -> Bool {
-        guard state == .connected, topicLength > 0,
-              topicLength <= Int32(WireBufferConfig.maxTopicLength),
-              axoloty_mqtt_subscribe_wait(topic, topicLength, deadlineMS) != 0 else { return false }
+        guard state == .connected, !topic.isEmpty,
+              topic.count <= WireBufferConfig.maxTopicLength,
+              axoloty_mqtt_subscribe_wait(topic, deadlineMS) != 0 else { return false }
         state = .subscribed
         return true
     }
 
     public func publish(
-        topic: UnsafePointer<UInt8>, topicLength: Int32,
-        payload: UnsafePointer<UInt8>, payloadLength: Int32
+        topic: Span<UInt8>,
+        payload: Span<UInt8>
     ) -> Bool {
-        guard state == .subscribed, topicLength > 0,
-              topicLength <= Int32(WireBufferConfig.maxTopicLength),
-              payloadLength >= 0, payloadLength <= Int32(WireBufferConfig.maxPayloadSize) else { return false }
-        return axoloty_mqtt_publish(topic, topicLength, payload, payloadLength) != 0
+        guard state == .subscribed, !topic.isEmpty,
+              topic.count <= WireBufferConfig.maxTopicLength,
+              payload.count <= WireBufferConfig.maxPayloadSize else { return false }
+        return axoloty_mqtt_publish(topic, payload) != 0
     }
 
     public func unsubscribe(
-        topic: UnsafePointer<UInt8>, topicLength: Int32,
+        topic: Span<UInt8>,
         deadlineMS: UInt32
     ) -> Bool {
-        guard state == .subscribed, topicLength > 0,
-              topicLength <= Int32(WireBufferConfig.maxTopicLength) else { return false }
+        guard state == .subscribed, !topic.isEmpty,
+              topic.count <= WireBufferConfig.maxTopicLength else { return false }
         _ = deadlineMS
-        return axoloty_mqtt_unsubscribe(topic, topicLength) != 0
+        return axoloty_mqtt_unsubscribe(topic) != 0
     }
 
     /// Copies one complete queued carrier frame into caller-owned fixed storage.
@@ -147,8 +122,11 @@ func embeddedExchangeConfigureLastWill(
     _ topic: UnsafePointer<UInt8>, _ topicLength: Int32,
     _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32
 ) -> Int32 {
-    applicationExchangeClient.configureLastWill(
-        topic: topic, topicLength: topicLength, payload: payload, payloadLength: payloadLength
+    guard topicLength > 0, topicLength <= Int32(WireBufferConfig.maxTopicLength),
+          payloadLength >= 0, payloadLength <= Int32(WireBufferConfig.maxPayloadSize) else { return 0 }
+    return applicationExchangeClient.configureLastWill(
+        topic: Span(_unsafeStart: topic, count: Int(topicLength)),
+        payload: Span(_unsafeStart: payload, count: Int(payloadLength))
     ) ? 1 : 0
 }
 
@@ -159,21 +137,30 @@ func embeddedExchangeConnect(_ deadlineMS: UInt32) -> Int32 {
 func embeddedExchangeSubscribe(
     _ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ deadlineMS: UInt32
 ) -> Int32 {
-    applicationExchangeClient.subscribe(topic: topic, topicLength: topicLength, deadlineMS: deadlineMS) ? 1 : 0
+    guard topicLength > 0, topicLength <= Int32(WireBufferConfig.maxTopicLength) else { return 0 }
+    return applicationExchangeClient.subscribe(
+        topic: Span(_unsafeStart: topic, count: Int(topicLength)), deadlineMS: deadlineMS
+    ) ? 1 : 0
 }
 
 func embeddedExchangeUnsubscribe(
     _ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ deadlineMS: UInt32
 ) -> Int32 {
-    applicationExchangeClient.unsubscribe(topic: topic, topicLength: topicLength, deadlineMS: deadlineMS) ? 1 : 0
+    guard topicLength > 0, topicLength <= Int32(WireBufferConfig.maxTopicLength) else { return 0 }
+    return applicationExchangeClient.unsubscribe(
+        topic: Span(_unsafeStart: topic, count: Int(topicLength)), deadlineMS: deadlineMS
+    ) ? 1 : 0
 }
 
 func embeddedExchangePublish(
     _ topic: UnsafePointer<UInt8>, _ topicLength: Int32,
     _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32
 ) -> Int32 {
-    applicationExchangeClient.publish(
-        topic: topic, topicLength: topicLength, payload: payload, payloadLength: payloadLength
+    guard topicLength > 0, topicLength <= Int32(WireBufferConfig.maxTopicLength),
+          payloadLength >= 0, payloadLength <= Int32(WireBufferConfig.maxPayloadSize) else { return 0 }
+    return applicationExchangeClient.publish(
+        topic: Span(_unsafeStart: topic, count: Int(topicLength)),
+        payload: Span(_unsafeStart: payload, count: Int(payloadLength))
     ) ? 1 : 0
 }
 

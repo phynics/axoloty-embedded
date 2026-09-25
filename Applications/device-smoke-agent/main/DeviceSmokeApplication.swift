@@ -11,6 +11,9 @@
 // them. Success is NEVER emitted before all checks complete.
 
 import AxolotyWire
+#if canImport(StaticDeviceAgentInterop)
+import StaticDeviceAgentInterop
+#endif
 import AxolotyProtocol
 import AxolotyObjectModel
 #if HOST_AGENT_EXCHANGE
@@ -185,7 +188,7 @@ private func runAgentVectors(_ record: (StaticString, Bool) -> Void) {
             withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 2_048) { outputPayload in
                 withUnsafeTemporaryAllocation(of: Int32.self, capacity: 1) { outputTopicLength in
                     withUnsafeTemporaryAllocation(of: Int32.self, capacity: 1) { outputPayloadLength in
-                        result = axolotyStaticAgentReceive(
+                        result = axoloty_static_agent_receive(
                             2, topic.utf8Start, Int32(topic.utf8CodeUnitCount),
                             payload.utf8Start, Int32(payload.utf8CodeUnitCount),
                             outputTopic.baseAddress!, Int32(outputTopic.count),

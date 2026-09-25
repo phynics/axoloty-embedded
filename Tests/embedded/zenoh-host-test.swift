@@ -6,18 +6,7 @@
 // before the carrier C seam is entered. It compiles the real client against a
 // host-only fake carrier; it never compiles or links zenoh-pico.
 
-@_silgen_name("host_zenoh_reset")
-private func hostZenohReset()
-@_silgen_name("host_zenoh_set_failures")
-private func hostZenohSetFailures(_ failures: UInt32)
-@_silgen_name("host_zenoh_call_count")
-private func hostZenohCallCount(_ operation: UInt32) -> UInt32
-@_silgen_name("host_zenoh_set_sample")
-private func hostZenohSetSample(
-    _ key: UnsafePointer<UInt8>?, _ keyLength: Int32,
-    _ payload: UnsafePointer<UInt8>?, _ payloadLength: Int32)
-@_silgen_name("host_zenoh_sample_validation_tests")
-private func hostZenohSampleValidationTests() -> Int32
+import ZenohHostTest
 
 @main
 private struct EmbeddedZenohHostTest {
@@ -29,8 +18,8 @@ private struct EmbeddedZenohHostTest {
     private static let failClose: UInt32 = 1 << 5
 
     static func main() {
-        precondition(hostZenohSampleValidationTests() != 0, "sample validation vectors")
-        hostZenohReset()
+        precondition(host_zenoh_sample_validation_tests() != 0, "sample validation vectors")
+        host_zenoh_reset()
 
         let key = Array("sample/key".utf8)
         let payload = Array("sample/payload".utf8)
@@ -41,8 +30,8 @@ private struct EmbeddedZenohHostTest {
             payload.withUnsafeBufferPointer { payloadBuffer in
                 let keyPointer = keyBuffer.baseAddress!
                 let payloadPointer = payloadBuffer.baseAddress!
-                let keyLength = Int32(key.count)
-                let payloadLength = Int32(payload.count)
+                let keySpan = Span(_unsafeStart: keyPointer, count: key.count)
+                let payloadSpan = Span(_unsafeStart: payloadPointer, count: payload.count)
 
                 var client = EmbeddedZenohClient()
                 var outKey = [UInt8](repeating: 0, count: 256)
@@ -51,12 +40,11 @@ private struct EmbeddedZenohHostTest {
                 var outPayloadLength: Int32 = 0
 
                 // Invalid order is rejected before the carrier is entered.
-                precondition(!client.subscribe(key: keyPointer, keyLength: keyLength, deadlineMS: 1))
+                precondition(!client.subscribe(key: keySpan, deadlineMS: 1))
                 precondition(!client.unsubscribe())
                 precondition(!client.close())
                 precondition(!client.publish(
-                    key: keyPointer, keyLength: keyLength,
-                    payload: payloadPointer, payloadLength: payloadLength))
+                    key: keySpan, payload: payloadSpan))
                 outKey.withUnsafeMutableBufferPointer { outKeyBuffer in
                     outPayload.withUnsafeMutableBufferPointer { outPayloadBuffer in
                         precondition(!client.poll(
@@ -66,37 +54,49 @@ private struct EmbeddedZenohHostTest {
                             payloadLength: &outPayloadLength, deadlineMS: 1))
                     }
                 }
-                precondition(hostZenohCallCount(0) == 0 && hostZenohCallCount(1) == 0)
-                precondition(hostZenohCallCount(2) == 0 && hostZenohCallCount(3) == 0)
-                precondition(hostZenohCallCount(4) == 0 && hostZenohCallCount(5) == 0)
+                precondition(host_zenoh_call_count(0) == 0 && host_zenoh_call_count(1) == 0)
+                precondition(host_zenoh_call_count(2) == 0 && host_zenoh_call_count(3) == 0)
+                precondition(host_zenoh_call_count(4) == 0 && host_zenoh_call_count(5) == 0)
 
                 // A failed open keeps the client idle, so a retry is safe.
-                hostZenohSetFailures(failOpen)
-                precondition(!client.open(endpoint: keyPointer, endpointLength: keyLength, deadlineMS: 1))
-                hostZenohSetFailures(0)
-                precondition(client.open(endpoint: keyPointer, endpointLength: keyLength, deadlineMS: 1))
-                precondition(!client.open(endpoint: keyPointer, endpointLength: keyLength, deadlineMS: 1))
+                host_zenoh_set_failures(failOpen)
+                precondition(!client.open(endpoint: keySpan, deadlineMS: 1))
+                host_zenoh_set_failures(0)
+                precondition(client.open(endpoint: keySpan, deadlineMS: 1))
+                precondition(!client.open(endpoint: keySpan, deadlineMS: 1))
 
                 // A failed subscribe keeps the session open.
-                hostZenohSetFailures(failSubscribe)
-                precondition(!client.subscribe(key: keyPointer, keyLength: keyLength, deadlineMS: 1))
-                hostZenohSetFailures(0)
-                precondition(client.subscribe(key: keyPointer, keyLength: keyLength, deadlineMS: 1))
+                host_zenoh_set_failures(failSubscribe)
+                precondition(!client.subscribe(key: keySpan, deadlineMS: 1))
+                host_zenoh_set_failures(0)
+                precondition(client.subscribe(key: keySpan, deadlineMS: 1))
 
                 // Bounds are enforced before the carrier is entered.
-                let publishCalls = hostZenohCallCount(2)
-                precondition(!client.publish(key: keyPointer, keyLength: 257, payload: payloadPointer, payloadLength: payloadLength))
-                precondition(!client.publish(key: keyPointer, keyLength: keyLength, payload: payloadPointer, payloadLength: 2_049))
-                precondition(hostZenohCallCount(2) == publishCalls)
+                let publishCalls = host_zenoh_call_count(2)
+                let oversizedKey = [UInt8](repeating: 0, count: 257)
+                let oversizedPayload = [UInt8](repeating: 0, count: 2_049)
+                oversizedKey.withUnsafeBufferPointer { oversizedKeyBuffer in
+                    precondition(!client.publish(
+                        key: Span(_unsafeStart: oversizedKeyBuffer.baseAddress!, count: oversizedKeyBuffer.count),
+                        payload: payloadSpan
+                    ))
+                }
+                oversizedPayload.withUnsafeBufferPointer { oversizedPayloadBuffer in
+                    precondition(!client.publish(
+                        key: keySpan,
+                        payload: Span(_unsafeStart: oversizedPayloadBuffer.baseAddress!, count: oversizedPayloadBuffer.count)
+                    ))
+                }
+                precondition(host_zenoh_call_count(2) == publishCalls)
 
                 // A failed publish is reported; a retry succeeds.
-                hostZenohSetFailures(failPublish)
-                precondition(!client.publish(key: keyPointer, keyLength: keyLength, payload: payloadPointer, payloadLength: payloadLength))
-                hostZenohSetFailures(0)
-                precondition(client.publish(key: keyPointer, keyLength: keyLength, payload: payloadPointer, payloadLength: payloadLength))
+                host_zenoh_set_failures(failPublish)
+                precondition(!client.publish(key: keySpan, payload: payloadSpan))
+                host_zenoh_set_failures(0)
+                precondition(client.publish(key: keySpan, payload: payloadSpan))
 
                 // Out-of-bounds poll capacities are rejected before the carrier.
-                let pollCalls = hostZenohCallCount(3)
+                let pollCalls = host_zenoh_call_count(3)
                 outKey.withUnsafeMutableBufferPointer { outKeyBuffer in
                     outPayload.withUnsafeMutableBufferPointer { outPayloadBuffer in
                         precondition(!client.poll(
@@ -110,7 +110,7 @@ private struct EmbeddedZenohHostTest {
                             payloadLength: &outPayloadLength, deadlineMS: 1))
                     }
                 }
-                precondition(hostZenohCallCount(3) == pollCalls)
+                precondition(host_zenoh_call_count(3) == pollCalls)
 
                 // No sample yet: poll reports false without writing lengths.
                 outKeyLength = -1
@@ -129,12 +129,12 @@ private struct EmbeddedZenohHostTest {
                 // carrier poll failure is reported without consuming it.
                 sampleKey.withUnsafeBufferPointer { sampleKeyBuffer in
                     samplePayload.withUnsafeBufferPointer { samplePayloadBuffer in
-                        hostZenohSetSample(
+                        host_zenoh_set_sample(
                             sampleKeyBuffer.baseAddress!, Int32(sampleKey.count),
                             samplePayloadBuffer.baseAddress!, Int32(samplePayload.count))
                     }
                 }
-                hostZenohSetFailures(failPoll)
+                host_zenoh_set_failures(failPoll)
                 outKey.withUnsafeMutableBufferPointer { outKeyBuffer in
                     outPayload.withUnsafeMutableBufferPointer { outPayloadBuffer in
                         precondition(!client.poll(
@@ -144,7 +144,7 @@ private struct EmbeddedZenohHostTest {
                             payloadLength: &outPayloadLength, deadlineMS: 1))
                     }
                 }
-                hostZenohSetFailures(0)
+                host_zenoh_set_failures(0)
                 outKey.withUnsafeMutableBufferPointer { outKeyBuffer in
                     outPayload.withUnsafeMutableBufferPointer { outPayloadBuffer in
                         precondition(client.poll(
@@ -164,20 +164,20 @@ private struct EmbeddedZenohHostTest {
                 }
 
                 // Unsubscribe returns to the open state; publishing is refused.
-                hostZenohSetFailures(failUnsubscribe)
+                host_zenoh_set_failures(failUnsubscribe)
                 precondition(!client.unsubscribe())
-                hostZenohSetFailures(0)
+                host_zenoh_set_failures(0)
                 precondition(client.unsubscribe())
-                precondition(!client.publish(key: keyPointer, keyLength: keyLength, payload: payloadPointer, payloadLength: payloadLength))
-                precondition(client.subscribe(key: keyPointer, keyLength: keyLength, deadlineMS: 1))
+                precondition(!client.publish(key: keySpan, payload: payloadSpan))
+                precondition(client.subscribe(key: keySpan, deadlineMS: 1))
 
                 // Close is terminal.
-                hostZenohSetFailures(failClose)
+                host_zenoh_set_failures(failClose)
                 precondition(!client.close())
-                hostZenohSetFailures(0)
+                host_zenoh_set_failures(0)
                 precondition(client.close())
                 precondition(!client.close())
-                precondition(!client.open(endpoint: keyPointer, endpointLength: keyLength, deadlineMS: 1))
+                precondition(!client.open(endpoint: keySpan, deadlineMS: 1))
             }
         }
     }

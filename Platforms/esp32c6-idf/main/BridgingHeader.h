@@ -15,6 +15,26 @@
 
 #include "sdkconfig.h"
 
+// Carrier declarations are owned by the selected transport. The include path
+// is supplied by that transport's composition metadata.
+#if __has_include("mqtt_carrier.h")
+#include "mqtt_carrier.h"
+#endif
+#if __has_include("zenoh_carrier.h")
+#include "zenoh_carrier.h"
+#endif
+
+// The selected application owns its C-callable device-agent seam.
+#if __has_include("static_device_agent.h")
+#include "static_device_agent.h"
+#endif
+
+// ESP-IDF calls app_main; the optional linker probe is rooted by the platform.
+void app_main(void);
+#include "../../../Interop/swift_c_interop.h"
+int axoloty_unicode_linker_probe(
+    const unsigned char * AXOLOTY_NONNULL bytes, int length);
+
 // C helpers for Swift logging (variadic functions like printf are unavailable
 // in Embedded Swift).
 void axoloty_print(const char *msg);
@@ -37,20 +57,6 @@ unsigned int axoloty_network_reconnect_wait(unsigned int deadline_ms);
 int axoloty_network_copy_topic(unsigned char *buffer, int capacity);
 int axoloty_network_copy_payload(unsigned char *buffer, int capacity);
 int axoloty_device_display_name(unsigned char *buffer, int capacity);
-int axoloty_mqtt_configure_last_will(const unsigned char *topic, int topic_length,
-                                     const unsigned char *payload, int payload_length);
-int axoloty_mqtt_connect_wait(unsigned int deadline_ms);
-int axoloty_mqtt_subscribe_wait(const unsigned char *topic, int topic_length,
-                                unsigned int deadline_ms);
-int axoloty_mqtt_unsubscribe(const unsigned char *topic, int topic_length);
-int axoloty_mqtt_publish(const unsigned char *topic, int topic_length,
-                        const unsigned char *payload, int payload_length);
-int axoloty_mqtt_wait_loopback(unsigned int deadline_ms);
-int axoloty_mqtt_reconnect_wait(unsigned int deadline_ms);
-int axoloty_mqtt_poll_one_event(unsigned char *topic, int topic_capacity,
-                                int *topic_length, unsigned char *payload,
-                                int payload_capacity, int *payload_length);
-int axoloty_mqtt_disconnect(void);
 unsigned int axoloty_network_cleanup(void);
 
 // The selected transport may declare its carrier C seam in a header of its

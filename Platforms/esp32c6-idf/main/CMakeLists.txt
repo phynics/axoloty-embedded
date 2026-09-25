@@ -97,7 +97,11 @@ idf_component_register(
         "network_bootstrap.c"
         "runtime_identity.c"
         ${AXOLOTY_TRANSPORT_C_SOURCES}
-    PRIV_INCLUDE_DIRS "." "${CMAKE_CURRENT_BINARY_DIR}" "${AXOLOTY_TRANSPORT_MAIN_DIR}"
+    PRIV_INCLUDE_DIRS "." "${CMAKE_CURRENT_BINARY_DIR}"
+        "${AXOLOTY_APPLICATION_MAIN_DIR}"
+        "${AXOLOTY_APPLICATION_DIR}/include"
+        "${AXOLOTY_TRANSPORT_MAIN_DIR}"
+        "${AXOLOTY_TRANSPORT_DIR}/include"
     PRIV_REQUIRES
         idf_swift
         axoloty_wire

@@ -33,8 +33,8 @@ public func runCarrierNetworkProbe(
         let willTopic: StaticString = "axoloty/network/will"
         let willPayload: StaticString = "axoloty-network-offline"
         let lastWillConfigured = client.configureLastWill(
-            topic: willTopic.utf8Start, topicLength: Int32(willTopic.utf8CodeUnitCount),
-            payload: willPayload.utf8Start, payloadLength: Int32(willPayload.utf8CodeUnitCount)
+            topic: Span(_unsafeStart: willTopic.utf8Start, count: willTopic.utf8CodeUnitCount),
+            payload: Span(_unsafeStart: willPayload.utf8Start, count: willPayload.utf8CodeUnitCount)
         )
         record("network:lastWillConfigured", lastWillConfigured)
         let connected = lastWillConfigured && client.connect(deadlineMS: 15_000)
@@ -49,20 +49,23 @@ public func runCarrierNetworkProbe(
                 withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 2_049) { payload in
                     let topicLength = networkCopyTopic(topic.baseAddress!, Int32(topic.count))
                     let payloadLength = networkCopyPayload(payload.baseAddress!, Int32(payload.count))
-                    if topicLength > 0 && payloadLength >= 0 {
+                    if topicLength > 0, topicLength <= Int32(topic.count),
+                       payloadLength >= 0, payloadLength <= Int32(payload.count) {
+                        let topicSpan = Span(_unsafeStart: topic.baseAddress!, count: Int(topicLength))
+                        let payloadSpan = Span(_unsafeStart: payload.baseAddress!, count: Int(payloadLength))
                         subscribed = client.subscribe(
-                            topic: topic.baseAddress!, topicLength: Int32(topicLength),
+                            topic: topicSpan,
                             deadlineMS: 10_000
                         )
                         let networkReturned = subscribed && networkReconnect(20_000) != 0
                         reconnected = networkReturned && client.waitForReconnect(deadlineMS: 20_000)
+                        let overlongTopic = Span(_unsafeStart: topic.baseAddress!, count: topic.count)
+                        let emptyPayload = Span(_unsafeStart: payload.baseAddress!, count: 0)
                         rejectedOversize = reconnected && !client.publish(
-                            topic: topic.baseAddress!, topicLength: 257,
-                            payload: payload.baseAddress!, payloadLength: 0
+                            topic: overlongTopic, payload: emptyPayload
                         )
                         published = reconnected && client.publish(
-                            topic: topic.baseAddress!, topicLength: Int32(topicLength),
-                            payload: payload.baseAddress!, payloadLength: Int32(payloadLength)
+                            topic: topicSpan, payload: payloadSpan
                         )
                         received = published && client.waitForLoopback(deadlineMS: 10_000)
                     }
