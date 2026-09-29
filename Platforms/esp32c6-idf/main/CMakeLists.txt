@@ -52,6 +52,11 @@ if(NOT EXISTS "${AXOLOTY_TRANSPORT_SOURCES_FILE}")
 endif()
 include("${AXOLOTY_TRANSPORT_SOURCES_FILE}")
 
+set(AXOLOTY_TRANSPORT_INCLUDE_DIRS)
+if(IS_DIRECTORY "${AXOLOTY_TRANSPORT_DIR}/include")
+    list(APPEND AXOLOTY_TRANSPORT_INCLUDE_DIRS "${AXOLOTY_TRANSPORT_DIR}/include")
+endif()
+
 set(AXOLOTY_SWIFT_SOURCES
     ${AXOLOTY_APPLICATION_MAIN_DIR}/DeviceSmokeApplication.swift
     ${AXOLOTY_APPLICATION_MAIN_DIR}/AgentExchange.swift
@@ -101,7 +106,7 @@ idf_component_register(
         "${AXOLOTY_APPLICATION_MAIN_DIR}"
         "${AXOLOTY_APPLICATION_DIR}/include"
         "${AXOLOTY_TRANSPORT_MAIN_DIR}"
-        "${AXOLOTY_TRANSPORT_DIR}/include"
+        ${AXOLOTY_TRANSPORT_INCLUDE_DIRS}
     PRIV_REQUIRES
         idf_swift
         axoloty_wire

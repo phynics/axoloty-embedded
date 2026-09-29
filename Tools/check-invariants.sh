@@ -389,6 +389,9 @@ if '"network_bootstrap.c"' not in sources:
     problems.append("platform sources do not include network_bootstrap.c")
 if "${AXOLOTY_TRANSPORT_C_SOURCES}" not in sources:
     problems.append("platform sources do not include selected transport C sources")
+if 'if(IS_DIRECTORY "${AXOLOTY_TRANSPORT_DIR}/include")' not in main or \
+   "${AXOLOTY_TRANSPORT_INCLUDE_DIRS}" not in main:
+    problems.append("platform does not treat a transport include directory as optional")
 for token in ("mqtt_client.h", "mqtt_event_validation.h", "esp_mqtt_client_", "MQTT_EVENT_"):
     if token in network:
         problems.append(f"platform network source contains MQTT mechanic {token}")
