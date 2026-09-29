@@ -331,6 +331,101 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 6c. The selected transport owns its carrier sources and components.
+# ---------------------------------------------------------------------------
+# The platform main component composes a selected transport manifest. Keep
+# platform Wi-Fi requirements unconditional, and ensure only the MQTT manifest
+# selects ESP-MQTT code/component metadata.
+
+main_component='Platforms/esp32c6-idf/main/CMakeLists.txt'
+platform_network='Platforms/esp32c6-idf/main/network_bootstrap.c'
+mqtt_manifest='Transports/mqtt-espidf/main/idf_sources.cmake'
+zenoh_manifest='Transports/zenoh-pico/main/idf_sources.cmake'
+composition_report="$(python3 - "$main_component" "$platform_network" "$mqtt_manifest" "$zenoh_manifest" <<'PY'
+import re
+import sys
+
+main_path, network_path, mqtt_path, zenoh_path = sys.argv[1:]
+problems = []
+
+def read(path):
+    try:
+        with open(path, encoding="utf-8") as source:
+            return source.read()
+    except OSError as error:
+        problems.append(f"{path} is unavailable: {error}")
+        return ""
+
+def set_values(text, name):
+    match = re.search(r"(?ms)^set\(" + re.escape(name) + r"\s*(.*?)\)", text)
+    if not match:
+        return None
+    block = re.sub(r"(?m)#.*$", "", match.group(1))
+    return re.findall(r'"([^"\n]*)"|([^\s()]+)', block)
+
+def flattened(values):
+    if values is None:
+        return []
+    return [quoted or bare for quoted, bare in values]
+
+main = read(main_path)
+network = read(network_path)
+mqtt = read(mqtt_path)
+zenoh = read(zenoh_path)
+
+requires_match = re.search(r"(?s)PRIV_REQUIRES(.*?)LDFRAGMENTS", main)
+requires = requires_match.group(1) if requires_match else ""
+for component in ("esp_wifi", "esp_event", "esp_netif", "nvs_flash"):
+    if not re.search(r"\b" + component + r"\b", requires):
+        problems.append(f"platform PRIV_REQUIRES does not include {component}")
+if re.search(r"\bmqtt\b", requires):
+    problems.append("platform PRIV_REQUIRES still includes mqtt")
+if "${AXOLOTY_TRANSPORT_IDF_REQUIRES}" not in requires:
+    problems.append("platform PRIV_REQUIRES does not include selected transport requirements")
+
+sources_match = re.search(r"(?s)SRCS(.*?)PRIV_INCLUDE_DIRS", main)
+sources = sources_match.group(1) if sources_match else ""
+if '"network_bootstrap.c"' not in sources:
+    problems.append("platform sources do not include network_bootstrap.c")
+if "${AXOLOTY_TRANSPORT_C_SOURCES}" not in sources:
+    problems.append("platform sources do not include selected transport C sources")
+if 'if(IS_DIRECTORY "${AXOLOTY_TRANSPORT_DIR}/include")' not in main or \
+   "${AXOLOTY_TRANSPORT_INCLUDE_DIRS}" not in main:
+    problems.append("platform does not treat a transport include directory as optional")
+for token in ("mqtt_client.h", "mqtt_event_validation.h", "esp_mqtt_client_", "MQTT_EVENT_"):
+    if token in network:
+        problems.append(f"platform network source contains MQTT mechanic {token}")
+
+mqtt_sources = flattened(set_values(mqtt, "AXOLOTY_TRANSPORT_C_SOURCES"))
+mqtt_requires = flattened(set_values(mqtt, "AXOLOTY_TRANSPORT_IDF_REQUIRES"))
+for source in ("mqtt_carrier_espidf.c", "mqtt_event_validation.c"):
+    if not any(source in entry for entry in mqtt_sources):
+        problems.append(f"MQTT manifest does not select {source}")
+if "mqtt" not in mqtt_requires:
+    problems.append("MQTT manifest does not require the mqtt component")
+
+zenoh_sources = flattened(set_values(zenoh, "AXOLOTY_TRANSPORT_C_SOURCES"))
+zenoh_requires = flattened(set_values(zenoh, "AXOLOTY_TRANSPORT_IDF_REQUIRES"))
+if not any("zenoh_sample_validation.c" in entry for entry in zenoh_sources):
+    problems.append("Zenoh manifest no longer selects its own C validation source")
+if "zenoh_pico" not in zenoh_requires:
+    problems.append("Zenoh manifest does not require zenoh_pico")
+if "mqtt" in zenoh_requires or any("mqtt" in entry.lower() for entry in zenoh_sources):
+    problems.append("Zenoh manifest selects an MQTT component or source")
+
+for problem in problems:
+    print(problem)
+PY
+)"
+if [ -z "$composition_report" ]; then
+    pass transport-composition 'platform Wi-Fi remains required; MQTT sources and mqtt component are transport-selected'
+else
+    while IFS= read -r line; do
+        [ -n "$line" ] && fail transport-composition "$line"
+    done <<< "$composition_report"
+fi
+
+# ---------------------------------------------------------------------------
 # 7. A profile is one declarative application x platform x transport selection.
 # ---------------------------------------------------------------------------
 

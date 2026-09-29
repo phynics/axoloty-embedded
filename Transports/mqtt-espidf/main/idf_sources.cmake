@@ -14,9 +14,9 @@ set(AXOLOTY_TRANSPORT_SWIFT_SOURCES
 )
 
 set(AXOLOTY_TRANSPORT_C_SOURCES
+    "${AXOLOTY_TRANSPORT_MAIN_DIR}/mqtt_carrier_espidf.c"
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/mqtt_event_validation.c"
 )
 
-# The platform already requires `mqtt` for its network bootstrap; ESP-MQTT is
-# its bundled component and carries no independent version.
-set(AXOLOTY_TRANSPORT_IDF_REQUIRES "")
+# ESP-MQTT is an ESP-IDF component selected only with this carrier.
+set(AXOLOTY_TRANSPORT_IDF_REQUIRES "mqtt")

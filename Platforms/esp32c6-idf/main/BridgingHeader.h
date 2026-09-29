@@ -48,16 +48,8 @@ unsigned int axoloty_reset_reason(void);
 int axoloty_heap_trace_begin(void);
 unsigned int axoloty_heap_trace_end(void);
 
-// Platform-owned Wi-Fi setup and network interruption operations.
-int axoloty_network_configured(void);
-unsigned int axoloty_network_role(void);
-unsigned int axoloty_network_scenario(void);
-unsigned int axoloty_network_prepare(unsigned int overall_deadline_ms);
-unsigned int axoloty_network_reconnect_wait(unsigned int deadline_ms);
-int axoloty_network_copy_topic(unsigned char *buffer, int capacity);
-int axoloty_network_copy_payload(unsigned char *buffer, int capacity);
-int axoloty_device_display_name(unsigned char *buffer, int capacity);
-unsigned int axoloty_network_cleanup(void);
+// Platform-owned Wi-Fi, network deadline, and device configuration operations.
+#include "network_bootstrap.h"
 
 // The selected transport may declare its carrier C seam in a header of its
 // own. The platform supplies the transport include path; it does not name a

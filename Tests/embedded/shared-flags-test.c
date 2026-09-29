@@ -9,16 +9,19 @@
 enum { Iterations = 100000 };
 
 typedef struct {
-    AxolotyEmbeddedSharedFlags flags;
+    AxolotyAtomicUInt event_bits;
+    AxolotyAtomicUInt connection_count;
+    AxolotyAtomicUInt retry_count;
+    AxolotyAtomicInt disconnecting;
 } TestContext;
 
 static void *callback_thread(void *argument) {
     TestContext *context = argument;
     for (unsigned index = 0; index < Iterations; ++index) {
-        axoloty_atomic_uint_fetch_or(&context->flags.mqtt_bits, 1U << (index % 8U));
-        axoloty_atomic_uint_fetch_add(&context->flags.network_connect_count, 1U);
-        axoloty_atomic_uint_fetch_add(&context->flags.wifi_retry_count, 1U);
-        axoloty_atomic_int_store(&context->flags.forced_wifi_disconnect, (int)(index & 1U));
+        axoloty_atomic_uint_fetch_or(&context->event_bits, 1U << (index % 8U));
+        axoloty_atomic_uint_fetch_add(&context->connection_count, 1U);
+        axoloty_atomic_uint_fetch_add(&context->retry_count, 1U);
+        axoloty_atomic_int_store(&context->disconnecting, (int)(index & 1U));
     }
     return NULL;
 }
@@ -26,11 +29,11 @@ static void *callback_thread(void *argument) {
 static void *main_loop_thread(void *argument) {
     TestContext *context = argument;
     for (unsigned index = 0; index < Iterations; ++index) {
-        (void)axoloty_atomic_uint_load(&context->flags.mqtt_bits);
-        axoloty_atomic_uint_fetch_and(&context->flags.mqtt_bits, ~(1U << (index % 8U)));
-        (void)axoloty_atomic_uint_load(&context->flags.network_connect_count);
-        (void)axoloty_atomic_uint_load(&context->flags.wifi_retry_count);
-        assert(axoloty_atomic_int_load(&context->flags.forced_wifi_disconnect) >= 0);
+        (void)axoloty_atomic_uint_load(&context->event_bits);
+        axoloty_atomic_uint_fetch_and(&context->event_bits, ~(1U << (index % 8U)));
+        (void)axoloty_atomic_uint_load(&context->connection_count);
+        (void)axoloty_atomic_uint_load(&context->retry_count);
+        assert(axoloty_atomic_int_load(&context->disconnecting) >= 0);
     }
     return NULL;
 }
@@ -44,7 +47,7 @@ int main(void) {
     assert(pthread_create(&main_loop, NULL, main_loop_thread, &context) == 0);
     assert(pthread_join(callback, NULL) == 0);
     assert(pthread_join(main_loop, NULL) == 0);
-    assert(axoloty_atomic_uint_load(&context.flags.network_connect_count) == Iterations);
-    assert(axoloty_atomic_uint_load(&context.flags.wifi_retry_count) == Iterations);
+    assert(axoloty_atomic_uint_load(&context.connection_count) == Iterations);
+    assert(axoloty_atomic_uint_load(&context.retry_count) == Iterations);
     return 0;
 }
