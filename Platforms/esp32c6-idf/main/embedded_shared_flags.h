@@ -6,16 +6,10 @@
 typedef unsigned AxolotyAtomicUInt;
 typedef int AxolotyAtomicInt;
 
-// State exchanged between ESP event callbacks and the main execution task.
-// The acquire/release operations make callback-produced state visible to the
-// polling task, while acq_rel read-modify-write operations preserve updates
-// when both contexts set or clear bits concurrently.
-typedef struct {
-    AxolotyAtomicUInt mqtt_bits;
-    AxolotyAtomicUInt network_connect_count;
-    AxolotyAtomicUInt wifi_retry_count;
-    AxolotyAtomicInt forced_wifi_disconnect;
-} AxolotyEmbeddedSharedFlags;
+// Atomic operations for state exchanged between ESP event callbacks and the
+// main execution task. The acquire/release operations make callback-produced
+// state visible to the polling task, while acq_rel read-modify-write operations
+// preserve concurrent updates.
 
 static inline unsigned axoloty_atomic_uint_load(const AxolotyAtomicUInt *value) {
     return __atomic_load_n(value, __ATOMIC_ACQUIRE);

@@ -119,7 +119,6 @@ idf_component_register(
         esp_event
         esp_netif
         nvs_flash
-        mqtt
         ${AXOLOTY_TRANSPORT_IDF_REQUIRES}
     LDFRAGMENTS "linker.lf"
 )
