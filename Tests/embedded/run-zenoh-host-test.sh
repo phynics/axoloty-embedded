@@ -4,14 +4,20 @@
 # Host check for the embedded Zenoh transport seam.
 #
 # Compiles the real EmbeddedZenohClient overlay, the real bounded-sample
-# validator, and a host-only fake carrier. No board, no SDK, no broker, and no
-# zenoh-pico.
+# validator, the real bounded receive queue, and a host-only fake carrier. No
+# board, no SDK, no broker, and no zenoh-pico.
 #
-# The test proves operation order and the 256/2048 bounds before the carrier
-# seam is entered. It does not compile or link zenoh-pico and cannot be used by
-# the production image.
+# The C seam under test is the Core-owned Axoloty Zenoh facade, so this check
+# needs its header. Point AXOLOTY_ZENOH_FACADE_INCLUDE_DIR at the directory that
+# contains axoloty_zenoh.h, or set AXOLOTY_SOURCE_DIR to a Core checkout that
+# carries it. Without either, the check reports that it could not run (69)
+# instead of passing quietly.
 #
-# Exit status: 0 passed, 1 failed, 69 required tool missing.
+# It proves operation order, handle lifetime, the 256/2048 bounds, and the
+# bounded queue with its drop counters. It does not compile or link zenoh-pico
+# and cannot be used by the production image.
+#
+# Exit status: 0 passed, 1 failed, 69 required tool or input missing.
 
 set -eu
 
@@ -29,23 +35,56 @@ if ! command -v swiftc >/dev/null 2>&1; then
     exit 69
 fi
 
+# The one Core-relative path of a Core-owned consumer contract. The firmware
+# build resolves the same header from the Core preparation report; see
+# Platforms/esp32c6-idf/cmake/axoloty-source.cmake.
+facade_include=${AXOLOTY_ZENOH_FACADE_INCLUDE_DIR:-}
+if [ -z "$facade_include" ] && [ -n "${AXOLOTY_SOURCE_DIR:-}" ]; then
+    facade_include="$AXOLOTY_SOURCE_DIR/Packages/AxolotyZenoh/Sources/CAxolotyZenoh/include"
+fi
+if [ -z "$facade_include" ] || [ ! -f "$facade_include/axoloty_zenoh.h" ]; then
+    echo "embedded Zenoh host test needs the Core facade header: set" >&2
+    echo "AXOLOTY_ZENOH_FACADE_INCLUDE_DIR to the directory holding axoloty_zenoh.h," >&2
+    echo "or AXOLOTY_SOURCE_DIR to a Core checkout that carries it" >&2
+    exit 69
+fi
+facade_include=$(CDPATH='' cd -- "$facade_include" && pwd -P)
+
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
+# The facade header is Core's, so the Swift overlay imports a generated module
+# map that points at it. The header is linked, never copied: the ABI stays
+# Core's single source.
+ln -s "$facade_include/axoloty_zenoh.h" "$tmp/axoloty_zenoh.h"
+cat > "$tmp/CAxolotyZenoh.modulemap" <<'MODULEMAP'
+module CAxolotyZenoh {
+    header "axoloty_zenoh.h"
+    export *
+}
+MODULEMAP
+
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
-    -I "$transport_main" -I "$repo_root/Interop" \
+    -I "$transport_main" -I "$facade_include" -I "$repo_root/Interop" \
     -c "$script_dir/zenoh-host-hal.c" -o "$tmp/hal.o"
+"$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
+    -I "$transport_main" -I "$facade_include" \
+    -c "$script_dir/zenoh-queue-test.c" -o "$tmp/queue-test.o"
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
     -I "$transport_main" \
     -c "$transport_main/zenoh_sample_validation.c" -o "$tmp/validation.o"
+"$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
+    -I "$transport_main" -I "$facade_include" \
+    -c "$transport_main/zenoh_pico_queue.c" -o "$tmp/queue.o"
 swiftc -D EMBEDDED_ZENOH_HOST_TEST \
     -I "$transport_main" \
     -I "$script_dir" \
     -I "$repo_root/Interop" \
+    -Xcc -fmodule-map-file="$tmp/CAxolotyZenoh.modulemap" \
     -Xcc -fmodule-map-file="$script_dir/zenoh_host_test.modulemap" \
     "$transport_main/EmbeddedZenohClient.swift" \
     "$script_dir/zenoh-host-test.swift" \
-    "$tmp/hal.o" "$tmp/validation.o" \
+    "$tmp/hal.o" "$tmp/queue.o" "$tmp/queue-test.o" "$tmp/validation.o" \
     -o "$tmp/embedded-zenoh-host-test"
 
 # Nix's standalone Swift compiler does not always add the dispatch library to

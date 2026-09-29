@@ -221,10 +221,19 @@ idf_component_register(
     INCLUDE_DIRS
         "${AXOLOTY_ZENOH_PICO_GENERATED_INCLUDE}"
         "${AXOLOTY_ZENOH_PICO_DIR}/include"
-    PRIV_REQUIRES esp_driver_uart
+    # Public, not private: zenoh-pico's espidf platform header includes
+    # driver/uart.h, so every component that includes a zenoh-pico header needs
+    # the driver include path. The v1 feature profile disables serial links and
+    # still requires the driver for exactly this reason.
+    REQUIRES esp_driver_uart
 )
 
-target_compile_definitions(${COMPONENT_LIB} PRIVATE
+# These definitions select the platform profile inside zenoh-pico's own headers,
+# so they must be PUBLIC: a component that includes zenoh-pico.h (the Zenoh
+# facade backend) has to see the same platform and standard selection as the
+# compiled library. A PRIVATE definition here compiles the library and leaves
+# every consumer on "#error Unknown platform".
+target_compile_definitions(${COMPONENT_LIB} PUBLIC
     ZENOH_ESPIDF
     ZENOH_C_STANDARD=11
     Z_BUILD_LOG=0

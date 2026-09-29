@@ -20,8 +20,10 @@
 #if __has_include("mqtt_carrier.h")
 #include "mqtt_carrier.h"
 #endif
-#if __has_include("zenoh_carrier.h")
-#include "zenoh_carrier.h"
+// The Zenoh carrier seam is the Core-owned facade ABI. The transport supplies
+// the include path; the platform names no carrier operation of its own.
+#if __has_include("axoloty_zenoh.h")
+#include "axoloty_zenoh.h"
 #endif
 
 // The selected application owns its C-callable device-agent seam.
@@ -54,6 +56,6 @@ unsigned int axoloty_heap_trace_end(void);
 // The selected transport may declare its carrier C seam in a header of its
 // own. The platform supplies the transport include path; it does not name a
 // carrier here. A profile whose transport has no such header is unaffected.
-#if __has_include("zenoh_carrier.h")
-#include "zenoh_carrier.h"
+#if __has_include("axoloty_zenoh.h")
+#include "axoloty_zenoh.h"
 #endif
