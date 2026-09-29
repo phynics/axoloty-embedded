@@ -190,19 +190,20 @@ stays in Axoloty.
 
 | Check | Where defined today | What it proves | Disposition | Where it lands | Confidence |
 |---|---|---|---|---|---|
-| `zenoh-host-seam` | New in this repository (`Transports/zenoh-pico/main/EmbeddedZenohClient.swift` + `Tests/embedded/zenoh-host-test.swift`) | The bounded client enforces operation order and the 256/2048 bounds before the carrier C seam | **Landed** (tier `build`). Landed shape; the run is `unexecuted` here because no host compiler is available | `Tests/embedded/run-zenoh-host-test.sh` | certain on shape; run unexecuted |
+| `zenoh-host-seam` | New in this repository (`Transports/zenoh-pico/main/EmbeddedZenohClient.swift` + `Tests/embedded/zenoh-host-test.swift`) | The bounded client enforces operation order, handle lifetime, and the 256/2048 bounds before the carrier C seam, and the bounded queue with its drop counters behaves as the facade contract states | **Landed** (tier `build`). Extended to the Core facade ABI and to a queue conformance run against the real `zenoh_pico_queue.c`; needs the prepared Core, and reports a skip rather than a pass without it | `Tests/embedded/run-zenoh-host-test.sh` | certain |
 | zenoh-pico compile and C-only pub/sub | Axoloty #797, embedded half | The pinned `zenoh-pico 1.10.0` compiles for `esp32c6` and a C-only round trip runs | MOVE TO AXOLOTY-EMBEDDED | Proposed **ZP-1**; tiers `build` + `device` | certain on disposition |
 | zenoh-pico backend conformance | Axoloty #805, embedded half | The pico backend satisfies the same facade suite as `zenoh-c`, with divergence documented | MOVE TO AXOLOTY-EMBEDDED | Proposed **ZP-2**; tiers `build` + `device` | certain |
 | pinned zenoh-pico ESP-IDF component | Axoloty #813 | A pinned `zenoh-pico` builds through `idf.py` with only the required features | MOVE TO AXOLOTY-EMBEDDED | `Platforms/esp32c6-idf/components/zenoh_pico/` (pin and unverified wrapper landed), completed by **ZP-3** | certain |
-| zenoh-pico backend of the facade | Axoloty #814 | The pico backend implements the `axoloty_zenoh_*` carrier seam | MOVE TO AXOLOTY-EMBEDDED | `Transports/zenoh-pico/` carrier seam (skeleton) + **ZP-4** | certain |
+| zenoh-pico backend of the facade | Axoloty #814 | The pico backend implements the `axoloty_zenoh_*` facade ABI | MOVE TO AXOLOTY-EMBEDDED | `Transports/zenoh-pico/main/zenoh_pico_facade.c` + `zenoh_pico_queue.c`, over the Core-owned header; the image still does not link because the application seam is MQTT-shaped | certain on the C backend; device behavior unexecuted |
 | `EmbeddedZenohClient` | Axoloty #815 | open/subscribe/publish/poll/unsubscribe/close in the `EmbeddedMQTTClient` style | MOVE TO AXOLOTY-EMBEDDED | `Transports/zenoh-pico/main/EmbeddedZenohClient.swift` (skeleton landed) + **ZP-5** | certain |
 | static runtime integration | Axoloty #816 | MQTT Embedded and Zenoh Embedded invoke identical `AxolotyProtocol` code paths | MOVE TO AXOLOTY-EMBEDDED | Proposed **ZP-6**; tier `device` | certain |
 | embedded route subscriptions | Axoloty #817 | The two bounded route shapes install over Zenoh and match the host | MOVE TO AXOLOTY-EMBEDDED | Proposed **ZP-7**; tier `device` | certain |
 | ESP32-C6 Zenoh hardware qualification | Axoloty #818 | Boot/session/pub-sub/reconnect/saturation/resource gate with enforced thresholds | MOVE TO AXOLOTY-EMBEDDED | Proposed **ZP-8**; tier `device` | certain |
 
-Not done here, named rather than stubbed: the pico backend, the completed
-component wrapper, the application carrier seam, embedded route wiring, and any
-device or resource run. The exact proposed issue titles and bodies are in
+Not done here, named rather than stubbed: the application carrier seam, embedded
+route wiring, and any device or resource run. The pico backend and the component
+wrapper landed; the Zenoh image still fails to link at the application seam, so
+no device run was attempted and none is claimed. The exact proposed issue titles and bodies are in
 [proposed-issues.md](./proposed-issues.md). The pin and its source are in
 [zenoh-embedded.md](./zenoh-embedded.md).
 

@@ -85,7 +85,11 @@ existing ESP-IDF/CMake build and selected by the `esp32c6-zenoh` profile.
 
 ## ZP-4 — `[ZENOH] Implement zenoh-pico backend of Axoloty Zenoh facade`
 
-Supersedes `phynics/axoloty#814`.
+Supersedes `phynics/axoloty#814`. **Implemented in this repository** as
+`Transports/zenoh-pico/main/zenoh_pico_facade.c` over the Core-owned header; the
+bounded receive state is `zenoh_pico_queue.c` and is host-conformant. The
+`ZP-2` conformance suite and the device run it names are still open, and the
+image still does not link because the application seam is MQTT-shaped.
 
 **Outcome.** The pico backend implements the device carrier seam
 (`axoloty_zenoh_*`) so `EmbeddedZenohClient` compiles and links against

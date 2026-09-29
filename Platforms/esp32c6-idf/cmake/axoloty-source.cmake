@@ -127,6 +127,57 @@ foreach(AXOLOTY_PACKAGE_SOURCE_DIR IN ITEMS
     endif()
 endforeach()
 
+# The Axoloty Zenoh facade header is a Core-owned consumer contract: the C ABI
+# the `zenoh-pico` backend implements and the portable Swift wrapper imports.
+# Core publishes it in the preparation report as `zenohCore.facadeHeader`
+# (phynics/axoloty#956). Until a prepared Core report carries that field, the
+# header is resolved inside the prepared checkout at the same Core-relative
+# path, and the transport manifest fails closed when the header is missing.
+#
+# This resolver never fails for a profile that does not select the Zenoh
+# transport: an ESP-IDF requirements pass walks this file for every profile, and
+# a transport's contract must not become the build's contract (see
+# docs/container-builds.md).
+set(AXOLOTY_ZENOH_FACADE_RELATIVE_PATH
+    "Packages/AxolotyZenoh/Sources/CAxolotyZenoh/include/axoloty_zenoh.h")
+set(AXOLOTY_ZENOH_FACADE_HEADER "")
+set(AXOLOTY_ZENOH_FACADE_HEADER_SHA256 "")
+string(JSON AXOLOTY_ZENOH_REPORTED_HEADER ERROR_VARIABLE AXOLOTY_ZENOH_HEADER_ABSENT
+    GET "${AXOLOTY_PREPARATION_JSON}" zenohCore facadeHeader
+)
+if(NOT AXOLOTY_ZENOH_HEADER_ABSENT)
+    set(AXOLOTY_ZENOH_FACADE_HEADER "${AXOLOTY_ZENOH_REPORTED_HEADER}")
+    string(JSON AXOLOTY_ZENOH_FACADE_HEADER_SHA256 ERROR_VARIABLE AXOLOTY_ZENOH_SHA_ABSENT
+        GET "${AXOLOTY_PREPARATION_JSON}" zenohCore facadeHeaderSHA256
+    )
+else()
+    set(AXOLOTY_ZENOH_FACADE_HEADER "${AXOLOTY_SOURCE_DIR}/${AXOLOTY_ZENOH_FACADE_RELATIVE_PATH}")
+endif()
+if(EXISTS "${AXOLOTY_ZENOH_FACADE_HEADER}")
+    file(REAL_PATH "${AXOLOTY_ZENOH_FACADE_HEADER}" AXOLOTY_ZENOH_FACADE_HEADER)
+    get_filename_component(AXOLOTY_ZENOH_FACADE_INCLUDE_DIR "${AXOLOTY_ZENOH_FACADE_HEADER}" DIRECTORY)
+    file(RELATIVE_PATH AXOLOTY_ZENOH_FACADE_RELATIVE
+        "${AXOLOTY_SOURCE_DIR}" "${AXOLOTY_ZENOH_FACADE_HEADER}"
+    )
+    if(IS_ABSOLUTE "${AXOLOTY_ZENOH_FACADE_RELATIVE}" OR
+       "${AXOLOTY_ZENOH_FACADE_RELATIVE}" MATCHES "^\.\./")
+        message(FATAL_ERROR "the Axoloty Zenoh facade header escapes the Core checkout")
+    endif()
+    if(NOT AXOLOTY_ZENOH_FACADE_HEADER_SHA256 STREQUAL "")
+        file(SHA256 "${AXOLOTY_ZENOH_FACADE_HEADER}" AXOLOTY_ZENOH_FACADE_HEADER_ACTUAL_SHA256)
+        if(NOT AXOLOTY_ZENOH_FACADE_HEADER_ACTUAL_SHA256 STREQUAL "${AXOLOTY_ZENOH_FACADE_HEADER_SHA256}")
+            message(FATAL_ERROR
+                "the Axoloty Zenoh facade header does not match the SHA-256 the preparation report names"
+            )
+        endif()
+    endif()
+else()
+    # No facade header in this Core. AXOLOTY_ZENOH_FACADE_INCLUDE_DIR stays
+    # empty and only a profile that selected the Zenoh transport fails.
+    unset(AXOLOTY_ZENOH_FACADE_INCLUDE_DIR)
+    set(AXOLOTY_ZENOH_FACADE_HEADER "")
+endif()
+
 string(JSON AXOLOTY_JSON_CORE_SOURCE_DIR GET
     "${AXOLOTY_PREPARATION_JSON}" jsonCore sourceDir
 )

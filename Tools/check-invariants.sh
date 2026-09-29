@@ -406,8 +406,9 @@ if "mqtt" not in mqtt_requires:
 
 zenoh_sources = flattened(set_values(zenoh, "AXOLOTY_TRANSPORT_C_SOURCES"))
 zenoh_requires = flattened(set_values(zenoh, "AXOLOTY_TRANSPORT_IDF_REQUIRES"))
-if not any("zenoh_sample_validation.c" in entry for entry in zenoh_sources):
-    problems.append("Zenoh manifest no longer selects its own C validation source")
+for source in ("zenoh_sample_validation.c", "zenoh_pico_queue.c", "zenoh_pico_facade.c"):
+    if not any(source in entry for entry in zenoh_sources):
+        problems.append("Zenoh manifest no longer selects %s" % source)
 if "zenoh_pico" not in zenoh_requires:
     problems.append("Zenoh manifest does not require zenoh_pico")
 if "mqtt" in zenoh_requires or any("mqtt" in entry.lower() for entry in zenoh_sources):
@@ -423,6 +424,44 @@ else
     while IFS= read -r line; do
         [ -n "$line" ] && fail transport-composition "$line"
     done <<< "$composition_report"
+fi
+
+# ---------------------------------------------------------------------------
+# 6d. The Zenoh backend implements the Core-owned facade ABI.
+# ---------------------------------------------------------------------------
+# The C seam the `zenoh-pico` backend implements is Axoloty's, and Core is the
+# only source of it. The header must therefore be resolved from the Core
+# preparation report, must be supplied to the transport as an include directory,
+# and must fail the build when it is absent -- for a profile that selected the
+# Zenoh transport, and only for that profile. A silent fallback to a
+# firmware-local copy of the ABI is the exact mistake these rules exclude.
+
+facade_resolver='Platforms/esp32c6-idf/cmake/axoloty-source.cmake'
+facade_manifest='Transports/zenoh-pico/main/idf_sources.cmake'
+facade_bad=0
+facade_require() {
+    file="$1"
+    text="$2"
+    description="$3"
+    if [ ! -f "$file" ] || ! grep -Fq "$text" "$file"; then
+        fail zenoh-facade-resolution "$description"
+        facade_bad=1
+    fi
+}
+facade_require "$facade_resolver" 'zenohCore facadeHeader' \
+    'the platform does not read the Core-owned facade header path from the preparation report'
+facade_require "$facade_resolver" 'facadeHeaderSHA256' \
+    'the platform does not check the facade header against the report SHA-256'
+facade_require "$facade_resolver" 'AXOLOTY_ZENOH_FACADE_INCLUDE_DIR' \
+    'the platform does not publish the facade include directory to the transport'
+facade_require "$facade_manifest" 'AXOLOTY_ZENOH_FACADE_INCLUDE_DIR' \
+    'the Zenoh transport does not request the Core facade include directory'
+facade_require "$facade_manifest" 'axoloty_zenoh.h' \
+    'the Zenoh transport does not name the Core facade header it implements'
+facade_require "$facade_manifest" 'FATAL_ERROR' \
+    'the Zenoh transport does not fail closed when the Core facade header is absent'
+if [ "$facade_bad" -eq 0 ]; then
+    pass zenoh-facade-resolution 'the Zenoh backend builds against the Core-owned facade header and fails closed without it'
 fi
 
 # ---------------------------------------------------------------------------
@@ -503,19 +542,54 @@ fi
 # couplings the split had to disprove.
 
 private_tokens='Packages/|/\.build/|Tests/Support|resolve-embedded-core|prepare-embedded-core'
+
+# The Axoloty Zenoh facade header is a Core-owned consumer contract, not private
+# layout, and Core publishes it in the preparation report as
+# `zenohCore.facadeHeader` (phynics/axoloty#956). Until a prepared Core report
+# carries that field, two places must name the one Core-relative path that
+# holds it: the platform's Core-path resolver, for the firmware build, and the
+# host Zenoh seam, for the host check. The exception names those two files and
+# no other path, so a growing coupling to Core's layout still fails here.
+facade_path_prefix='Packages/AxolotyZenoh/Sources/CAxolotyZenoh/include'
+facade_path_files='Platforms/esp32c6-idf/cmake/axoloty-source.cmake
+Tests/embedded/run-zenoh-host-test.sh'
+facade_path_private_tokens='/\.build/|Tests/Support|resolve-embedded-core|prepare-embedded-core'
+
 private_bad=0
 # Prose and harness logs are excluded: docs must be able to quote an original
 # Axoloty path when recording provenance, and .testing/ holds captured tool
 # output rather than firmware source. Every firmware file stays in the scan.
 for file in $(tracked '*' | grep -vE '^(\.testing/|docs/|\.github/|README\.md|AGENTS\.md|[A-Za-z]+/AGENTS\.md|Tools/check-invariants\.sh)'); do
     [ -f "$file" ] || continue
-    hits="$(grep -nE "$private_tokens" "$file" 2>/dev/null | head -2 || true)"
+    scan_tokens="$private_tokens"
+    case "
+$facade_path_files
+" in
+        *"
+$file
+"*) scan_tokens="$facade_path_private_tokens" ;;
+    esac
+    hits="$(grep -nE "$scan_tokens" "$file" 2>/dev/null | head -2 || true)"
     if [ -n "$hits" ]; then
         fail private-reference "$file names Core's private layout: $(echo "$hits" | head -1 | cut -c1-110)"
         private_bad=1
     fi
+    case "
+$facade_path_files
+" in
+        *"
+$file
+"*)
+            off_path="$(awk -v prefix="$facade_path_prefix" \
+                '/Packages\// && index($0, prefix) == 0 { print FILENAME ":" FNR }' "$file" | head -2 || true)"
+            if [ -n "$off_path" ]; then
+                fail private-reference "$file names a Core path other than the Zenoh facade header: $(echo "$off_path" | head -1)"
+                private_bad=1
+            fi
+            ;;
+    esac
 done
-[ "$private_bad" -eq 0 ] && pass private-reference 'no tracked firmware file names Core package layout, .build, private support tests, or a pre-split resolver'
+[ "$private_bad" -eq 0 ] && pass private-reference 'no tracked firmware file names Core package layout, .build, private support tests, or a pre-split resolver, except the one Core-owned Zenoh facade header'
 
 # ---------------------------------------------------------------------------
 # 8. No committed credentials.

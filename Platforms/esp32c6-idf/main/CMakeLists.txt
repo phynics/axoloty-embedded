@@ -52,7 +52,9 @@ if(NOT EXISTS "${AXOLOTY_TRANSPORT_SOURCES_FILE}")
 endif()
 include("${AXOLOTY_TRANSPORT_SOURCES_FILE}")
 
-set(AXOLOTY_TRANSPORT_INCLUDE_DIRS)
+# A transport may contribute include directories from its own manifest, for a
+# C seam it does not own, so this list is appended to rather than reset. The
+# optional transport include directory is the same mechanism.
 if(IS_DIRECTORY "${AXOLOTY_TRANSPORT_DIR}/include")
     list(APPEND AXOLOTY_TRANSPORT_INCLUDE_DIRS "${AXOLOTY_TRANSPORT_DIR}/include")
 endif()

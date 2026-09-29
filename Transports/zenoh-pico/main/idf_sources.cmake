@@ -12,9 +12,36 @@ set(AXOLOTY_TRANSPORT_SWIFT_SOURCES
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/EmbeddedZenohClient.swift"
 )
 
+# The facade is implemented on the device. zenoh_pico_queue.c holds the bounded
+# receive queue, its counters, and the session and subscriber registries; it
+# includes no Zenoh and no SDK header, so the host seam can check it with no
+# board. zenoh_pico_facade.c is the `axoloty_zenoh_*` entry points over the
+# pinned zenoh-pico.
 set(AXOLOTY_TRANSPORT_C_SOURCES
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_sample_validation.c"
+    "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_pico_queue.c"
+    "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_pico_facade.c"
 )
 
 # The pinned zenoh-pico wrapper component supplies the carrier seam backend.
 set(AXOLOTY_TRANSPORT_IDF_REQUIRES "zenoh_pico")
+
+# The C seam this transport declares is the Core-owned Axoloty Zenoh facade
+# header, resolved by the platform from the Core preparation report. This file
+# is read only when this transport is the selected one, so failing closed here
+# fails the profile that asked for the facade and no other.
+if(NOT DEFINED AXOLOTY_ZENOH_FACADE_INCLUDE_DIR OR
+   "${AXOLOTY_ZENOH_FACADE_INCLUDE_DIR}" STREQUAL "")
+    message(FATAL_ERROR
+        "the Core preparation report has no Axoloty Zenoh facade header. The "
+        "zenoh-pico backend implements the Core-owned axoloty_zenoh_* ABI, so "
+        "Core must expose that header (phynics/axoloty#956) and the profile must "
+        "prepare a Core revision that carries it"
+    )
+endif()
+if(NOT EXISTS "${AXOLOTY_ZENOH_FACADE_INCLUDE_DIR}/axoloty_zenoh.h")
+    message(FATAL_ERROR
+        "AXOLOTY_ZENOH_FACADE_INCLUDE_DIR does not contain axoloty_zenoh.h: ${AXOLOTY_ZENOH_FACADE_INCLUDE_DIR}"
+    )
+endif()
+list(APPEND AXOLOTY_TRANSPORT_INCLUDE_DIRS "${AXOLOTY_ZENOH_FACADE_INCLUDE_DIR}")
