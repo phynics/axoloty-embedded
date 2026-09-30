@@ -33,6 +33,15 @@ fi
 
 failures=0
 
+# The assertions below pin the defaults, so ambient operator overrides must
+# not leak in: every override case sets its own variables explicitly. The
+# board variables are emptied for the same reason: on a host with a
+# configured or attached board, an inherited device would carry a flash probe
+# past the workspace guard into flash/proof checks and fail it for unrelated
+# reasons. This script is standalone, so plain unsets are safe.
+unset EMBEDDED_PROOF_ROOT EMBEDDED_BUILD_DIR EMBEDDED_EVIDENCE_DIR
+unset AXOLOTY_DEVICE_PORT EMBEDDED_DEVICE
+
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
@@ -178,10 +187,14 @@ unset AXOLOTY_PROFILE_DIR AXOLOTY_APPLICATION_DIR AXOLOTY_TRANSPORT_DIR
 # --print-proof-root stops before any preparation, build, or device step, so
 # this stays hardware-free. If release.sh ever reverts to the shared firmware
 # root, both profiles print one path; if it inlines a divergent rule, the
-# output stops matching the helper. Either way this fails.
-mqtt_release_root=$(AXOLOTY_SCRATCH="$tmp/scratch" "$repo_root/Tools/release.sh" \
+# output stops matching the helper. Either way this fails. The workspace
+# overrides are emptied so an operator's ambient EMBEDDED_* cannot stand in
+# for the default under test.
+mqtt_release_root=$(AXOLOTY_SCRATCH="$tmp/scratch" EMBEDDED_PROOF_ROOT= EMBEDDED_EVIDENCE_DIR= \
+    "$repo_root/Tools/release.sh" \
     --profile esp32c6-mqtt --print-proof-root | sed -n 's/^proof_root=//p')
-zenoh_release_root=$(AXOLOTY_SCRATCH="$tmp/scratch" "$repo_root/Tools/release.sh" \
+zenoh_release_root=$(AXOLOTY_SCRATCH="$tmp/scratch" EMBEDDED_PROOF_ROOT= EMBEDDED_EVIDENCE_DIR= \
+    "$repo_root/Tools/release.sh" \
     --profile esp32c6-zenoh --print-proof-root | sed -n 's/^proof_root=//p')
 AXOLOTY_PROFILE_DIR="$mqtt_profile"
 mqtt_expected=$(axoloty_default_proof_root "$tmp/scratch")
@@ -200,7 +213,8 @@ fi
 flash_tool="$repo_root/Platforms/esp32c6-idf/tools/flash.sh"
 
 # 8. flash.sh refuses an ambiguous workspace before touching any board, so all
-# three probes are hardware-free: no device and no toolchain is used.
+# three probes are hardware-free: no device and no toolchain is used (the
+# board and workspace variables were emptied at the top of this script).
 # 8a. No profile and no explicit workspace: the legacy shared default could
 # hold any profile's image, so the flash is refused.
 if AXOLOTY_SCRATCH="$tmp/scratch" "$flash_tool" >"$tmp/flash-refused.log" 2>&1; then
