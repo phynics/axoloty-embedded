@@ -7,6 +7,25 @@
 # CMake variables used by the ESP-IDF components. It never searches a parent
 # directory and never reads a Core build directory.
 
+# A relative path escapes its root when its first segment is the parent
+# directory.
+#
+# The prefix is a bracket expression, `[.][.]`, and not the `\.` of the pattern
+# it replaces. `\.` is not a valid escape sequence in a CMake string, and CMake
+# says so: the ESP-IDF requirements pass evaluates this file with policy CMP0010
+# unset and reported "Invalid escape sequence \." against each of the four
+# checks that used it, once per evaluation. In CMake 3.29 the pattern still
+# happened to match what it should, but its interpretation is policy-governed
+# and a policy change turns it into a hard error, in a check whose only job is
+# to reject traversal. The bracket expression is two literal dots with no escape
+# to interpret, so it carries no policy and no diagnostic, and it still does not
+# match a directory whose name merely starts with dots, such as `...`.
+#
+# Defined before the include guard because the four checks live in whichever
+# directory scope loaded this file first, and a variable set only inside the
+# guard would be missing in the rest of the project.
+set(AXOLOTY_PARENT_DIR_PREFIX "^[.][.]/")
+
 if(AXOLOTY_PREPARATION_REPORT_LOADED)
     return()
 endif()
@@ -122,7 +141,7 @@ foreach(AXOLOTY_PACKAGE_SOURCE_DIR IN ITEMS
     )
     if(IS_ABSOLUTE "${AXOLOTY_PACKAGE_RELATIVE}" OR
        "${AXOLOTY_PACKAGE_RELATIVE}" STREQUAL ".." OR
-       "${AXOLOTY_PACKAGE_RELATIVE}" MATCHES "^\.\./")
+       "${AXOLOTY_PACKAGE_RELATIVE}" MATCHES "${AXOLOTY_PARENT_DIR_PREFIX}")
         message(FATAL_ERROR "${AXOLOTY_PACKAGE_SOURCE_DIR} escapes the Core checkout")
     endif()
 endforeach()
@@ -202,7 +221,7 @@ if(NOT AXOLOTY_ZENOH_ABSENT)
         )
         if(IS_ABSOLUTE "${AXOLOTY_ZENOH_REPORT_RELATIVE}" OR
            "${AXOLOTY_ZENOH_REPORT_RELATIVE}" STREQUAL ".." OR
-           "${AXOLOTY_ZENOH_REPORT_RELATIVE}" MATCHES "^\.\./")
+           "${AXOLOTY_ZENOH_REPORT_RELATIVE}" MATCHES "${AXOLOTY_PARENT_DIR_PREFIX}")
             message(FATAL_ERROR
                 "the Core preparation report names a Zenoh path outside the Core checkout: ${AXOLOTY_ZENOH_REPORT_PATH}"
             )
@@ -247,7 +266,7 @@ if(NOT AXOLOTY_ZENOH_ABSENT)
     )
     if(IS_ABSOLUTE "${AXOLOTY_ZENOH_MODULE_MAP_RELATIVE}" OR
        "${AXOLOTY_ZENOH_MODULE_MAP_RELATIVE}" STREQUAL ".." OR
-       "${AXOLOTY_ZENOH_MODULE_MAP_RELATIVE}" MATCHES "^\.\./")
+       "${AXOLOTY_ZENOH_MODULE_MAP_RELATIVE}" MATCHES "${AXOLOTY_PARENT_DIR_PREFIX}")
         message(FATAL_ERROR "the reported Zenoh module map escapes caller-owned scratch")
     endif()
 
@@ -309,6 +328,6 @@ file(RELATIVE_PATH AXOLOTY_MACRO_RELATIVE
 )
 if(IS_ABSOLUTE "${AXOLOTY_MACRO_RELATIVE}" OR
    "${AXOLOTY_MACRO_RELATIVE}" STREQUAL ".." OR
-   "${AXOLOTY_MACRO_RELATIVE}" MATCHES "^\.\./")
+   "${AXOLOTY_MACRO_RELATIVE}" MATCHES "${AXOLOTY_PARENT_DIR_PREFIX}")
     message(FATAL_ERROR "static-runtime macro executable escapes caller scratch")
 endif()

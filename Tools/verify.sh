@@ -171,6 +171,14 @@ if wanted build; then
     check_script zenoh-report-contract \
         'node, python3, swiftc, or a prepared Core report is not available for the Zenoh report contract check' \
         Tests/embedded/check-zenoh-report-validation.sh
+    # The resolver's path-escape checks are the only thing standing between a
+    # reported path and a directory outside the Core checkout. A pattern CMake
+    # refuses to parse is indistinguishable at a glance from one that works, so
+    # the check runs the real resolver and observes both the diagnostics and the
+    # rejections.
+    check_script cmake-escape \
+        'cmake, python3, or a prepared Core report is not available for the CMake path-escape check' \
+        Tests/embedded/check-cmake-escape.sh
     check_script host-smoke \
         'swiftc, a host C compiler, or the prepared Core is not available for the host smoke check' \
         Tests/embedded/run-host-smoke-test.sh
