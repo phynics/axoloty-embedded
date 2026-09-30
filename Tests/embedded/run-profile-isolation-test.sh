@@ -9,7 +9,9 @@
 #
 # This exercises the real profile-build-env.sh helper while switching between
 # the real MQTT and Zenoh profiles, and inspects the resolved directories and
-# the actual CMakeCache.txt contents. It needs only sh, node, and git: no
+# the actual CMakeCache.txt contents. It also probes Tools/release.sh through
+# its --print-proof-root introspection flag, so a release path that stops
+# sharing the per-profile rule fails here. It needs only sh, node, and git: no
 # board, no SDK, no broker.
 #
 # Exit status: 0 passed, 1 failed, 69 required tool missing.
@@ -170,6 +172,29 @@ else
     failures=$((failures + 1))
 fi
 unset AXOLOTY_PROFILE_DIR AXOLOTY_APPLICATION_DIR AXOLOTY_TRANSPORT_DIR
+
+# 7. The release path resolves its workspace through the same shared rule.
+# --print-proof-root stops before any preparation, build, or device step, so
+# this stays hardware-free. If release.sh ever reverts to the shared firmware
+# root, both profiles print one path; if it inlines a divergent rule, the
+# output stops matching the helper. Either way this fails.
+mqtt_release_root=$(AXOLOTY_SCRATCH="$tmp/scratch" "$repo_root/Tools/release.sh" \
+    --profile esp32c6-mqtt --print-proof-root | sed -n 's/^proof_root=//p')
+zenoh_release_root=$(AXOLOTY_SCRATCH="$tmp/scratch" "$repo_root/Tools/release.sh" \
+    --profile esp32c6-zenoh --print-proof-root | sed -n 's/^proof_root=//p')
+AXOLOTY_PROFILE_DIR="$mqtt_profile"
+mqtt_expected=$(axoloty_default_proof_root "$tmp/scratch")
+AXOLOTY_PROFILE_DIR="$zenoh_profile"
+zenoh_expected=$(axoloty_default_proof_root "$tmp/scratch")
+unset AXOLOTY_PROFILE_DIR
+if [ -n "$mqtt_release_root" ] && [ "$mqtt_release_root" = "$mqtt_expected" ] &&
+    [ -n "$zenoh_release_root" ] && [ "$zenoh_release_root" = "$zenoh_expected" ] &&
+    [ "$mqtt_release_root" != "$zenoh_release_root" ]; then
+    echo "ok: release.sh resolves the shared per-profile workspace for both profiles"
+else
+    echo "FAIL: release.sh workspace diverged from the shared rule (mqtt: $mqtt_release_root; zenoh: $zenoh_release_root)" >&2
+    failures=$((failures + 1))
+fi
 
 if [ "$failures" -ne 0 ]; then
     echo "profile isolation tests failed: $failures failure(s)" >&2
