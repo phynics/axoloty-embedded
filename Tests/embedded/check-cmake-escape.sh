@@ -62,8 +62,23 @@ fi
     exit 69
 }
 
+# Every fixture this check creates is named with the run's pid and removed on
+# exit, including on failure. Two of them live outside $work, next to or under
+# the caller scratch the report names, so a fixed name would collide with a
+# concurrent run and a leaked directory would outlive the check that made it.
 work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
+created=""
+cleanup() {
+    rm -rf "$work"
+    for fixture in $created; do
+        rm -rf "$fixture"
+    done
+    # This run created the `...` directory itself, so it removes it too. It is
+    # left alone when anything else is inside it.
+    rmdir "$dots_parent" 2>/dev/null || true
+}
+trap cleanup EXIT
+dots_parent=""
 
 # The probe loads the real resolver and reports the outcome. cmake -P runs the
 # file in script mode, which is the same mode the ESP-IDF requirements pass uses,
@@ -158,24 +173,28 @@ run_case valid "the reported paths where the report names them" accept
 echo "== a directory whose name only starts with dots"
 # `...` is three dots, not two, so it is inside caller scratch and must be
 # accepted. A pattern written as a bare `..` would reject it.
-dots_dir="$scratch_dir/.../probe"
+dots_parent="$scratch_dir/..."
+dots_dir="$dots_parent/probe-$$"
 mkdir -p "$dots_dir"
+created="$dots_dir $created"
 dots_map="$dots_dir/module.modulemap"
 cp "$real_module_map" "$dots_map"
 build_case dots "$dots_map"
 run_case dots "a module map under a ... directory inside caller scratch" accept
 
 echo "== a real traversal"
-parent_dir="$(dirname "$scratch_dir")/escape-check"
+parent_dir="$(dirname "$scratch_dir")/escape-check-$$"
 mkdir -p "$parent_dir"
+created="$parent_dir $created"
 parent_map="$parent_dir/module.modulemap"
 cp "$real_module_map" "$parent_map"
 build_case parent "$parent_map"
 run_case parent "a module map one level above caller scratch" reject
 
 echo "== a sibling whose name starts with the scratch path"
-sibling_dir="$scratch_dir-sibling"
+sibling_dir="$scratch_dir-sibling-$$"
 mkdir -p "$sibling_dir"
+created="$sibling_dir $created"
 sibling_map="$sibling_dir/module.modulemap"
 cp "$real_module_map" "$sibling_map"
 build_case sibling "$sibling_map"
