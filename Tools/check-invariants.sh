@@ -328,9 +328,9 @@ else
     require_component_text "$component_root/axoloty_static_runtime/CMakeLists.txt" 'axoloty_protocol_module_alias' 'the static-runtime component does not wait for AxolotyProtocol'
     require_component_text "$main_component" 'axoloty_static_runtime_module_alias' 'the main component does not wait for AxolotyStaticRuntime'
     require_component_text "$source_resolver" 'AXOLOTY_ZENOH_CORE_SOURCE_DIR' "$source_resolver does not resolve AXOLOTY_ZENOH_CORE_SOURCE_DIR from the preparation report"
-    require_component_text "$component_root/axoloty_zenoh_core/CMakeLists.txt" '"${AXOLOTY_ZENOH_CORE_SOURCE_DIR}/*.swift"' 'the Zenoh-core component does not compile the prepared AxolotyZenohCore sources'
+    require_component_text "$component_root/axoloty_zenoh_core/CMakeLists.txt" "\"\${AXOLOTY_ZENOH_CORE_SOURCE_DIR}/*.swift\"" 'the Zenoh-core component does not compile the prepared AxolotyZenohCore sources'
     require_component_text "$component_root/axoloty_zenoh_core/CMakeLists.txt" 'axoloty_wire_module_alias' 'the Zenoh-core component does not wait for AxolotyWire'
-    require_component_text "$component_root/axoloty_zenoh_core/CMakeLists.txt" 'fmodule-map-file=${AXOLOTY_ZENOH_FACADE_MODULE_MAP}' 'the Zenoh-core component does not bind the Core-generated facade module map'
+    require_component_text "$component_root/axoloty_zenoh_core/CMakeLists.txt" "fmodule-map-file=\${AXOLOTY_ZENOH_FACADE_MODULE_MAP}" 'the Zenoh-core component does not bind the Core-generated facade module map'
     require_component_text "$component_root/axoloty_zenoh_core/CMakeLists.txt" 'AXOLOTY_ZENOH_FACADE_MODULE_DIR' 'the Zenoh-core component does not add the generated facade module-map directory to Swift Clang search paths'
     require_component_text "$component_root/axoloty_zenoh_core/CMakeLists.txt" 'add_custom_target(axoloty_zenoh_core_module_alias' 'the Zenoh-core component does not publish its importable module alias'
     require_component_text "$main_component" 'axoloty_zenoh_core_module_alias' 'the main component does not wait for AxolotyZenohCore'
