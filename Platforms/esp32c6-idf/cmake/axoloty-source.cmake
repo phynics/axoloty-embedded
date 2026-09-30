@@ -221,8 +221,14 @@ if(NOT AXOLOTY_ZENOH_ABSENT)
             "the Core preparation report does not name a generated Zenoh module map"
         )
     endif()
-    file(REAL_PATH "${AXOLOTY_ZENOH_FACADE_MODULE_MAP}" AXOLOTY_ZENOH_FACADE_MODULE_MAP)
-    if(NOT "${AXOLOTY_ZENOH_FACADE_MODULE_MAP}" STREQUAL "${AXOLOTY_ZENOH_FACADE_MODULE_MAP}")
+    if(IS_DIRECTORY "${AXOLOTY_ZENOH_FACADE_MODULE_MAP}")
+        message(FATAL_ERROR "the reported Zenoh module map is a directory, not a file")
+    endif()
+    # Canonicality is checked against the value the report named. Resolving into
+    # the same variable would compare the resolved path with itself and accept
+    # anything, which is the one thing this check exists to catch.
+    file(REAL_PATH "${AXOLOTY_ZENOH_FACADE_MODULE_MAP}" AXOLOTY_ZENOH_FACADE_MODULE_MAP_REAL)
+    if(NOT "${AXOLOTY_ZENOH_FACADE_MODULE_MAP}" STREQUAL "${AXOLOTY_ZENOH_FACADE_MODULE_MAP_REAL}")
         message(FATAL_ERROR "the reported Zenoh module map must be canonical")
     endif()
     string(JSON AXOLOTY_ZENOH_SCRATCH_DIR GET
@@ -231,6 +237,10 @@ if(NOT AXOLOTY_ZENOH_ABSENT)
     if(NOT IS_ABSOLUTE "${AXOLOTY_ZENOH_SCRATCH_DIR}" OR
        NOT IS_DIRECTORY "${AXOLOTY_ZENOH_SCRATCH_DIR}")
         message(FATAL_ERROR "the Core preparation report scratchDir is not a directory")
+    endif()
+    file(REAL_PATH "${AXOLOTY_ZENOH_SCRATCH_DIR}" AXOLOTY_ZENOH_SCRATCH_DIR_REAL)
+    if(NOT "${AXOLOTY_ZENOH_SCRATCH_DIR}" STREQUAL "${AXOLOTY_ZENOH_SCRATCH_DIR_REAL}")
+        message(FATAL_ERROR "the Core preparation report scratchDir must be canonical")
     endif()
     file(RELATIVE_PATH AXOLOTY_ZENOH_MODULE_MAP_RELATIVE
         "${AXOLOTY_ZENOH_SCRATCH_DIR}" "${AXOLOTY_ZENOH_FACADE_MODULE_MAP}"
@@ -243,8 +253,12 @@ if(NOT AXOLOTY_ZENOH_ABSENT)
 
     # The header digest identifies the exact C declarations this build compiles
     # against. It is checked, not trusted.
-    if(NOT AXOLOTY_ZENOH_FACADE_HEADER_SHA256 MATCHES "^[0-9a-fA-F]+$")
-        message(FATAL_ERROR "the reported Axoloty Zenoh facade header SHA-256 is not a digest")
+    string(LENGTH "${AXOLOTY_ZENOH_FACADE_HEADER_SHA256}" AXOLOTY_ZENOH_FACADE_HEADER_SHA256_LENGTH)
+    if(NOT AXOLOTY_ZENOH_FACADE_HEADER_SHA256_LENGTH EQUAL 64 OR
+       NOT AXOLOTY_ZENOH_FACADE_HEADER_SHA256 MATCHES "^[0-9a-f]+$")
+        message(FATAL_ERROR
+            "the reported Axoloty Zenoh facade header SHA-256 is not 64 lowercase hexadecimal characters"
+        )
     endif()
     file(SHA256 "${AXOLOTY_ZENOH_FACADE_HEADER}" AXOLOTY_ZENOH_FACADE_HEADER_ACTUAL_SHA256)
     if(NOT AXOLOTY_ZENOH_FACADE_HEADER_ACTUAL_SHA256 STREQUAL "${AXOLOTY_ZENOH_FACADE_HEADER_SHA256}")

@@ -442,6 +442,7 @@ fi
 
 facade_resolver='Platforms/esp32c6-idf/cmake/axoloty-source.cmake'
 facade_manifest='Transports/zenoh-pico/main/idf_sources.cmake'
+facade_host_seam='Tests/embedded/run-zenoh-host-test.sh'
 facade_bad=0
 facade_require() {
     file="$1"
@@ -471,6 +472,15 @@ facade_require "$facade_resolver" 'facadeHeaderSHA256' \
     'the platform does not check the facade header against the report SHA-256'
 facade_require "$facade_resolver" 'file(SHA256' \
     'the platform computes no SHA-256 of the facade header, so the reported digest is never checked'
+facade_require "$facade_resolver" 'AXOLOTY_ZENOH_FACADE_HEADER_SHA256_LENGTH' \
+    'the platform checks the digest is 64 lowercase hexadecimal characters, so a truncated or padded value is never compared'
+# Resolving a reported path into the variable that holds it and then comparing
+# that variable with itself accepts every spelling, including one that escapes.
+# The resolved value needs its own variable for the check to mean anything.
+facade_require "$facade_resolver" 'AXOLOTY_ZENOH_FACADE_MODULE_MAP_REAL' \
+    'the platform resolves the module map into the variable that holds it, so its canonicality check compares a path with itself'
+facade_require "$facade_resolver" 'is a directory, not a file' \
+    'the platform does not reject a reported module map that names a directory'
 facade_require "$facade_resolver" 'AXOLOTY_ZENOH_FACADE_INCLUDE_DIR' \
     'the platform does not publish the facade include directory to the transport'
 # The pre-report resolver kept one Core-relative path and reached for it when
@@ -485,6 +495,23 @@ facade_require "$facade_manifest" 'axoloty_zenoh.h' \
     'the Zenoh transport does not name the Core facade header it implements'
 facade_require "$facade_manifest" 'FATAL_ERROR' \
     'the Zenoh transport does not fail closed when the Core facade header is absent'
+
+# The host seam compiles against the same report, so it enforces the same
+# contract. An optional digest or a locally generated module map there would let
+# the host check pass against declarations the firmware image refuses, which is
+# the one thing a host seam is for.
+# Exactly the fields the seam consumes. A name it does not read is a field it
+# cannot misuse, and requiring one would make the rule drift from the code.
+# Anchored on the call, not on the field name: the seam's refusal messages
+# repeat every field name, so a bare name check would pass on a message alone.
+for field in zenohCore.facadeHeader zenohCore.facadeHeaderSHA256 zenohCore.moduleMap core.sourceDir staticRuntimeMacro.scratchDir; do
+    facade_require "$facade_host_seam" "require_field $field " \
+        "the host Zenoh seam does not require $field from the preparation report"
+done
+facade_require "$facade_host_seam" 'fail_contract' \
+    'the host Zenoh seam has no way to fail on a malformed report'
+facade_forbid "$facade_host_seam" 'MODULEMAP' \
+    'the host Zenoh seam generates a module map of its own instead of using the one Core published'
 if [ "$facade_bad" -eq 0 ]; then
     pass zenoh-facade-resolution 'the Zenoh backend builds against the Core-owned facade header resolved from the preparation report, with its SHA-256 checked, and fails closed without it'
 fi

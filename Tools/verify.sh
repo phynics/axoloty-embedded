@@ -162,6 +162,12 @@ if wanted build; then
     check_script zenoh-host-seam \
         'swiftc or a host C compiler is not available for the Zenoh seam check' \
         Tests/embedded/run-zenoh-host-test.sh
+    # The seam above trusts the preparation report. This proves it refuses a
+    # report that breaks the contract, so the refusals are observed rather than
+    # assumed; a seam that rejected every report would otherwise look identical.
+    check_script zenoh-report-contract \
+        'node, python3, swiftc, or a prepared Core report is not available for the Zenoh report contract check' \
+        Tests/embedded/check-zenoh-report-validation.sh
     check_script host-smoke \
         'swiftc, a host C compiler, or the prepared Core is not available for the host smoke check' \
         Tests/embedded/run-host-smoke-test.sh

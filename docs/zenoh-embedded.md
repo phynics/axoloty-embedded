@@ -14,8 +14,8 @@ re-scoped for the repository split by
 |---|---|---|
 | Portable/shared Zenoh contracts, the `axoloty_zenoh_*` facade ABI | `phynics/axoloty` | Landed (`#956`) |
 | `AxolotyZenohCore` (Embedded-Swift-safe Swift types over the facade) | `phynics/axoloty` | Landed (`#974`); reported, not yet composed here |
-| `zenoh-c` host backend | `phynics/axoloty` | Not landed |
-| `AxolotyZenoh` host runtime transport, host parity | `phynics/axoloty` | Not landed |
+| `zenoh-c` host backend (`CZenohC` + `CAxolotyZenoh`) | `phynics/axoloty` | Landed (`#956`); not consumed by a device image |
+| `AxolotyZenoh` host runtime transport, host parity | `phynics/axoloty` | Landed (`ZenohBinding: AxolotyRuntimeTransport` at `68e46c76`); not consumed by a device image |
 | `EmbeddedZenohClient` (bounded device client) | here | Adapted to the facade ABI |
 | `zenoh-pico` backend of the facade | here | Landed here (`#814`), compiles and links, not qualified |
 | ESP-IDF component wiring for pinned `zenoh-pico` | here | Pin and wrapper landed; the wrapper publishes its platform profile |
@@ -28,6 +28,12 @@ preparation report as `zenohCore.facadeHeader`, reached through
 The backend is `Transports/zenoh-pico/main/zenoh_pico_facade.c`; the bounded
 receive state is `zenoh_pico_queue.c`, which includes no Zenoh and no SDK header
 so the host seam can check it without a board.
+
+The host side of Core's Zenoh adapter is landed, and none of it reaches a
+device image. `CZenohC` is a host `systemLibrary` bound to `zenoh-c` through
+pkg-config, and the Core contract explicitly does not export or link it. A
+device supplies the `axoloty_zenoh_*` implementations through the transport
+instead, which is why the two are alternatives rather than stages.
 
 ## Pin
 
@@ -79,8 +85,9 @@ Two things this repository deliberately does **not** do:
   That fallback, and the `private-reference` invariant exception that permitted
   two files to name a `Packages/` path, are both removed. `Tools/verify.sh
   --tier repo` now fails on the literal `Packages/` in any tracked firmware
-  file. `Tests/embedded/run-zenoh-host-test.sh` reads the same report and
-  verifies the same digest instead of reconstructing a path.
+  file. `Tests/embedded/run-zenoh-host-test.sh` reads the same report, requires
+  all six fields, checks the same paths and digest, and uses Core's generated
+  module map instead of reconstructing one.
 - **No ESP-IDF composition of `AxolotyZenohCore` yet.** Core's module is the
   Swift side of the same facade ABI that `EmbeddedZenohClient` already
   implements on the device, and `docs/zenoh-embedded.md` already recorded that
@@ -95,10 +102,18 @@ a profile that did not select Zenoh, and
 transport is selected, fails with a message that names the missing Core
 contract.
 
+The report is a contract, not a hint, and both consumers enforce it the same
+way: every published field required, every path absolute, canonical, and inside
+the root the report names, the digest 64 lowercase hexadecimal characters and
+matching the header. Neither has a fallback. A fallback would let the host
+check pass against declarations the firmware image will not compile against.
+
 `Tools/check-invariants.sh` enforces all of it: the resolver must read
 `facadeHeader`, `sourceDir`, and `moduleMap`, must compute a SHA-256, and must
 not reconstruct a relative path; the manifest must request the include
 directory, name the header, name no `Packages/` path, and fail closed.
+`Tests/embedded/check-zenoh-report-validation.sh` enforces the other half, by
+running the host seam against mutated reports and requiring a refusal.
 
 ## v1 feature profile and tuning
 
@@ -189,8 +204,18 @@ backend; each is visible in the code or in a returned result code.
   conformance, the sample-validator vectors, and the facade contract's
   close/state/foreign-handle behaviour. It needs the Core preparation report
   (`AXOLOTY_PREPARATION_REPORT`, or the default `Tools/prepare-core.sh`
-  scratch) and reports 69 without one that carries `zenohCore`, which is a skip,
-  not a pass.
+  scratch) and reports 69 when there is no report at all, which is a skip, not a
+  pass.
+- `Tests/embedded/check-zenoh-report-validation.sh` passes: it proves the seam
+  above *refuses* a report that breaks the contract — a missing
+  `facadeHeaderSHA256` or `moduleMap`, a digest that is not 64 lowercase hex,
+  a digest that does not match the header, a path spelled non-canonically, a
+  header outside the Core checkout the report names, a module map outside
+  caller-owned scratch, and a relative path — by running it against focused
+  mutations of a real prepared report, and it also asserts the unmutated report
+  still passes, so a seam that rejected everything would not pass this check
+  either. A malformed report is a **failure**, not a skip: the locked Core
+  publishes the contract, so a report without it is not a missing capability.
 - The `esp32c6-zenoh` C backend compiles for `esp32c6` against pinned
   `zenoh-pico 1.10.0` with no warnings, and a relocatable link of the backend
   objects against `libzenoh_pico.a` leaves no undefined Zenoh symbol. It
