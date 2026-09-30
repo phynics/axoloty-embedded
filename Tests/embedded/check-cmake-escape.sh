@@ -66,23 +66,41 @@ fi
 # exit, including on failure. Two of them live outside $work, next to or under
 # the caller scratch the report names, so a fixed name would collide with a
 # concurrent run and a leaked directory would outlive the check that made it.
+#
+# Each path is a separate quoted variable rather than an entry in one list: a
+# report's scratch path may contain spaces, and splitting a list on whitespace
+# would hand `rm -rf` a partial path. All four start empty and are guarded, so
+# the trap is safe before any fixture exists.
 work=$(mktemp -d)
-created=""
+dots_dir=""
+dots_parent=""
+parent_dir=""
+sibling_dir=""
+# `if` rather than `[ ... ] && rm`, because a failing `&&` list is itself a
+# failing command and `set -e` would abandon the trap half way through, leaving
+# the fixtures behind.
 cleanup() {
-    rm -rf "$work"
-    for fixture in $created; do
-        rm -rf "$fixture"
+    if [ -n "$work" ]; then
+        rm -rf "$work"
+    fi
+    for fixture in "$dots_dir" "$parent_dir" "$sibling_dir"; do
+        if [ -n "$fixture" ]; then
+            rm -rf "$fixture"
+        fi
     done
-    # This run created the `...` directory itself, so it removes it too. It is
-    # left alone when anything else is inside it.
-    rmdir "$dots_parent" 2>/dev/null || true
+    # This run created the `...` directory itself, so it removes it too, and
+    # only when nothing else is inside it.
+    if [ -n "$dots_parent" ]; then
+        rmdir "$dots_parent" 2>/dev/null || true
+    fi
+    return 0
 }
 trap cleanup EXIT
-dots_parent=""
 
-# The probe loads the real resolver and reports the outcome. cmake -P runs the
-# file in script mode, which is the same mode the ESP-IDF requirements pass uses,
-# so a pattern that does not parse here does not parse there either.
+# The probe loads the real resolver and reports the outcome. `cmake -P` runs the
+# file in script mode, which is the mode the ESP-IDF requirements pass uses, so a
+# pattern CMake objects to here is a pattern CMake objects to there: the same
+# CMP0010 diagnostic and the same policy-dependent interpretation.
 cat > "$work/probe.cmake" <<'PROBE'
 include("${RESOLVER}")
 message(STATUS "ACCEPTED module map: ${AXOLOTY_ZENOH_FACADE_MODULE_MAP}")
@@ -176,7 +194,6 @@ echo "== a directory whose name only starts with dots"
 dots_parent="$scratch_dir/..."
 dots_dir="$dots_parent/probe-$$"
 mkdir -p "$dots_dir"
-created="$dots_dir $created"
 dots_map="$dots_dir/module.modulemap"
 cp "$real_module_map" "$dots_map"
 build_case dots "$dots_map"
@@ -185,7 +202,6 @@ run_case dots "a module map under a ... directory inside caller scratch" accept
 echo "== a real traversal"
 parent_dir="$(dirname "$scratch_dir")/escape-check-$$"
 mkdir -p "$parent_dir"
-created="$parent_dir $created"
 parent_map="$parent_dir/module.modulemap"
 cp "$real_module_map" "$parent_map"
 build_case parent "$parent_map"
@@ -194,7 +210,6 @@ run_case parent "a module map one level above caller scratch" reject
 echo "== a sibling whose name starts with the scratch path"
 sibling_dir="$scratch_dir-sibling-$$"
 mkdir -p "$sibling_dir"
-created="$sibling_dir $created"
 sibling_map="$sibling_dir/module.modulemap"
 cp "$real_module_map" "$sibling_map"
 build_case sibling "$sibling_map"
