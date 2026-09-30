@@ -34,7 +34,10 @@ fi
 
 proof_run_id=${AXOLOTY_PROOF_RUN_ID:-swift-linker}
 scratch=${AXOLOTY_SCRATCH:-"$repo_root/.axoloty"}
-proof_root=${EMBEDDED_PROOF_ROOT:-"$scratch/firmware-swift-linker"}
+# The linker probe re-runs the configure in the profile's own build tree. A
+# shared tree across profiles would probe the other profile's cached
+# selection, so the default workspace is per profile.
+proof_root=${EMBEDDED_PROOF_ROOT:-"$scratch/firmware-swift-linker-$profile"}
 build_dir=${EMBEDDED_BUILD_DIR:-"$proof_root/build"}
 project_dir="$proof_root/platform"
 

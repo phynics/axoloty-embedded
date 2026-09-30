@@ -237,3 +237,33 @@ change did not touch, and comparing the image digest against a known one. A
 second profile does not only add coverage for itself — it adds a way for any
 new axis to break an existing one. Rebuild the *other* profile after any
 change under `Platforms/`, `components/`, or a transport.
+
+## 7. Two profiles must never share one build directory
+
+A fourth instance of stale-selection trouble, found when `verify.sh` started
+building MQTT and Zenoh in sequence.
+
+**Symptom:** the Zenoh profile builds MQTT sources, or fails in the Zenoh
+component's requirements with a cache that names
+`Transports/mqtt-espidf` — even though the profile selects `zenoh-pico`.
+
+**Cause:** both profiles defaulted to `$scratch/firmware`, so they shared one
+`$proof_root/build`. The platform build only ran `set-target` when the cache
+was missing or named another chip; MQTT and Zenoh target the same ESP32-C6, so
+the second build skipped it and inherited the first profile's cached
+`AXOLOTY_TRANSPORT_DIR`. The requirements pass then composed the wrong
+transport's sources and component requirements.
+
+**Rule:** the default proof workspace is per profile —
+`<scratch>/firmware-<profile>` — resolved by the one helper every caller
+shares, `Platforms/esp32c6-idf/tools/profile-build-env.sh`. An explicit
+`EMBEDDED_PROOF_ROOT` or `EMBEDDED_BUILD_DIR` still wins, but a build
+directory whose `CMakeCache.txt` selection names another profile's axes is
+cleared before reuse, loudly. The platform build also verifies the selection
+against `AXOLOTY_PROFILE_DIR/profile.json` before configuring, and exports the
+selection plus passes it with `-D` on every `idf.py` invocation, so the
+requirements pass of §5 always sees the current profile.
+
+Rebuilding the profiles in the opposite order is the regression probe: if the
+second build ever inherits the first profile's transport again, the eviction
+message names both selections.

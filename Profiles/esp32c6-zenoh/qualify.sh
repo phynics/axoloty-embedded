@@ -28,7 +28,16 @@ application=$(read_field application)
 platform=$(read_field platform)
 transport=$(read_field transport)
 
-if [ -z "${AXOLOTY_DEVICE_PORT:-}" ]; then
+# Introspection for operators and the profile-isolation regression test. It is
+# parsed before any device step so the probe stays hardware-free.
+print_proof_root=0
+case "${1:-}" in
+    '') ;;
+    --print-proof-root) print_proof_root=1 ;;
+    *) echo "error: usage: qualify.sh [--print-proof-root]" >&2; exit 64 ;;
+esac
+
+if [ -z "${AXOLOTY_DEVICE_PORT:-}" ] && [ "$print_proof_root" -eq 0 ]; then
     echo "error: AXOLOTY_DEVICE_PORT must name the board; it is never guessed" >&2
     exit 64
 fi
@@ -41,15 +50,36 @@ if [ -n "${AXOLOTY_PREVIEW_CORE_REVISION:-}" ]; then
     exit 64
 fi
 
+export AXOLOTY_PROFILE_DIR="$script_dir"
 export AXOLOTY_APPLICATION_DIR="$repo_root/Applications/$application"
 export AXOLOTY_TRANSPORT_DIR="$repo_root/Transports/$transport"
 export AXOLOTY_CORPUS_MANIFEST="$AXOLOTY_APPLICATION_DIR/fixtures/manifest.json"
 
-"$repo_root/Platforms/$platform/tools/flash.sh"
-
 scratch=${AXOLOTY_SCRATCH:-"$repo_root/.axoloty"}
-proof_root=${EMBEDDED_PROOF_ROOT:-"$scratch/firmware"}
+# One rule for the default proof workspace lives in the platform helper, and
+# this qualification path shares it: the image flashed here is this profile's
+# own build, never the other profile's. The platform directory is
+# profile-derived, so ShellCheck cannot follow this source without -x, which
+# CI does not pass; the disable is scoped to this line, and the file it names
+# is covered by the profile-isolation regression test. Hand the flash tool the
+# exact directories instead of letting it re-derive them.
+# shellcheck disable=SC1091
+# shellcheck source=../../Platforms/esp32c6-idf/tools/profile-build-env.sh
+. "$repo_root/Platforms/$platform/tools/profile-build-env.sh"
+default_proof_root=$(axoloty_default_proof_root "$scratch")
+proof_root=${EMBEDDED_PROOF_ROOT:-"$default_proof_root"}
+build_dir=${EMBEDDED_BUILD_DIR:-"$proof_root/build"}
 evidence_dir=${EMBEDDED_EVIDENCE_DIR:-"$proof_root/working-evidence"}
+
+if [ "$print_proof_root" -eq 1 ]; then
+    printf 'proof_root=%s\nbuild_dir=%s\nevidence_dir=%s\n' "$proof_root" "$build_dir" "$evidence_dir"
+    exit 0
+fi
+
+EMBEDDED_PROOF_ROOT="$proof_root" EMBEDDED_BUILD_DIR="$build_dir" \
+    EMBEDDED_EVIDENCE_DIR="$evidence_dir" \
+    "$repo_root/Platforms/$platform/tools/flash.sh"
+
 proof="$evidence_dir/go-proof.json"
 device_manifest="$evidence_dir/device-manifest.json"
 evidence_out="$repo_root/docs/evidence/esp32c6-zenoh-embedded-zenoh-smoke.json"

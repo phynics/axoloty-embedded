@@ -33,10 +33,10 @@ if ! command -v idf.py >/dev/null 2>&1; then
 fi
 
 scratch=${AXOLOTY_SCRATCH:-"$repo_root/.axoloty"}
-proof_base=${EMBEDDED_PROOF_ROOT:-"$scratch/firmware-reproducible"}
+proof_base=${EMBEDDED_PROOF_ROOT:-"$scratch/firmware-reproducible-$profile"}
 out_dir=${EMBEDDED_OUTPUT_DIR:-"$scratch/reproducible"}
 bin_name="axoloty-swift.bin"
-report="$out_dir/reproducible-build.json"
+report="$out_dir/reproducible-build-$profile.json"
 
 mkdir -p "$out_dir"
 

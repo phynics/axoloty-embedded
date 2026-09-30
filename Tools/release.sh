@@ -25,6 +25,7 @@
 # Usage:
 #   Tools/release.sh --profile <name>
 #   Tools/release.sh --profile <name> --preview <40-char Axoloty SHA>
+#   Tools/release.sh --profile <name> --print-proof-root
 #
 # Environment:
 #   AXOLOTY_DEVICE_PORT  Required for a release; names the board, never guessed.
@@ -42,10 +43,12 @@ cd "$repo_root" || exit 2
 
 profile=''
 preview_revision=''
+print_proof_root=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --profile) profile="${2:-}"; shift 2 || exit 2 ;;
         --preview) preview_revision="${2:-}"; shift 2 || exit 2 ;;
+        --print-proof-root) print_proof_root=1; shift || exit 2 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "release: unknown argument: $1" >&2; exit 2 ;;
     esac
@@ -71,9 +74,26 @@ fi
 version="$(cat "$repo_root/VERSION")"
 
 scratch="${AXOLOTY_SCRATCH:-$repo_root/.axoloty}"
-proof_root="${EMBEDDED_PROOF_ROOT:-$scratch/firmware}"
+# One rule for the default proof workspace lives in the platform helper, and
+# this release path shares it. The platform directory is profile-derived, so
+# ShellCheck cannot follow this source without -x, which CI does not pass;
+# the disable is scoped to this line, and the file it names is covered by the
+# profile-isolation regression test.
+# shellcheck disable=SC1091
+# shellcheck source=../Platforms/esp32c6-idf/tools/profile-build-env.sh
+. "$repo_root/Platforms/$platform/tools/profile-build-env.sh"
+default_proof_root=$(AXOLOTY_PROFILE_DIR="$profile_dir" axoloty_default_proof_root "$scratch")
+proof_root="${EMBEDDED_PROOF_ROOT:-$default_proof_root}"
 evidence_dir="${EMBEDDED_EVIDENCE_DIR:-$proof_root/working-evidence}"
 candidate="$evidence_dir/release-manifest.json"
+
+# Introspection for operators and the profile-isolation regression test: print
+# the resolved workspace and stop before any preparation, build, or device
+# step.
+if [ "$print_proof_root" -eq 1 ]; then
+    printf 'proof_root=%s\nevidence_dir=%s\n' "$proof_root" "$evidence_dir"
+    exit 0
+fi
 
 # Strict preparation is the release contract; never weaken it here.
 export AXOLOTY_STRICT_CORE=1

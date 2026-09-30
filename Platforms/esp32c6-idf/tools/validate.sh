@@ -9,7 +9,9 @@
 #   AXOLOTY_SCRATCH          Scratch root. Default: <repo>/.axoloty
 #   AXOLOTY_SOURCE_DIR       Local Core checkout passed through to prepare-core.
 #   AXOLOTY_PROOF_RUN_ID     Stable, filesystem-safe run identifier.
-#   EMBEDDED_PROOF_ROOT      Caller-owned proof workspace. Default: <scratch>/firmware
+#   EMBEDDED_PROOF_ROOT      Caller-owned proof workspace. Default:
+#                            <scratch>/firmware-<profile> when AXOLOTY_PROFILE_DIR
+#                            names the profile, else <scratch>/firmware
 #   EMBEDDED_BUILD_DIR       ESP-IDF build directory.
 #   EMBEDDED_EVIDENCE_DIR    Evidence output directory.
 #
@@ -24,7 +26,10 @@ repo_root=$(git -C "$script_dir" rev-parse --show-toplevel)
 
 scratch=${AXOLOTY_SCRATCH:-"$repo_root/.axoloty"}
 proof_run_id=${AXOLOTY_PROOF_RUN_ID:-manual}
-proof_root=${EMBEDDED_PROOF_ROOT:-"$scratch/firmware"}
+# shellcheck source=profile-build-env.sh
+. "$script_dir/profile-build-env.sh"
+default_proof_root=$(axoloty_default_proof_root "$scratch")
+proof_root=${EMBEDDED_PROOF_ROOT:-"$default_proof_root"}
 build_dir=${EMBEDDED_BUILD_DIR:-"$proof_root/build"}
 evidence_dir=${EMBEDDED_EVIDENCE_DIR:-"$proof_root/working-evidence"}
 source_report="$scratch/core-preparation.json"
