@@ -5,5 +5,5 @@
   "tier": "build",
   "status": "unexecuted",
   "recordedAt": "2026-09-24",
-  "reason": "Not rerun against locked Core 0579663a9d33c0a017cbb3ad5d74dd1b80a8853f; the profile has no linkable image because the application calls transport functions only defined by MQTT."
+  "reason": "Not rerun against locked Core 68e46c764a555a027f2779c74e8dd04a6bc4bb06; the profile has no linkable image because the application calls transport functions only defined by MQTT."
 }

@@ -27,16 +27,20 @@ set(AXOLOTY_TRANSPORT_C_SOURCES
 set(AXOLOTY_TRANSPORT_IDF_REQUIRES "zenoh_pico")
 
 # The C seam this transport declares is the Core-owned Axoloty Zenoh facade
-# header, resolved by the platform from the Core preparation report. This file
-# is read only when this transport is the selected one, so failing closed here
-# fails the profile that asked for the facade and no other.
+# header, resolved by the platform from the `zenohCore` entry of the Core
+# preparation report (phynics/axoloty#974). This transport never names a
+# Core-relative path: the report is the only channel, and it is also the only
+# place a checksum for the header exists.
+#
+# This file is read only when this transport is the selected one, so failing
+# closed here fails the profile that asked for the facade and no other.
 if(NOT DEFINED AXOLOTY_ZENOH_FACADE_INCLUDE_DIR OR
    "${AXOLOTY_ZENOH_FACADE_INCLUDE_DIR}" STREQUAL "")
     message(FATAL_ERROR
-        "the Core preparation report has no Axoloty Zenoh facade header. The "
-        "zenoh-pico backend implements the Core-owned axoloty_zenoh_* ABI, so "
-        "Core must expose that header (phynics/axoloty#956) and the profile must "
-        "prepare a Core revision that carries it"
+        "the Core preparation report has no zenohCore entry. The zenoh-pico "
+        "backend implements the Core-owned axoloty_zenoh_* ABI, so Core must "
+        "publish that contract in the preparation report "
+        "(phynics/axoloty#974) and the lock must name a revision that carries it"
     )
 endif()
 if(NOT EXISTS "${AXOLOTY_ZENOH_FACADE_INCLUDE_DIR}/axoloty_zenoh.h")
