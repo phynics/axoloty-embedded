@@ -7,8 +7,10 @@
 #
 # The board is named by AXOLOTY_DEVICE_PORT or EMBEDDED_DEVICE; it is never
 # guessed. The default proof workspace follows AXOLOTY_PROFILE_DIR
-# (<scratch>/firmware-<profile>), so flashing one profile never reads the
-# other profile's image; an explicit EMBEDDED_PROOF_ROOT still wins.
+# (<scratch>/firmware-<profile>), so a profile flash reads that profile's own
+# image — provided the caller names the profile or its own workspace. A
+# direct invocation with neither is refused below: the legacy shared default
+# could hold any profile's image, and flashing it would be a guess.
 
 set -eu
 
@@ -31,6 +33,16 @@ serial_log="$evidence_dir/swift-smoke-log.txt"
 smoke_result="$evidence_dir/swift-smoke-result.json"
 corpus_manifest="${AXOLOTY_CORPUS_MANIFEST:-}"
 deadline=${EMBEDDED_DEADLINE:-120}
+
+# A direct invocation that names no profile and no explicit workspace would
+# fall back to the legacy shared proof root, which can hold any profile's
+# image. Refuse that ambiguity before touching any board: profile wrappers
+# (qualify.sh) set AXOLOTY_PROFILE_DIR, and callers with their own workspace
+# (run-network-test.sh) set EMBEDDED_PROOF_ROOT explicitly. Either suffices.
+if [ -z "${AXOLOTY_PROFILE_DIR:-}" ] && [ -z "${EMBEDDED_PROOF_ROOT:-}" ]; then
+    echo "error: refusing the shared default proof workspace with no profile selection; flash through Profiles/<name>/qualify.sh or set EMBEDDED_PROOF_ROOT explicitly" >&2
+    exit 64
+fi
 
 if [ -z "$device" ]; then
     echo "error: AXOLOTY_DEVICE_PORT is unset; name the board explicitly" >&2

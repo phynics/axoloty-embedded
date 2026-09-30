@@ -233,16 +233,13 @@ backend; each is visible in the code or in a returned result code.
   operations are last-will setup, a reconnect check, and a network probe, which
   a Zenoh image has to answer with Zenoh semantics or not at all. That is
   #816/#817 work and is deliberately not attempted here.
-- **A second, unrelated blocker sits in front of it.**
-  `Platforms/esp32c6-idf/tools/build.sh` passes the transport selection with
-  `-D` and only re-runs `idf.py set-target` when the build directory is new or
-  its target changed. `Tools/verify.sh` builds every profile into one build
-  directory, so the second profile inherits the first profile's cached
-  `AXOLOTY_TRANSPORT_DIR`: `Tools/verify.sh` reports
-  `build:esp32c6-zenoh` against the MQTT transport's sources and fails on
-  `mqtt_carrier_espidf.c`. This is pre-existing, from the migration commit,
-  and is not fixed by the lock raise. Until it is fixed, build the Zenoh
-  profile in its own scratch to see the real seam errors above.
+- **Profile build isolation has landed, so only the seam above blocks the build.**
+  Each profile builds in its own proof workspace
+  (`<scratch>/firmware-<profile>`), the platform verifies the selection
+  against the profile before configuring, and a build directory whose cached
+  selection names another profile is cleared before reuse. The earlier
+  second-profile failure on `mqtt_carrier_espidf.c` from the shared build
+  directory no longer occurs.
 - **No device or resource evidence.** None was produced and none was invented.
   See `docs/evidence/esp32c6-zenoh-*.json`.
 

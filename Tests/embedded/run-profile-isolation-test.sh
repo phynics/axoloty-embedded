@@ -9,10 +9,11 @@
 #
 # This exercises the real profile-build-env.sh helper while switching between
 # the real MQTT and Zenoh profiles, and inspects the resolved directories and
-# the actual CMakeCache.txt contents. It also probes Tools/release.sh through
-# its --print-proof-root introspection flag, so a release path that stops
-# sharing the per-profile rule fails here. It needs only sh, node, and git: no
-# board, no SDK, no broker.
+# synthetic CMakeCache.txt fixtures written for the switch. It also probes
+# Tools/release.sh through its --print-proof-root introspection flag, so a
+# release path that stops sharing the per-profile rule fails here, and probes
+# the flash.sh workspace guard. It needs only sh, node, and git: no board, no
+# SDK, no broker.
 #
 # Exit status: 0 passed, 1 failed, 69 required tool missing.
 
@@ -193,6 +194,57 @@ if [ -n "$mqtt_release_root" ] && [ "$mqtt_release_root" = "$mqtt_expected" ] &&
     echo "ok: release.sh resolves the shared per-profile workspace for both profiles"
 else
     echo "FAIL: release.sh workspace diverged from the shared rule (mqtt: $mqtt_release_root; zenoh: $zenoh_release_root)" >&2
+    failures=$((failures + 1))
+fi
+
+flash_tool="$repo_root/Platforms/esp32c6-idf/tools/flash.sh"
+
+# 8. flash.sh refuses an ambiguous workspace before touching any board, so all
+# three probes are hardware-free: no device and no toolchain is used.
+# 8a. No profile and no explicit workspace: the legacy shared default could
+# hold any profile's image, so the flash is refused.
+if AXOLOTY_SCRATCH="$tmp/scratch" "$flash_tool" >"$tmp/flash-refused.log" 2>&1; then
+    echo "FAIL: flash.sh accepted the shared default workspace with no profile selection" >&2
+    failures=$((failures + 1))
+else
+    refused_status=$?
+    if [ "$refused_status" -eq 64 ] && grep -q 'shared default proof workspace' "$tmp/flash-refused.log"; then
+        echo "ok: flash.sh refuses the shared default workspace with no profile selection"
+    else
+        echo "FAIL: flash.sh refusal was not the workspace guard (status $refused_status)" >&2
+        failures=$((failures + 1))
+    fi
+fi
+# 8b. An explicit caller-owned workspace (the run-network-test.sh shape) is
+# allowed past the guard: it proceeds to the board check instead.
+if EMBEDDED_PROOF_ROOT="$tmp/explicit-root" AXOLOTY_SCRATCH="$tmp/scratch" \
+    "$flash_tool" >"$tmp/flash-explicit.log" 2>&1; then
+    echo "FAIL: flash.sh unexpectedly succeeded with no board" >&2
+    failures=$((failures + 1))
+elif grep -q 'shared default proof workspace' "$tmp/flash-explicit.log"; then
+    echo "FAIL: flash.sh refused an explicit caller-owned workspace" >&2
+    failures=$((failures + 1))
+elif grep -q 'AXOLOTY_DEVICE_PORT is unset' "$tmp/flash-explicit.log"; then
+    echo "ok: flash.sh honors an explicit caller-owned workspace"
+else
+    echo "FAIL: flash.sh with an explicit workspace failed unexpectedly:" >&2
+    cat "$tmp/flash-explicit.log" >&2
+    failures=$((failures + 1))
+fi
+# 8c. A profile selection (the qualify.sh shape) resolves the profile's own
+# workspace and is allowed past the guard the same way.
+if AXOLOTY_PROFILE_DIR="$mqtt_profile" AXOLOTY_SCRATCH="$tmp/scratch" \
+    "$flash_tool" >"$tmp/flash-profile.log" 2>&1; then
+    echo "FAIL: flash.sh unexpectedly succeeded with no board" >&2
+    failures=$((failures + 1))
+elif grep -q 'shared default proof workspace' "$tmp/flash-profile.log"; then
+    echo "FAIL: flash.sh refused a profile-selected workspace" >&2
+    failures=$((failures + 1))
+elif grep -q 'AXOLOTY_DEVICE_PORT is unset' "$tmp/flash-profile.log"; then
+    echo "ok: flash.sh honors a profile-selected workspace"
+else
+    echo "FAIL: flash.sh with a profile selection failed unexpectedly:" >&2
+    cat "$tmp/flash-profile.log" >&2
     failures=$((failures + 1))
 fi
 

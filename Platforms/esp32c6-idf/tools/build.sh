@@ -9,7 +9,11 @@
 #   AXOLOTY_APPLICATION_DIR  Absolute path to the selected application axis.
 #   AXOLOTY_TRANSPORT_DIR    Absolute path to the selected transport axis.
 #   AXOLOTY_PROOF_RUN_ID     Stable, filesystem-safe run identifier.
-#   EMBEDDED_PROOF_ROOT      Caller-owned proof workspace.
+#   EMBEDDED_PROOF_ROOT      Caller-owned proof workspace. Default:
+#                            <scratch>/firmware-<profile> for the selected
+#                            profile, so sequential profile builds never
+#                            share a build directory unless the operator
+#                            overrides it.
 #   EMBEDDED_BUILD_DIR       ESP-IDF build directory.
 #   EMBEDDED_EVIDENCE_DIR    Evidence output directory.
 
