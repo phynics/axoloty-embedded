@@ -28,16 +28,30 @@ import AxolotyWire
 import AxolotyZenohCore
 #if EMBEDDED_ZENOH_HOST_TEST
 import ZenohHostTest
-@inline(__always)
-private func zenohWaitTicks(milliseconds: UInt32) -> UInt32 {
-    host_zenoh_ticks_from_ms(milliseconds)
-}
-#else
-@inline(__always)
-private func zenohWaitTicks(milliseconds: UInt32) -> UInt32 {
-    axoloty_ticks_from_ms(milliseconds)
-}
 #endif
+
+/// Converts one bounded millisecond wait to scheduler ticks without allowing
+/// a non-zero wait to turn into a zero-tick busy spin. Rounding up can extend
+/// one individual sleep by less than a scheduler tick; the next deadline check
+/// always uses the monotonic clock rather than accumulated requested sleeps.
+@inline(__always)
+func zenohPollingWaitTicks(milliseconds: UInt32, schedulerHz: UInt32) -> UInt32 {
+    guard milliseconds > 0, schedulerHz > 0 else { return 0 }
+    let product = UInt64(milliseconds) * UInt64(schedulerHz)
+    let rounded = (product + 999) / 1_000
+    return UInt32(min(max(rounded, 1), UInt64(UInt32.max)))
+}
+
+@inline(__always)
+private func zenohWaitTicks(milliseconds: UInt32) -> UInt32 {
+#if EMBEDDED_ZENOH_HOST_TEST
+    zenohPollingWaitTicks(milliseconds: milliseconds,
+                          schedulerHz: host_zenoh_scheduler_hz())
+#else
+    zenohPollingWaitTicks(milliseconds: milliseconds,
+                          schedulerHz: axoloty_scheduler_hz())
+#endif
+}
 
 /// Fixed slots for one carrier session's subscriptions.
 ///
@@ -61,7 +75,7 @@ struct ZenohCarrier: ~Copyable {
     /// The facade's fixed per-session subscription capacity.
     static let maximumSubscriptions = 8
     /// Milliseconds between router observations while waiting.
-    static let reconnectPollIntervalMS: UInt32 = 50
+    static let reconnectPollIntervalMS: UInt32 = 20
 
     private enum Phase {
         case idle
@@ -354,14 +368,22 @@ struct ZenohCarrier: ~Copyable {
     /// Observes router connectivity until the deadline, without touching
     /// session or subscription ownership.
     ///
-    /// Success needs an open session, an observed router loss, and a later
-    /// observed router restoration inside the deadline. A closed session fails
-    /// fast: it cannot become usable without a reopen, and this operation
-    /// never reopens behind the caller. Subscription and bidirectional traffic
-    /// proof still belong to the actual device recovery test.
+    /// Success means the open session observes a connected router inside the
+    /// deadline. This includes a session that was already usable when the wait
+    /// began; the result is a connectivity wait, not recovery evidence. A
+    /// closed session fails fast because this operation never reopens it.
+    /// Recovery evidence belongs to the caller and requires separately
+    /// observing a loss and restoration plus subscriptions and traffic.
     mutating func waitForReconnect(deadlineMS: UInt32) -> Bool {
         guard phase == .subscribed else { return false }
         let startMS = UInt64(max(0, esp_timer_get_time() / 1_000))
+        switch session.connectedRouterCount() {
+        case .count(let routers):
+            connectedRouterObserved = routers > 0
+            if routers > 0 { return true }
+        case .failure(let result):
+            if result == .notOpen { return false }
+        }
         while true {
             switch session.connectedRouterCount() {
             case .count(let routers):
@@ -369,11 +391,8 @@ struct ZenohCarrier: ~Copyable {
                     if connectedRouterObserved { routerLossObserved = true }
                     connectedRouterObserved = false
                 } else {
-                    if routerLossObserved {
-                        connectedRouterObserved = true
-                        return true
-                    }
                     connectedRouterObserved = true
+                    return true
                 }
             case .failure(let result):
                 if result == .notOpen { return false }
@@ -381,7 +400,8 @@ struct ZenohCarrier: ~Copyable {
             let nowMS = UInt64(max(0, esp_timer_get_time() / 1_000))
             let elapsed = nowMS >= startMS ? nowMS - startMS : 0
             guard UInt64(deadlineMS) > elapsed else { return false }
-            let waitMS = UInt32(min(UInt64(deadlineMS) - elapsed, UInt64(Self.reconnectPollIntervalMS)))
+            let remainingMS = UInt64(deadlineMS) - elapsed
+            let waitMS = UInt32(min(remainingMS, UInt64(Self.reconnectPollIntervalMS)))
             vTaskDelay(zenohWaitTicks(milliseconds: waitMS))
         }
     }

@@ -174,9 +174,6 @@ func runDeviceAgentExchange(
             result.insert(.connected)
             seam.exchangeMilestone(DeviceSmokeExchangeMilestone.connected.rawValue)
 
-            let hashFilter: StaticString = "coaty/3/axoloty-embedded/#"
-            let twoLevelFilter: StaticString = "coaty/3/axoloty-embedded/*/*"
-            let threeLevelFilter: StaticString = "coaty/3/axoloty-embedded/*/*/*"
             // Profile interest covers every inbound topic this agent handles:
             // the hash shape matches all levels under the namespace, while
             // the two star shapes match exactly the two-level topics
@@ -187,15 +184,11 @@ func runDeviceAgentExchange(
             // so all three subscriptions are required on every carrier and
             // the previously proven single-filter behavior is preserved
             // wherever it already held.
-            var subscribed = seam.carrier.subscribe(
-                hashFilter.utf8Start, Int32(hashFilter.utf8CodeUnitCount), deadline.remaining(using: seam)
-            ) != 0
-            subscribed = seam.carrier.subscribe(
-                twoLevelFilter.utf8Start, Int32(twoLevelFilter.utf8CodeUnitCount), deadline.remaining(using: seam)
-            ) != 0 && subscribed
-            subscribed = seam.carrier.subscribe(
-                threeLevelFilter.utf8Start, Int32(threeLevelFilter.utf8CodeUnitCount), deadline.remaining(using: seam)
-            ) != 0 && subscribed
+            let subscribed = installDeviceAgentProfileInterest(
+                subscribe: seam.carrier.subscribe,
+                unsubscribe: seam.carrier.unsubscribe,
+                deadlineMS: deadline.remaining(using: seam)
+            )
             if subscribed {
                 result.insert(.subscribed)
                 seam.exchangeMilestone(DeviceSmokeExchangeMilestone.subscribed.rawValue)
@@ -232,21 +225,6 @@ func runDeviceAgentExchange(
                         )
                     }
                 }
-            }
-            if !subscribed {
-                // A failed multi-shape install may have declared an earlier
-                // shape successfully. Remove every shape before teardown so
-                // a retry cannot inherit stale receive interest. Disconnect
-                // below is the final cleanup if an undeclare itself fails.
-                _ = seam.carrier.unsubscribe(
-                    hashFilter.utf8Start, Int32(hashFilter.utf8CodeUnitCount), deadline.remaining(using: seam)
-                )
-                _ = seam.carrier.unsubscribe(
-                    twoLevelFilter.utf8Start, Int32(twoLevelFilter.utf8CodeUnitCount), deadline.remaining(using: seam)
-                )
-                _ = seam.carrier.unsubscribe(
-                    threeLevelFilter.utf8Start, Int32(threeLevelFilter.utf8CodeUnitCount), deadline.remaining(using: seam)
-                )
             }
         }
     }

@@ -47,10 +47,12 @@ private struct EmbeddedZenohHostTest {
         host_zenoh_reset()
 
         carrierLifecycle()
+        partialProfileInterestCleanup()
         carrierBounds()
         carrierPollMapping()
         willIsUnsupported()
         reconnectObservation()
+        schedulerTickConversion()
         probeRecords()
         facadeContract()
     }
@@ -126,6 +128,32 @@ private struct EmbeddedZenohHostTest {
         check(!carrier.disconnect(), "second disconnect is rejected")
         check(!carrier.connect(deadlineMS: 5_000), "reconnect after close is rejected")
         check(!carrier.waitForReconnect(deadlineMS: 100), "reconnect after close is rejected")
+    }
+
+    // MARK: - Application partial profile-interest install
+
+    static func partialProfileInterestCleanup() {
+        var subscribeCalls = 0
+        var unsubscribeCalls: [String] = []
+        let subscribe: (UnsafePointer<UInt8>, Int32, UInt32) -> Int32 = { key, length, _ in
+            subscribeCalls += 1
+            // Fail the second shape after the first declaration succeeded.
+            return subscribeCalls == 2 ? 0 : (length > 0 && key.pointee != 0 ? 1 : 0)
+        }
+        let unsubscribe: (UnsafePointer<UInt8>, Int32, UInt32) -> Int32 = { key, length, _ in
+            unsubscribeCalls.append(String(
+                decoding: UnsafeBufferPointer(start: key, count: Int(length)), as: UTF8.self
+            ))
+            return 1
+        }
+        let installed = installDeviceAgentProfileInterest(
+            subscribe: subscribe,
+            unsubscribe: unsubscribe,
+            deadlineMS: 1_000
+        )
+        check(!installed, "partial profile-interest install reports failure")
+        check(subscribeCalls == 2, "remaining shapes are not declared after failure")
+        check(unsubscribeCalls == ["coaty/3/axoloty-embedded/#"], "earlier successful shape is removed")
     }
 
     // MARK: - Bounds
@@ -304,16 +332,23 @@ private struct EmbeddedZenohHostTest {
             carrier.subscribe(topic: $0, deadlineMS: 1_000)
         }, "subscribe for reconnect")
 
-        // Current connectivity is not evidence of recovery. Keep it present
-        // for the whole deadline and require the carrier to report false.
+        // A currently usable session succeeds immediately. This is only the
+        // connectivity-wait contract; recovery evidence is a separate concern.
         host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_ROUTER_DROP_AFTER_ONE))
         let startUS = host_zenoh_fake_time_us()
-        check(!carrier.waitForReconnect(deadlineMS: 200), "current router is not recovery evidence")
-        check(host_zenoh_fake_time_us() - startUS >= 200_000, "wait checks the full bounded window")
+        check(carrier.waitForReconnect(deadlineMS: 200), "already-usable router succeeds")
+        check(host_zenoh_fake_time_us() == startUS, "usable router does not wait")
 
         // An observed loss followed by restoration satisfies recovery.
         host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_ROUTER_DROP_THEN_RESTORE))
         check(carrier.waitForReconnect(deadlineMS: 500), "observed loss and restoration succeeds")
+
+        // If loss/restoration finished before the wait starts, a usable router
+        // still satisfies the connectivity contract at entry.
+        host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_ROUTER_DROP_RESTORE_BEFORE_ENTRY))
+        let restoredBeforeEntryUS = host_zenoh_fake_time_us()
+        check(carrier.waitForReconnect(deadlineMS: 500), "restored router before entry succeeds")
+        check(host_zenoh_fake_time_us() == restoredBeforeEntryUS, "already-restored router returns immediately")
 
         // No router within the deadline is an honest timeout, bounded by it.
         host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_ROUTERS))
@@ -333,6 +368,37 @@ private struct EmbeddedZenohHostTest {
         let closedStartUS = host_zenoh_fake_time_us()
         check(!carrier.waitForReconnect(deadlineMS: 5_000), "closed session fails fast")
         check(host_zenoh_fake_time_us() == closedStartUS, "closed session never waits out a deadline")
+    }
+
+    // MARK: - Scheduler tick conversion
+
+    static func schedulerTickConversion() {
+        host_zenoh_set_scheduler_hz(100)
+        check(zenohPollingWaitTicks(milliseconds: 0, schedulerHz: 100) == 0, "zero wait maps to zero ticks")
+        check(zenohPollingWaitTicks(milliseconds: 1, schedulerHz: 100) == 1, "sub-tick wait rounds up")
+        check(zenohPollingWaitTicks(milliseconds: 10, schedulerHz: 100) == 1, "one tick duration maps to one")
+        check(zenohPollingWaitTicks(milliseconds: 11, schedulerHz: 100) == 2, "fractional tick rounds up")
+
+        host_zenoh_reset()
+        host_zenoh_set_scheduler_hz(100)
+        var carrier = ZenohCarrier()
+        check(carrier.connect(deadlineMS: 5_000), "open at 100 Hz")
+        let key = Array("sample/key".utf8)
+        check(withSpan(key, count: key.count) {
+            carrier.subscribe(topic: $0, deadlineMS: 1_000)
+        }, "subscribe at 100 Hz")
+
+        // A 21 ms deadline with a 20 ms polling ceiling first waits 20 ms.
+        // The final one-millisecond remainder rounds to one 10 ms tick, so
+        // fake time reaches 30 ms rather than busy-spinning or timing out early.
+        host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_ROUTERS))
+        let start = host_zenoh_fake_time_us()
+        check(!carrier.waitForReconnect(deadlineMS: 21), "short remainder times out")
+        let elapsed = host_zenoh_fake_time_us() - start
+        check(elapsed == 30_000, "20 ms poll plus one rounded 100 Hz tick reaches 30 ms")
+        host_zenoh_set_failures(0)
+        check(carrier.disconnect(), "100 Hz teardown")
+        host_zenoh_reset()
     }
 
     // MARK: - Probe records
@@ -365,10 +431,11 @@ private struct EmbeddedZenohHostTest {
             ("network:wifi", "passed"), ("network:ip", "passed"),
             ("network:rejectOutOfOrder", "passed"), ("network:lastWillUnsupported", "unsupported"),
             ("network:zenohConnect", "passed"), ("network:subscribe", "passed"),
-            // The probe fake leaves an already-connected router present;
-            // that is connectivity, not evidence of a loss/recovery.
-            ("network:reconnect", "failed"), ("network:rejectOversize", "failed"),
-            ("network:publish", "failed"), ("network:receiveUnsupported", "unsupported"),
+            // The probe records usable current connectivity. This does not
+            // establish the loss/restoration evidence required by device
+            // qualification.
+            ("network:reconnect", "passed"), ("network:rejectOversize", "passed"),
+            ("network:publish", "passed"), ("network:receiveUnsupported", "unsupported"),
             ("network:disconnect", "passed"),
         ]
         check(records.count == expected.count, "probe emits every step once")

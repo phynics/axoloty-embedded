@@ -12,19 +12,16 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "sdkconfig.h"
 
-// Converts milliseconds into scheduler ticks for bounded polling waits. Keep
-// the SDK macro at the C boundary; Embedded Swift does not import C macros.
+// Exposes the selected scheduler frequency to the transport's bounded wait
+// calculation. Embedded Swift does not import the SDK's config macros.
 #ifndef AXOLOTY_TICKS_FROM_MS_DEFINED
 #define AXOLOTY_TICKS_FROM_MS_DEFINED
-static inline unsigned int axoloty_ticks_from_ms(unsigned int milliseconds) {
-    if (milliseconds == 0U) return 0U;
-    TickType_t ticks = pdMS_TO_TICKS(milliseconds);
-    return ticks == 0 ? 1U : (unsigned int)ticks;
+static inline unsigned int axoloty_scheduler_hz(void) {
+    return configTICK_RATE_HZ;
 }
 #endif
-
-#include "sdkconfig.h"
 
 // Carrier declarations are owned by the selected transport. The include path
 // is supplied by that transport's composition metadata.

@@ -31,6 +31,8 @@ enum {
     FAIL_ROUTERS = 1 << 6,
     FAIL_ROUTER_DROP_AFTER_ONE = 1 << 7,
     FAIL_ROUTER_DROP_THEN_RESTORE = 1 << 8,
+    FAIL_ROUTER_COUNT_ERROR = 1 << 9,
+    FAIL_ROUTER_DROP_RESTORE_BEFORE_ENTRY = 1 << 10,
 };
 
 enum {
@@ -75,6 +77,7 @@ static uint32_t host_last_publish_payload_length;
 static int64_t host_fake_time_us;
 static int host_router_zero_observed;
 static uint32_t host_router_query_count;
+static uint32_t host_scheduler_hz = 1000;
 
 void host_zenoh_reset(void) {
     host_failures = 0;
@@ -92,21 +95,24 @@ void host_zenoh_reset(void) {
     host_fake_time_us = 0;
     host_router_zero_observed = 0;
     host_router_query_count = 0;
+    host_scheduler_hz = 1000;
 }
 
 void host_zenoh_set_failures(unsigned failures) { host_failures = failures; }
 
 int64_t esp_timer_get_time(void) { return host_fake_time_us; }
 
-void vTaskDelay(uint32_t ticks) { host_fake_time_us += (int64_t)ticks * 1000; }
+void vTaskDelay(uint32_t ticks) {
+    host_fake_time_us += (int64_t)ticks * 1000000 / host_scheduler_hz;
+}
 
 int64_t host_zenoh_fake_time_us(void) { return host_fake_time_us; }
 
-uint32_t host_zenoh_ticks_from_ms(uint32_t milliseconds) {
-    if (milliseconds == 0u) return 0u;
-    // The firmware configuration is 1000 Hz; round upward exactly as
-    // pdMS_TO_TICKS does so sub-tick waits still make progress.
-    return milliseconds;
+uint32_t host_zenoh_scheduler_hz(void) { return host_scheduler_hz; }
+
+void host_zenoh_set_scheduler_hz(uint32_t hz) {
+    host_scheduler_hz = hz == 0 ? 1 : hz;
+    host_fake_time_us = 0;
 }
 
 unsigned host_zenoh_call_count(unsigned operation) {
@@ -224,6 +230,14 @@ axoloty_zenoh_result_t axoloty_zenoh_connected_router_count(const axoloty_zenoh_
         } else {
             *out_count = 1u;
         }
+        return AXOLOTY_ZENOH_OK;
+    }
+    if ((host_failures & FAIL_ROUTER_COUNT_ERROR) != 0) {
+        return AXOLOTY_ZENOH_TRANSPORT_ERROR;
+    }
+    if ((host_failures & FAIL_ROUTER_DROP_RESTORE_BEFORE_ENTRY) != 0) {
+        host_router_zero_observed = 1;
+        *out_count = 1;
         return AXOLOTY_ZENOH_OK;
     }
     if ((host_failures & FAIL_ROUTERS) != 0) {

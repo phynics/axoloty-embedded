@@ -77,6 +77,10 @@ public func runCarrierNetworkProbe(
                             deadlineMS: 10_000
                         )
                         let networkReturned = subscribed && networkReconnect(20_000) != 0
+                        // This is a connectivity wait, not evidence of a new
+                        // loss/recovery interval. An already usable session
+                        // satisfies the operation; hardware recovery evidence
+                        // is recorded by the dedicated qualification test.
                         reconnected = networkReturned && carrier.waitForReconnect(deadlineMS: 20_000)
                         let overlongTopic = Span(_unsafeStart: topic.baseAddress!, count: topic.count)
                         let emptyPayload = Span(_unsafeStart: payload.baseAddress!, count: 0)

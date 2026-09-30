@@ -24,9 +24,11 @@
 # satisfy the contract fails (1); only a missing report or a missing tool makes
 # the check unable to run (69).
 #
-# It proves lifecycle order, the 256/2048 bounds, multi-subscription
-# handling, the unsupported last-will refusal, deadline-bounded router
-# observation with its timeout and closed-session behavior, error mapping,
+# It proves lifecycle order, the 256/2048 bounds, application-owned
+# multi-shape subscription cleanup when a later declaration fails, the
+# unsupported last-will refusal, deadline-bounded router observation with
+# already-connected, restored-before-entry, timeout and closed-session cases,
+# 100-Hz wait conversion including a sub-tick remainder, error mapping,
 # and the probe's honest record sequence. It does not compile or link
 # zenoh-pico and cannot be used by the production image.
 #
@@ -195,8 +197,8 @@ facade_modulemap="$facade_module_map"
 
 # The carrier is written against the portable session module, so this check
 # compiles the same Core sources the firmware image compiles in place: the
-# JSON core, AxolotyWire, then AxolotyZenohCore. Same report, same paths, same
-# modules; the device build differs only in its Embedded feature set.
+# JSON core, AxolotyWire, then AxolotyZenohCore. It also compiles the exact
+# application-owned profile-interest installer for its partial-failure test.
 zenoh_core_dir=$(require_field zenohCore.sourceDir \
     "The portable session module is Core-owned and the carrier is written against it.")
 wire_dir=$(require_field portablePackages.0.sourcePath \
@@ -295,6 +297,7 @@ swiftc -D EMBEDDED_ZENOH_HOST_TEST \
     -Xcc -fmodule-map-file="$script_dir/zenoh_host_test.modulemap" \
     "$transport_main/ZenohCarrier.swift" \
     "$transport_main/ZenohNetworkProbe.swift" \
+    "$repo_root/Applications/device-smoke-agent/main/ProfileInterest.swift" \
     "$script_dir/zenoh-host-test.swift" \
     "$tmp/hal.o" "$tmp/queue.o" "$tmp/queue-test.o" "$tmp/validation.o" "$tmp/endpoint.o" \
     "$tmp/_JSONCore.o" "$tmp/AxolotyWire.o" "$tmp/AxolotyZenohCore.o" \
