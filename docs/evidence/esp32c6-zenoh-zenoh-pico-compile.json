@@ -3,7 +3,11 @@
   "profile": "esp32c6-zenoh",
   "check": "zenoh-pico-compile",
   "tier": "component",
-  "status": "unexecuted",
-  "recordedAt": "2026-09-24",
-  "reason": "Not rerun against locked Core 0579663a9d33c0a017cbb3ad5d74dd1b80a8853f. The prior component compile used the ESP-IDF v5.4 toolchain with Core 4956298afb4a087147713fce73bb481cf7c59cab."
+  "status": "passed",
+  "recordedAt": "2026-09-30",
+  "component": "eclipse-zenoh/zenoh-pico 1.10.0",
+  "artifactSHA256": "08ca877ef0c205503bdcb71cbd6cfb4c7efab6d3978de96ae08c7f2dd20c27df",
+  "coreRevision": "68e46c764a555a027f2779c74e8dd04a6bc4bb06",
+  "result": "Rerun at the locked Core revision. Tools/prepare-zenoh-pico.sh prepared the pinned revision 96006957fddef401c20c8c2d813c2a630b666974 from Platforms/esp32c6-idf/dependencies/zenoh-pico.lock.json, and the ESP-IDF wrapper compiled 132 C objects for esp32c6 into libzenoh_pico.a with no errors. The two warnings come from pinned upstream sources (src/net/session.c, src/session/loopback.c), not from the wrapper or the facade backend. This record covers the C library only: it says nothing about the axoloty_zenoh_* facade backend, the Swift module, or a linkable image, and the profile image did not link in the same run (see esp32c6-zenoh-firmware-build.json).",
+  "toolchain": "axoloty-embedded-dev image sha256:300977549cef51e03728784ab59d3a351c5eb4d60e9b5f3a47fb6d16462b2994 — ESP-IDF v5.4, riscv32-esp-elf-gcc 14.2.0, target esp32c6"
 }

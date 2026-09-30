@@ -127,55 +127,149 @@ foreach(AXOLOTY_PACKAGE_SOURCE_DIR IN ITEMS
     endif()
 endforeach()
 
-# The Axoloty Zenoh facade header is a Core-owned consumer contract: the C ABI
-# the `zenoh-pico` backend implements and the portable Swift wrapper imports.
-# Core publishes it in the preparation report as `zenohCore.facadeHeader`
-# (phynics/axoloty#956). Until a prepared Core report carries that field, the
-# header is resolved inside the prepared checkout at the same Core-relative
-# path, and the transport manifest fails closed when the header is missing.
+# The Axoloty Zenoh consumer artifacts are a Core-owned contract: the C facade
+# ABI the `zenoh-pico` backend implements, the portable `AxolotyZenohCore` Swift
+# module that imports it, and the generated module map that binds the two. Core
+# publishes all of it in the preparation report under `zenohCore`
+# (phynics/axoloty#956, phynics/axoloty#974), with a SHA-256 for the header.
 #
-# This resolver never fails for a profile that does not select the Zenoh
-# transport: an ESP-IDF requirements pass walks this file for every profile, and
-# a transport's contract must not become the build's contract (see
-# docs/container-builds.md).
-set(AXOLOTY_ZENOH_FACADE_RELATIVE_PATH
-    "Packages/AxolotyZenoh/Sources/CAxolotyZenoh/include/axoloty_zenoh.h")
-set(AXOLOTY_ZENOH_FACADE_HEADER "")
-set(AXOLOTY_ZENOH_FACADE_HEADER_SHA256 "")
-string(JSON AXOLOTY_ZENOH_REPORTED_HEADER ERROR_VARIABLE AXOLOTY_ZENOH_HEADER_ABSENT
-    GET "${AXOLOTY_PREPARATION_JSON}" zenohCore facadeHeader
+# The report is the only channel. This resolver never guesses a Core-relative
+# path: a firmware file that hardcoded one would couple to Core's private
+# package layout, which is exactly what the repository split had to disprove.
+# A report without `zenohCore` therefore yields no Zenoh variables at all, and
+# only a profile that selected the Zenoh transport fails -- because an ESP-IDF
+# requirements pass walks this file for every profile and a transport's contract
+# must not become the build's contract (see docs/container-builds.md).
+foreach(AXOLOTY_ZENOH_VARIABLE IN ITEMS
+    AXOLOTY_ZENOH_MODULE
+    AXOLOTY_ZENOH_CORE_SOURCE_DIR
+    AXOLOTY_ZENOH_FACADE_MODULE
+    AXOLOTY_ZENOH_FACADE_HEADER
+    AXOLOTY_ZENOH_FACADE_HEADER_SHA256
+    AXOLOTY_ZENOH_FACADE_INCLUDE_DIR
+    AXOLOTY_ZENOH_FACADE_MODULE_MAP
 )
-if(NOT AXOLOTY_ZENOH_HEADER_ABSENT)
-    set(AXOLOTY_ZENOH_FACADE_HEADER "${AXOLOTY_ZENOH_REPORTED_HEADER}")
-    string(JSON AXOLOTY_ZENOH_FACADE_HEADER_SHA256 ERROR_VARIABLE AXOLOTY_ZENOH_SHA_ABSENT
-        GET "${AXOLOTY_PREPARATION_JSON}" zenohCore facadeHeaderSHA256
+    unset(${AXOLOTY_ZENOH_VARIABLE})
+endforeach()
+
+string(JSON AXOLOTY_ZENOH_REPORTED_MODULE ERROR_VARIABLE AXOLOTY_ZENOH_ABSENT
+    GET "${AXOLOTY_PREPARATION_JSON}" zenohCore module
+)
+if(NOT AXOLOTY_ZENOH_ABSENT)
+    set(AXOLOTY_ZENOH_MODULE "${AXOLOTY_ZENOH_REPORTED_MODULE}")
+    string(JSON AXOLOTY_ZENOH_CORE_SOURCE_DIR GET
+        "${AXOLOTY_PREPARATION_JSON}" zenohCore sourceDir
     )
-else()
-    set(AXOLOTY_ZENOH_FACADE_HEADER "${AXOLOTY_SOURCE_DIR}/${AXOLOTY_ZENOH_FACADE_RELATIVE_PATH}")
-endif()
-if(EXISTS "${AXOLOTY_ZENOH_FACADE_HEADER}")
-    file(REAL_PATH "${AXOLOTY_ZENOH_FACADE_HEADER}" AXOLOTY_ZENOH_FACADE_HEADER)
-    get_filename_component(AXOLOTY_ZENOH_FACADE_INCLUDE_DIR "${AXOLOTY_ZENOH_FACADE_HEADER}" DIRECTORY)
-    file(RELATIVE_PATH AXOLOTY_ZENOH_FACADE_RELATIVE
-        "${AXOLOTY_SOURCE_DIR}" "${AXOLOTY_ZENOH_FACADE_HEADER}"
+    string(JSON AXOLOTY_ZENOH_FACADE_MODULE GET
+        "${AXOLOTY_PREPARATION_JSON}" zenohCore facadeModule
     )
-    if(IS_ABSOLUTE "${AXOLOTY_ZENOH_FACADE_RELATIVE}" OR
-       "${AXOLOTY_ZENOH_FACADE_RELATIVE}" MATCHES "^\.\./")
-        message(FATAL_ERROR "the Axoloty Zenoh facade header escapes the Core checkout")
-    endif()
-    if(NOT AXOLOTY_ZENOH_FACADE_HEADER_SHA256 STREQUAL "")
-        file(SHA256 "${AXOLOTY_ZENOH_FACADE_HEADER}" AXOLOTY_ZENOH_FACADE_HEADER_ACTUAL_SHA256)
-        if(NOT AXOLOTY_ZENOH_FACADE_HEADER_ACTUAL_SHA256 STREQUAL "${AXOLOTY_ZENOH_FACADE_HEADER_SHA256}")
+    string(JSON AXOLOTY_ZENOH_FACADE_HEADER GET
+        "${AXOLOTY_PREPARATION_JSON}" zenohCore facadeHeader
+    )
+    string(JSON AXOLOTY_ZENOH_FACADE_HEADER_SHA256 GET
+        "${AXOLOTY_PREPARATION_JSON}" zenohCore facadeHeaderSHA256
+    )
+    string(JSON AXOLOTY_ZENOH_FACADE_MODULE_MAP GET
+        "${AXOLOTY_PREPARATION_JSON}" zenohCore moduleMap
+    )
+
+    # Both Core-side paths must be absolute, canonical, present, and inside the
+    # Core checkout the report names. The generated module map must be
+    # canonical and inside caller-owned scratch. A report that says otherwise
+    # is rejected, not repaired.
+    foreach(AXOLOTY_ZENOH_REPORT_PATH IN ITEMS
+        "${AXOLOTY_ZENOH_CORE_SOURCE_DIR}"
+        "${AXOLOTY_ZENOH_FACADE_HEADER}"
+    )
+        if(NOT IS_ABSOLUTE "${AXOLOTY_ZENOH_REPORT_PATH}")
             message(FATAL_ERROR
-                "the Axoloty Zenoh facade header does not match the SHA-256 the preparation report names"
+                "the Core preparation report names a non-absolute Zenoh path: ${AXOLOTY_ZENOH_REPORT_PATH}"
             )
         endif()
+        if(NOT EXISTS "${AXOLOTY_ZENOH_REPORT_PATH}")
+            message(FATAL_ERROR
+                "the Core preparation report names a Zenoh path that does not exist: ${AXOLOTY_ZENOH_REPORT_PATH}"
+            )
+        endif()
+        file(REAL_PATH "${AXOLOTY_ZENOH_REPORT_PATH}" AXOLOTY_ZENOH_REPORT_PATH_REAL)
+        if(NOT "${AXOLOTY_ZENOH_REPORT_PATH}" STREQUAL "${AXOLOTY_ZENOH_REPORT_PATH_REAL}")
+            message(FATAL_ERROR
+                "the Core preparation report names a non-canonical Zenoh path: ${AXOLOTY_ZENOH_REPORT_PATH}"
+            )
+        endif()
+        file(RELATIVE_PATH AXOLOTY_ZENOH_REPORT_RELATIVE
+            "${AXOLOTY_SOURCE_DIR}" "${AXOLOTY_ZENOH_REPORT_PATH}"
+        )
+        if(IS_ABSOLUTE "${AXOLOTY_ZENOH_REPORT_RELATIVE}" OR
+           "${AXOLOTY_ZENOH_REPORT_RELATIVE}" STREQUAL ".." OR
+           "${AXOLOTY_ZENOH_REPORT_RELATIVE}" MATCHES "^\.\./")
+            message(FATAL_ERROR
+                "the Core preparation report names a Zenoh path outside the Core checkout: ${AXOLOTY_ZENOH_REPORT_PATH}"
+            )
+        endif()
+    endforeach()
+    if(NOT IS_DIRECTORY "${AXOLOTY_ZENOH_CORE_SOURCE_DIR}")
+        message(FATAL_ERROR "the reported AxolotyZenohCore sourceDir is not a directory")
     endif()
-else()
-    # No facade header in this Core. AXOLOTY_ZENOH_FACADE_INCLUDE_DIR stays
-    # empty and only a profile that selected the Zenoh transport fails.
-    unset(AXOLOTY_ZENOH_FACADE_INCLUDE_DIR)
-    set(AXOLOTY_ZENOH_FACADE_HEADER "")
+    if(IS_DIRECTORY "${AXOLOTY_ZENOH_FACADE_HEADER}")
+        message(FATAL_ERROR "the reported Axoloty Zenoh facade header is not a file")
+    endif()
+
+    if(NOT IS_ABSOLUTE "${AXOLOTY_ZENOH_FACADE_MODULE_MAP}" OR
+       NOT EXISTS "${AXOLOTY_ZENOH_FACADE_MODULE_MAP}")
+        message(FATAL_ERROR
+            "the Core preparation report does not name a generated Zenoh module map"
+        )
+    endif()
+    if(IS_DIRECTORY "${AXOLOTY_ZENOH_FACADE_MODULE_MAP}")
+        message(FATAL_ERROR "the reported Zenoh module map is a directory, not a file")
+    endif()
+    # Canonicality is checked against the value the report named. Resolving into
+    # the same variable would compare the resolved path with itself and accept
+    # anything, which is the one thing this check exists to catch.
+    file(REAL_PATH "${AXOLOTY_ZENOH_FACADE_MODULE_MAP}" AXOLOTY_ZENOH_FACADE_MODULE_MAP_REAL)
+    if(NOT "${AXOLOTY_ZENOH_FACADE_MODULE_MAP}" STREQUAL "${AXOLOTY_ZENOH_FACADE_MODULE_MAP_REAL}")
+        message(FATAL_ERROR "the reported Zenoh module map must be canonical")
+    endif()
+    string(JSON AXOLOTY_ZENOH_SCRATCH_DIR GET
+        "${AXOLOTY_PREPARATION_JSON}" staticRuntimeMacro scratchDir
+    )
+    if(NOT IS_ABSOLUTE "${AXOLOTY_ZENOH_SCRATCH_DIR}" OR
+       NOT IS_DIRECTORY "${AXOLOTY_ZENOH_SCRATCH_DIR}")
+        message(FATAL_ERROR "the Core preparation report scratchDir is not a directory")
+    endif()
+    file(REAL_PATH "${AXOLOTY_ZENOH_SCRATCH_DIR}" AXOLOTY_ZENOH_SCRATCH_DIR_REAL)
+    if(NOT "${AXOLOTY_ZENOH_SCRATCH_DIR}" STREQUAL "${AXOLOTY_ZENOH_SCRATCH_DIR_REAL}")
+        message(FATAL_ERROR "the Core preparation report scratchDir must be canonical")
+    endif()
+    file(RELATIVE_PATH AXOLOTY_ZENOH_MODULE_MAP_RELATIVE
+        "${AXOLOTY_ZENOH_SCRATCH_DIR}" "${AXOLOTY_ZENOH_FACADE_MODULE_MAP}"
+    )
+    if(IS_ABSOLUTE "${AXOLOTY_ZENOH_MODULE_MAP_RELATIVE}" OR
+       "${AXOLOTY_ZENOH_MODULE_MAP_RELATIVE}" STREQUAL ".." OR
+       "${AXOLOTY_ZENOH_MODULE_MAP_RELATIVE}" MATCHES "^\.\./")
+        message(FATAL_ERROR "the reported Zenoh module map escapes caller-owned scratch")
+    endif()
+
+    # The header digest identifies the exact C declarations this build compiles
+    # against. It is checked, not trusted.
+    string(LENGTH "${AXOLOTY_ZENOH_FACADE_HEADER_SHA256}" AXOLOTY_ZENOH_FACADE_HEADER_SHA256_LENGTH)
+    if(NOT AXOLOTY_ZENOH_FACADE_HEADER_SHA256_LENGTH EQUAL 64 OR
+       NOT AXOLOTY_ZENOH_FACADE_HEADER_SHA256 MATCHES "^[0-9a-f]+$")
+        message(FATAL_ERROR
+            "the reported Axoloty Zenoh facade header SHA-256 is not 64 lowercase hexadecimal characters"
+        )
+    endif()
+    file(SHA256 "${AXOLOTY_ZENOH_FACADE_HEADER}" AXOLOTY_ZENOH_FACADE_HEADER_ACTUAL_SHA256)
+    if(NOT AXOLOTY_ZENOH_FACADE_HEADER_ACTUAL_SHA256 STREQUAL "${AXOLOTY_ZENOH_FACADE_HEADER_SHA256}")
+        message(FATAL_ERROR
+            "the Axoloty Zenoh facade header does not match the SHA-256 the preparation report names"
+        )
+    endif()
+
+    get_filename_component(AXOLOTY_ZENOH_FACADE_INCLUDE_DIR
+        "${AXOLOTY_ZENOH_FACADE_HEADER}" DIRECTORY
+    )
 endif()
 
 string(JSON AXOLOTY_JSON_CORE_SOURCE_DIR GET

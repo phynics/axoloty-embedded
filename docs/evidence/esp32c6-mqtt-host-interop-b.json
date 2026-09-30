@@ -4,6 +4,6 @@
   "check": "host-interop",
   "tier": "device",
   "status": "unexecuted",
-  "recordedAt": "2026-09-24",
-  "reason": "Not rerun against locked Core 0579663a9d33c0a017cbb3ad5d74dd1b80a8853f; no device is attached. The prior passed run was against Core 4956298afb4a087147713fce73bb481cf7c59cab."
+  "recordedAt": "2026-09-30",
+  "reason": "Not rerun against locked Core 68e46c764a555a027f2779c74e8dd04a6bc4bb06; no device is attached. The prior passed run was against Core 4956298afb4a087147713fce73bb481cf7c59cab."
 }

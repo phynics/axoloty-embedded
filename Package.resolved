@@ -1,12 +1,12 @@
 {
-  "originHash" : "5588f8b8ef97be4ea267667acec2ad18bc77b8cdcfdd4f5e26473ae2fe1f8f52",
+  "originHash" : "9698f0de6b658e31ed5e5fc9428d9aef568cf20da2d65f0ac13676e5a216bc0f",
   "pins" : [
     {
       "identity" : "axoloty",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/phynics/axoloty.git",
       "state" : {
-        "revision" : "4956298afb4a087147713fce73bb481cf7c59cab"
+        "revision" : "68e46c764a555a027f2779c74e8dd04a6bc4bb06"
       }
     },
     {
@@ -113,8 +113,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-syntax.git",
       "state" : {
-        "revision" : "2b59c0c741e9184ab057fd22950b491076d42e91",
-        "version" : "603.0.0"
+        "revision" : "050f1a346fbbac0ca2cfb15a95274f7bd1cf0ccf",
+        "version" : "604.0.0"
       }
     },
     {

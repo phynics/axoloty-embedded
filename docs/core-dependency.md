@@ -35,8 +35,12 @@ the SHA wins and the lock is wrong; fix the lock.
 It writes `<scratch>/core-preparation.json` and prints that path. The report
 carries the Core commit and dirty state, the contract SHA-256, the compiler
 flags, the five portable source directories in dependency order, the locked
-`_JSONCore` revision and source, and the macro executable. Firmware build
-systems consume that report and nothing else from Core.
+`_JSONCore` revision and source, the macro executable, and a `zenohCore` object
+for the Axoloty Zenoh consumer contract (module and source directory,
+façade module, façade header with its SHA-256, and a generated module map in
+caller-owned scratch). Firmware build systems consume that report and nothing
+else from Core, and they name no Core-relative path. See
+[docs/zenoh-embedded.md](zenoh-embedded.md) for the Zenoh half.
 
 ## Environment
 
@@ -87,10 +91,19 @@ so a release or CI build cannot silently consume uncommitted Core changes.
 
 1. Merge the Core change in `phynics/axoloty` and let it release, or pick the
    exact commit to move to.
-2. Update `core.revision`, and `core.version` and `core.tag` with it.
-3. Run `Tools/prepare-core.sh` with `AXOLOTY_STRICT_CORE=1` from a clean tree.
-4. Rebuild and requalify every affected profile. Compatibility is per profile:
-   a profile claims a Core revision only with device evidence for it.
+2. Update `core.revision`, and `core.version` and `core.tag` with it. The
+   version and tag follow Core's own `VERSION` and release tag at that commit;
+   they do not have to change when the revision moves.
+3. Run `Tools/prepare-core.sh` with `AXOLOTY_STRICT_CORE=1` from a clean tree,
+   and read the report the run actually wrote. Do not assume its shape from
+   the previous revision.
+4. Update every `Profiles/*/profile.json` `core.revision`, the host peer pin in
+   `Package.swift`, and `Package.resolved`. Regenerate each evidence record
+   that named a `coreRevision`; a stale `passed` record is a compatibility
+   claim for a Core the lock no longer names.
+5. Rebuild and requalify every affected profile. Compatibility is per profile:
+   a profile claims a Core revision only with device evidence for it. A raise
+   with no board is build-only, and its device evidence stays `unexecuted`.
 
 ## Unsupported
 
