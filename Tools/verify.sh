@@ -159,6 +159,9 @@ if wanted build; then
     check_script mqtt-host-seam \
         'swiftc or a host C compiler is not available for the MQTT seam check' \
         Tests/embedded/run-mqtt-host-test.sh
+    check_script profile-isolation \
+        'node is not available for the profile isolation check' \
+        Tests/embedded/run-profile-isolation-test.sh
     check_script zenoh-host-seam \
         'swiftc or a host C compiler is not available for the Zenoh seam check' \
         Tests/embedded/run-zenoh-host-test.sh

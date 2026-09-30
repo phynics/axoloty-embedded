@@ -5,6 +5,7 @@
 # transport. Core preparation remains in validate.sh.
 #
 # Environment:
+#   AXOLOTY_PROFILE_DIR        Absolute path to the selected profile axis.
 #   AXOLOTY_APPLICATION_DIR  Absolute path to the selected application axis.
 #   AXOLOTY_TRANSPORT_DIR    Absolute path to the selected transport axis.
 #   AXOLOTY_PROOF_RUN_ID     Stable, filesystem-safe run identifier.
@@ -29,7 +30,14 @@ fi
 
 scratch=${AXOLOTY_SCRATCH:-"$repo_root/.axoloty"}
 proof_run_id=${AXOLOTY_PROOF_RUN_ID:-manual}
-proof_root=${EMBEDDED_PROOF_ROOT:-"$scratch/firmware"}
+# shellcheck source=profile-build-env.sh
+. "$script_dir/profile-build-env.sh"
+if [ -z "${AXOLOTY_PROFILE_DIR:-}" ]; then
+    echo "error: AXOLOTY_PROFILE_DIR must name the selected profile; build through Profiles/<name>/build.sh" >&2
+    exit 64
+fi
+default_proof_root=$(axoloty_default_proof_root "$scratch")
+proof_root=${EMBEDDED_PROOF_ROOT:-"$default_proof_root"}
 build_dir=${EMBEDDED_BUILD_DIR:-"$proof_root/build"}
 evidence_dir=${EMBEDDED_EVIDENCE_DIR:-"$proof_root/working-evidence"}
 sdkconfig="$build_dir/sdkconfig"
@@ -39,6 +47,12 @@ clean_room="$evidence_dir/clean-room.json"
 if [ -z "$proof_run_id" ] ||
     ! printf '%s' "$proof_run_id" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'; then
     echo "error: AXOLOTY_PROOF_RUN_ID must be a stable filesystem-safe identifier" >&2
+    exit 64
+fi
+
+# The profile owns the application x platform x transport selection. Refuse a
+# selection that names another profile's axes before it can reach the cache.
+if ! axoloty_verify_profile_selection; then
     exit 64
 fi
 
@@ -74,6 +88,14 @@ fi
 if [ -d "$build_dir" ] && [ ! -f "$build_dir/CMakeCache.txt" ] && [ -n "$(ls -A "$build_dir" 2>/dev/null)" ]; then
     rm -rf "$build_dir"
 fi
+# Profiles build in sequence, and two profiles share one IDF target. A build
+# directory whose cached selection names the other profile's axes would
+# otherwise keep building the wrong transport: the set-target below is skipped
+# for the same target, and the stale cache survives. Clear it so the next
+# configure starts from the current selection. An explicit EMBEDDED_BUILD_DIR
+# is honored the same way; sharing one directory across profiles just rebuilds
+# it every switch, loudly.
+axoloty_clear_stale_profile_cache "$build_dir"
 mkdir -p "$build_dir"
 
 # Operator network configuration is a private build input: SSID, password,
@@ -100,9 +122,13 @@ fi
 
 # ESP-IDF expands component requirements in a separate CMake sub-invocation
 # that does not inherit -D cache variables. axoloty-source.cmake is included
-# during that pass, so the report must also be in the environment or the pass
-# fails with "AXOLOTY_PREPARATION_REPORT is required" before any target builds.
+# during that pass, so the report and the profile selection must also be in
+# the environment or the pass fails with "AXOLOTY_PREPARATION_REPORT is
+# required" before any target builds, or silently keeps the previous profile's
+# axes.
 export AXOLOTY_PREPARATION_REPORT="$report"
+export AXOLOTY_APPLICATION_DIR
+export AXOLOTY_TRANSPORT_DIR
 
 
 : > "$evidence_dir/build.log"
@@ -122,7 +148,11 @@ echo "transport: $AXOLOTY_TRANSPORT_DIR"
 echo "Core report: $report"
 echo "parallelism: ${CMAKE_BUILD_PARALLEL_LEVEL:-default}"
 set +e
-idf.py -B "$build_dir" -D SDKCONFIG="$sdkconfig" build >> "$evidence_dir/build.log" 2>&1
+idf.py -B "$build_dir" -D SDKCONFIG="$sdkconfig" \
+    -D AXOLOTY_APPLICATION_DIR="$AXOLOTY_APPLICATION_DIR" \
+    -D AXOLOTY_TRANSPORT_DIR="$AXOLOTY_TRANSPORT_DIR" \
+    -D AXOLOTY_PREPARATION_REPORT="$report" \
+    build >> "$evidence_dir/build.log" 2>&1
 build_status=$?
 set -e
 cat "$evidence_dir/build.log"
@@ -143,13 +173,10 @@ node "$script_dir/write-provenance.mjs" \
     "$report" "$artifact" "$evidence_dir/build-provenance.json" \
     "$repo_root" "$build_dir" "$clean_room"
 
-if [ -z "${AXOLOTY_PROFILE_DIR:-}" ]; then
-    echo "error: AXOLOTY_PROFILE_DIR must name the selected profile; build through Profiles/<name>/build.sh" >&2
-    exit 64
-fi
 # The release manifest is produced by the build, from the same report and
 # provenance the build just wrote. The release path re-runs this after
 # qualification so the manifest also carries the device evidence.
+# AXOLOTY_PROFILE_DIR was required before the build started.
 "$script_dir/write-release-manifest.sh" "$AXOLOTY_PROFILE_DIR"
 
 echo "Firmware build passed"

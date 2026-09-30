@@ -8,7 +8,8 @@
 #
 # Environment, matching the platform build:
 #   AXOLOTY_SCRATCH        Scratch root. Default: <repo>/.axoloty
-#   EMBEDDED_PROOF_ROOT    Caller-owned proof workspace. Default: <scratch>/firmware
+#   EMBEDDED_PROOF_ROOT    Caller-owned proof workspace. Default:
+#                          <scratch>/firmware-<profile>
 #   EMBEDDED_EVIDENCE_DIR  Evidence output directory.
 #   AXOLOTY_PREVIEW_CORE_REVISION  Set only by the compatibility-preview path.
 
@@ -26,7 +27,10 @@ fi
 profile_dir=$(CDPATH='' cd -- "$profile_dir" && pwd)
 
 scratch=${AXOLOTY_SCRATCH:-"$repo_root/.axoloty"}
-proof_root=${EMBEDDED_PROOF_ROOT:-"$scratch/firmware"}
+# shellcheck source=profile-build-env.sh
+. "$script_dir/profile-build-env.sh"
+default_proof_root=$(AXOLOTY_PROFILE_DIR="$profile_dir" axoloty_default_proof_root "$scratch")
+proof_root=${EMBEDDED_PROOF_ROOT:-"$default_proof_root"}
 evidence_dir=${EMBEDDED_EVIDENCE_DIR:-"$proof_root/working-evidence"}
 preparation="$evidence_dir/preparation.json"
 provenance="$evidence_dir/build-provenance.json"

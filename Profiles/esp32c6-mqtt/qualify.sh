@@ -36,15 +36,24 @@ if [ -n "${AXOLOTY_PREVIEW_CORE_REVISION:-}" ]; then
     exit 64
 fi
 
+export AXOLOTY_PROFILE_DIR="$script_dir"
 export AXOLOTY_APPLICATION_DIR="$repo_root/Applications/$application"
 export AXOLOTY_TRANSPORT_DIR="$repo_root/Transports/$transport"
 export AXOLOTY_CORPUS_MANIFEST="$AXOLOTY_APPLICATION_DIR/fixtures/manifest.json"
 
-"$repo_root/Platforms/$platform/tools/flash.sh"
-
 scratch=${AXOLOTY_SCRATCH:-"$repo_root/.axoloty"}
-proof_root=${EMBEDDED_PROOF_ROOT:-"$scratch/firmware"}
+# The image flashed here is this profile's own build, never the other
+# profile's. Resolve the same per-profile default the build uses, and hand the
+# flash tool the exact directories instead of letting it re-derive them.
+profile_name=$(basename -- "$script_dir")
+proof_root=${EMBEDDED_PROOF_ROOT:-"$scratch/firmware-$profile_name"}
+build_dir=${EMBEDDED_BUILD_DIR:-"$proof_root/build"}
 evidence_dir=${EMBEDDED_EVIDENCE_DIR:-"$proof_root/working-evidence"}
+
+EMBEDDED_PROOF_ROOT="$proof_root" EMBEDDED_BUILD_DIR="$build_dir" \
+    EMBEDDED_EVIDENCE_DIR="$evidence_dir" \
+    "$repo_root/Platforms/$platform/tools/flash.sh"
+
 proof="$evidence_dir/go-proof.json"
 device_manifest="$evidence_dir/device-manifest.json"
 evidence_out="$repo_root/docs/evidence/esp32c6-mqtt-embedded-swift-smoke-v2.json"

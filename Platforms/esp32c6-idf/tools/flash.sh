@@ -6,7 +6,9 @@
 # never invokes sudo or rebuilds the firmware.
 #
 # The board is named by AXOLOTY_DEVICE_PORT or EMBEDDED_DEVICE; it is never
-# guessed.
+# guessed. The default proof workspace follows AXOLOTY_PROFILE_DIR
+# (<scratch>/firmware-<profile>), so flashing one profile never reads the
+# other profile's image; an explicit EMBEDDED_PROOF_ROOT still wins.
 
 set -eu
 
@@ -16,7 +18,10 @@ repo_root=$(git -C "$script_dir" rev-parse --show-toplevel)
 
 scratch=${AXOLOTY_SCRATCH:-"$repo_root/.axoloty"}
 proof_run_id=${AXOLOTY_PROOF_RUN_ID:-manual}
-proof_root=${EMBEDDED_PROOF_ROOT:-"$scratch/firmware"}
+# shellcheck source=profile-build-env.sh
+. "$script_dir/profile-build-env.sh"
+default_proof_root=$(axoloty_default_proof_root "$scratch")
+proof_root=${EMBEDDED_PROOF_ROOT:-"$default_proof_root"}
 build_dir=${EMBEDDED_BUILD_DIR:-"$proof_root/build"}
 evidence_dir=${EMBEDDED_EVIDENCE_DIR:-"$proof_root/working-evidence"}
 build_project_dir=${EMBEDDED_BUILD_PROJECT:-"$proof_root/platform"}

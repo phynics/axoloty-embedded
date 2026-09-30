@@ -71,7 +71,10 @@ fi
 version="$(cat "$repo_root/VERSION")"
 
 scratch="${AXOLOTY_SCRATCH:-$repo_root/.axoloty}"
-proof_root="${EMBEDDED_PROOF_ROOT:-$scratch/firmware}"
+# shellcheck source=../Platforms/esp32c6-idf/tools/profile-build-env.sh
+. "$repo_root/Platforms/$platform/tools/profile-build-env.sh"
+default_proof_root=$(AXOLOTY_PROFILE_DIR="$profile_dir" axoloty_default_proof_root "$scratch")
+proof_root="${EMBEDDED_PROOF_ROOT:-$default_proof_root}"
 evidence_dir="${EMBEDDED_EVIDENCE_DIR:-$proof_root/working-evidence}"
 candidate="$evidence_dir/release-manifest.json"
 
