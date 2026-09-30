@@ -195,9 +195,12 @@ backend; each is visible in the code or in a returned result code.
   `zenoh-pico 1.10.0` with no warnings, and a relocatable link of the backend
   objects against `libzenoh_pico.a` leaves no undefined Zenoh symbol. It
   defines all eleven `axoloty_zenoh_*` entry points.
-- **The image does not link.** The Swift application seam is still MQTT-shaped:
-  `DeviceSmokeApplication.swift` calls `runCarrierNetworkProbe` and
-  `Esp32c6SmokeSeam.swift` wires `embeddedExchangeConfigureLastWill`,
+- **The image does not link.** Built on its own in a fresh
+  `AXOLOTY_SCRATCH`, the Zenoh profile resolves the Core contract and compiles
+  the pinned zenoh-pico library and `EmbeddedZenohClient.swift`, then ESP-IDF
+  stops in the main Swift compile. The Swift application seam is still
+  MQTT-shaped: `DeviceSmokeApplication.swift` calls `runCarrierNetworkProbe`
+  and `Esp32c6SmokeSeam.swift` wires `embeddedExchangeConfigureLastWill`,
   `embeddedExchangeConnect`, `embeddedExchangeSubscribe`,
   `embeddedExchangeUnsubscribe`, `embeddedExchangePublish`,
   `embeddedExchangePollOneEvent`, `embeddedExchangeWaitForReconnect`, and
@@ -205,6 +208,16 @@ backend; each is visible in the code or in a returned result code.
   operations are last-will setup, a reconnect check, and a network probe, which
   a Zenoh image has to answer with Zenoh semantics or not at all. That is
   #816/#817 work and is deliberately not attempted here.
+- **A second, unrelated blocker sits in front of it.**
+  `Platforms/esp32c6-idf/tools/build.sh` passes the transport selection with
+  `-D` and only re-runs `idf.py set-target` when the build directory is new or
+  its target changed. `Tools/verify.sh` builds every profile into one build
+  directory, so the second profile inherits the first profile's cached
+  `AXOLOTY_TRANSPORT_DIR`: `Tools/verify.sh` reports
+  `build:esp32c6-zenoh` against the MQTT transport's sources and fails on
+  `mqtt_carrier_espidf.c`. This is pre-existing, from the migration commit,
+  and is not fixed by the lock raise. Until it is fixed, build the Zenoh
+  profile in its own scratch to see the real seam errors above.
 - **No device or resource evidence.** None was produced and none was invented.
   See `docs/evidence/esp32c6-zenoh-*.json`.
 
