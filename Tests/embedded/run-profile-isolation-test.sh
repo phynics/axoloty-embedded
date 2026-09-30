@@ -29,6 +29,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 # shellcheck source=../../Platforms/esp32c6-idf/tools/profile-build-env.sh
+# shellcheck source=../../Platforms/esp32c6-idf/tools/profile-build-env.sh
 . "$helper"
 
 failures=0
@@ -190,10 +191,10 @@ unset AXOLOTY_PROFILE_DIR AXOLOTY_APPLICATION_DIR AXOLOTY_TRANSPORT_DIR
 # output stops matching the helper. Either way this fails. The workspace
 # overrides are emptied so an operator's ambient EMBEDDED_* cannot stand in
 # for the default under test.
-mqtt_release_root=$(AXOLOTY_SCRATCH="$tmp/scratch" EMBEDDED_PROOF_ROOT= EMBEDDED_EVIDENCE_DIR= \
+mqtt_release_root=$(AXOLOTY_SCRATCH="$tmp/scratch" EMBEDDED_PROOF_ROOT='' EMBEDDED_EVIDENCE_DIR='' \
     "$repo_root/Tools/release.sh" \
     --profile esp32c6-mqtt --print-proof-root | sed -n 's/^proof_root=//p')
-zenoh_release_root=$(AXOLOTY_SCRATCH="$tmp/scratch" EMBEDDED_PROOF_ROOT= EMBEDDED_EVIDENCE_DIR= \
+zenoh_release_root=$(AXOLOTY_SCRATCH="$tmp/scratch" EMBEDDED_PROOF_ROOT='' EMBEDDED_EVIDENCE_DIR='' \
     "$repo_root/Tools/release.sh" \
     --profile esp32c6-zenoh --print-proof-root | sed -n 's/^proof_root=//p')
 AXOLOTY_PROFILE_DIR="$mqtt_profile"
