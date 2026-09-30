@@ -4,6 +4,6 @@
   "check": "embedded-zenoh-smoke",
   "tier": "device",
   "status": "unexecuted",
-  "recordedAt": "2026-09-24",
+  "recordedAt": "2026-09-30",
   "reason": "Not rerun against locked Core 68e46c764a555a027f2779c74e8dd04a6bc4bb06; no physical ESP32-C6 or reachable Zenoh router is attached, and the profile has no linkable image."
 }

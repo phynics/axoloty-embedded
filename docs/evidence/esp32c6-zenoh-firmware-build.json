@@ -4,6 +4,6 @@
   "check": "firmware-build",
   "tier": "build",
   "status": "unexecuted",
-  "recordedAt": "2026-09-24",
-  "reason": "Not rerun against locked Core 68e46c764a555a027f2779c74e8dd04a6bc4bb06; the profile has no linkable image because the application calls transport functions only defined by MQTT."
+  "recordedAt": "2026-09-30",
+  "reason": "Attempted against locked Core 68e46c764a555a027f2779c74e8dd04a6bc4bb06 with the report the new lock produces, and the Core Zenoh contract resolved from it: the platform passed the reported facade include directory to the transport, and the pinned zenoh-pico library plus EmbeddedZenohClient.swift both compiled. No image was produced. ESP-IDF stopped in the main Swift compile because the application and platform seam is still MQTT-shaped: DeviceSmokeApplication.swift cannot find runCarrierNetworkProbe, and Esp32c6SmokeSeam.swift cannot find embeddedExchangeConfigureLastWill, embeddedExchangeConnect, embeddedExchangeSubscribe, embeddedExchangeUnsubscribe, embeddedExchangePublish, embeddedExchangePollOneEvent, embeddedExchangeWaitForReconnect, or embeddedExchangeDisconnect, none of which the Zenoh transport provides. An executed build record must name firmwareSHA256, and there is no image to hash; inventing one is the one failure that cannot be repaired, so the state stays unexecuted with this reason. Generalizing the seam is application runtime integration work and is not attempted by the lock raise."
 }

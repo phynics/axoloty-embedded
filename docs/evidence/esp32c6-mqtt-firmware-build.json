@@ -3,7 +3,24 @@
   "profile": "esp32c6-mqtt",
   "check": "firmware-build",
   "tier": "build",
-  "status": "unexecuted",
+  "status": "passed",
   "recordedAt": "2026-09-30",
-  "reason": "Not yet rerun against locked Core 68e46c764a555a027f2779c74e8dd04a6bc4bb06; this placeholder holds the slot until the build that follows the lock raise finishes."
+  "result": "ESP32-C6 MQTT firmware compiled and linked with Swift 6.4 against locked Core revision 68e46c764a555a027f2779c74e8dd04a6bc4bb06, the revision that first publishes the zenohCore entry in the Core preparation report. The 671904-byte image is 3952 bytes smaller than the 675856-byte image the same toolchain produced at Core 0579663a (0.6% decrease). Device-only free/minimum heap and stack high-water metrics were not measured because no board is attached.",
+  "firmwareSHA256": "b1f84c7ab36ae8e1a3cb58ae4d0c23c31324614fc137630133362e68fdb437ec",
+  "firmwareSizeBytes": 671904,
+  "previousFirmwareSizeBytes": 675856,
+  "firmwareSizeDeltaBytes": -3952,
+  "coreRevision": "68e46c764a555a027f2779c74e8dd04a6bc4bb06",
+  "toolchain": "axoloty-embedded-dev image sha256:300977549cef51e03728784ab59d3a351c5eb4d60e9b5f3a47fb6d16462b2994 — Swift version 6.4 (swift-6.4-RELEASE)\nTarget: x86_64-unknown-linux-gnu, ESP-IDF v5.4, target esp32c6",
+  "dockerfileSHA256": "34c2b624b658ca77e06444cc23025d387fd9c84f624928aa6b0ed7a7036469e4",
+  "coreContractSHA256": "27254ace9481cd6b0d7d51063f29ac61b29b25b5f795d2aafe6087f406de0a7d",
+  "firmwareRevision": "5eff44a4b39ac30670ce915917904d65d2ffb7b3",
+  "runtimeResourceMetrics": {
+    "status": "unexecuted",
+    "freeHeapBytes": null,
+    "minimumFreeHeapBytes": null,
+    "mainStackHighWaterMarkBytes": null,
+    "workerStackHighWaterMarkBytes": null,
+    "reason": "No ESP32-C6 board was attached, so runtime heap and stack metrics could not be measured."
+  }
 }
