@@ -11,8 +11,9 @@
 # the real MQTT and Zenoh profiles, and inspects the resolved directories and
 # synthetic CMakeCache.txt fixtures written for the switch. It also probes
 # Tools/release.sh through its --print-proof-root introspection flag, so a
-# release path that stops sharing the per-profile rule fails here, and probes
-# the flash.sh workspace guard. It needs only sh, node, and git: no board, no
+# release path that stops sharing the per-profile rule fails here, probes
+# the flash.sh workspace guard, and probes both qualify.sh wrappers through
+# the same flag. It needs only sh, node, and git: no board, no
 # SDK, no broker.
 #
 # Exit status: 0 passed, 1 failed, 69 required tool missing.
@@ -260,6 +261,25 @@ elif grep -q 'AXOLOTY_DEVICE_PORT is unset' "$tmp/flash-profile.log"; then
 else
     echo "FAIL: flash.sh with a profile selection failed unexpectedly:" >&2
     cat "$tmp/flash-profile.log" >&2
+    failures=$((failures + 1))
+fi
+
+# 9. Both qualification wrappers resolve their workspace through the same
+# shared rule. --print-proof-root stops before any device step, so this stays
+# hardware-free. If a qualify.sh ever reverts to an inline default, its output
+# stops matching the helper and this fails.
+mqtt_qualify_root=$(AXOLOTY_SCRATCH="$tmp/scratch" EMBEDDED_PROOF_ROOT='' EMBEDDED_BUILD_DIR='' EMBEDDED_EVIDENCE_DIR='' \
+    "$mqtt_profile/qualify.sh" \
+    --print-proof-root | sed -n 's/^proof_root=//p')
+zenoh_qualify_root=$(AXOLOTY_SCRATCH="$tmp/scratch" EMBEDDED_PROOF_ROOT='' EMBEDDED_BUILD_DIR='' EMBEDDED_EVIDENCE_DIR='' \
+    "$zenoh_profile/qualify.sh" \
+    --print-proof-root | sed -n 's/^proof_root=//p')
+if [ -n "$mqtt_qualify_root" ] && [ "$mqtt_qualify_root" = "$mqtt_expected" ] &&
+    [ -n "$zenoh_qualify_root" ] && [ "$zenoh_qualify_root" = "$zenoh_expected" ] &&
+    [ "$mqtt_qualify_root" != "$zenoh_qualify_root" ]; then
+    echo "ok: both qualify.sh wrappers resolve the shared per-profile workspace"
+else
+    echo "FAIL: qualify.sh workspace diverged from the shared rule (mqtt: $mqtt_qualify_root; zenoh: $zenoh_qualify_root)" >&2
     failures=$((failures + 1))
 fi
 
