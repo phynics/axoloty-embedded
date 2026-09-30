@@ -71,10 +71,10 @@ fi
 version="$(cat "$repo_root/VERSION")"
 
 scratch="${AXOLOTY_SCRATCH:-$repo_root/.axoloty}"
-# shellcheck source=../Platforms/esp32c6-idf/tools/profile-build-env.sh
-. "$repo_root/Platforms/$platform/tools/profile-build-env.sh"
-default_proof_root=$(AXOLOTY_PROFILE_DIR="$profile_dir" axoloty_default_proof_root "$scratch")
-proof_root="${EMBEDDED_PROOF_ROOT:-$default_proof_root}"
+# The profile name is already in hand here, so resolve the same per-profile
+# default the platform build uses without sourcing across directories (which
+# ShellCheck cannot follow for a dynamic platform path).
+proof_root="${EMBEDDED_PROOF_ROOT:-$scratch/firmware-$profile}"
 evidence_dir="${EMBEDDED_EVIDENCE_DIR:-$proof_root/working-evidence}"
 candidate="$evidence_dir/release-manifest.json"
 
