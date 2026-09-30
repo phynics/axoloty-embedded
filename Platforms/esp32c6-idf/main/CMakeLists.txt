@@ -130,11 +130,40 @@ idf_component_register(
     LDFRAGMENTS "linker.lf"
 )
 
+# The Zenoh transport's carrier is written against the prepared
+# AxolotyZenohCore module. Order its publication and the Core-generated
+# facade module map before the main Swift compile, but only for the profile
+# that selected it: the component registers empty for every other profile.
+get_filename_component(AXOLOTY_SELECTED_TRANSPORT_NAME "${AXOLOTY_TRANSPORT_DIR}" NAME)
+set(AXOLOTY_MAIN_BRIDGING_HEADER "${CMAKE_CURRENT_LIST_DIR}/BridgingHeader.h")
+if(AXOLOTY_SELECTED_TRANSPORT_NAME STREQUAL "zenoh-pico")
+    add_dependencies(${COMPONENT_LIB} axoloty_zenoh_core_module_alias)
+    get_filename_component(AXOLOTY_ZENOH_FACADE_MODULE_DIR
+        "${AXOLOTY_ZENOH_FACADE_MODULE_MAP}" DIRECTORY
+    )
+    target_include_directories(${COMPONENT_LIB} PRIVATE
+        "${AXOLOTY_ZENOH_FACADE_MODULE_DIR}"
+    )
+endif()
+
+# Register the main Swift sources with the platform bridge. For Zenoh, the
+# selected Core-generated facade module map is also a Clang input to the
+# bridge's PCH and the subsequent Swift module imports.
 idf_component_register_swift(
     ${COMPONENT_LIB}
-    BRIDGING_HEADER ${CMAKE_CURRENT_LIST_DIR}/BridgingHeader.h
+    BRIDGING_HEADER ${AXOLOTY_MAIN_BRIDGING_HEADER}
     SRCS ${AXOLOTY_SWIFT_SOURCES}
 )
+
+# `idf_component_register_swift` resets COMPILE_OPTIONS to its Embedded
+# target defaults. Add the report-generated facade map afterwards so both the
+# bridging-header PCH and the Swift frontend can resolve CAxolotyZenoh.
+if(AXOLOTY_SELECTED_TRANSPORT_NAME STREQUAL "zenoh-pico")
+    target_compile_options(${COMPONENT_LIB} PRIVATE
+        "$<$<COMPILE_LANGUAGE:Swift>:-Xcc>"
+        "$<$<COMPILE_LANGUAGE:Swift>:-fmodule-map-file=${AXOLOTY_ZENOH_FACADE_MODULE_MAP}>"
+    )
+endif()
 
 # The application and the static model consumers import Core modules. Require
 # each explicit module output before compiling any main Swift source so clean

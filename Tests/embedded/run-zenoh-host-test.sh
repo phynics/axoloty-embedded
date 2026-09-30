@@ -3,9 +3,10 @@
 
 # Host check for the embedded Zenoh transport seam.
 #
-# Compiles the real EmbeddedZenohClient overlay, the real bounded-sample
-# validator, the real bounded receive queue, and a host-only fake carrier. No
-# board, no SDK, no broker, and no zenoh-pico.
+# Compiles the real carrier and probe sources against the real portable
+# session module, the real bounded-sample validator, the real bounded receive
+# queue, the real endpoint helper, and a host-only fake carrier. No board, no
+# SDK, no broker, and no zenoh-pico.
 #
 # The C seam under test is the Core-owned Axoloty Zenoh facade, so this check
 # needs its header and the module map Core generates for it. Both come from the
@@ -23,9 +24,11 @@
 # satisfy the contract fails (1); only a missing report or a missing tool makes
 # the check unable to run (69).
 #
-# It proves operation order, handle lifetime, the 256/2048 bounds, and the
-# bounded queue with its drop counters. It does not compile or link zenoh-pico
-# and cannot be used by the production image.
+# It proves lifecycle order, the 256/2048 bounds, multi-subscription
+# handling, the unsupported last-will refusal, deadline-bounded router
+# observation with its timeout and closed-session behavior, error mapping,
+# and the probe's honest record sequence. It does not compile or link
+# zenoh-pico and cannot be used by the production image.
 #
 # Exit status: 0 passed, 1 failed, 69 required tool or input missing.
 
@@ -190,9 +193,78 @@ facade_include=$(CDPATH='' cd -- "$(dirname -- "$facade_header")" && pwd -P)
     fail_contract "the reported facade header is not axoloty_zenoh.h: $facade_header"
 facade_modulemap="$facade_module_map"
 
+# The carrier is written against the portable session module, so this check
+# compiles the same Core sources the firmware image compiles in place: the
+# JSON core, AxolotyWire, then AxolotyZenohCore. Same report, same paths, same
+# modules; the device build differs only in its Embedded feature set.
+zenoh_core_dir=$(require_field zenohCore.sourceDir \
+    "The portable session module is Core-owned and the carrier is written against it.")
+wire_dir=$(require_field portablePackages.0.sourcePath \
+    "AxolotyZenohCore imports AxolotyWire, so this check compiles it from the same report.")
+json_core_dir=$(require_field jsonCore.sourceDir \
+    "AxolotyWire imports the JSON core, so this check compiles it from the same report.")
+
+for core_path in "$zenoh_core_dir" "$wire_dir"; do
+    is_absolute "$core_path" ||
+        fail_contract "a Core source path is not absolute: $core_path"
+    [ -d "$core_path" ] ||
+        fail_contract "a Core source path is not a directory: $core_path"
+    is_canonical "$core_path" ||
+        fail_contract "a Core source path is not canonical: $core_path"
+    inside_root "$core_path" "$core_source_dir" ||
+        fail_contract "a Core source path is outside the Core checkout: $core_path"
+done
+is_absolute "$json_core_dir" ||
+    fail_contract "the JSON core source path is not absolute: $json_core_dir"
+[ -d "$json_core_dir" ] ||
+    fail_contract "the JSON core source path is not a directory: $json_core_dir"
+is_canonical "$json_core_dir" ||
+    fail_contract "the JSON core source path is not canonical: $json_core_dir"
+inside_root "$json_core_dir" "$core_scratch_dir" ||
+    fail_contract "the JSON core source path is outside caller-owned scratch: $json_core_dir"
+[ "$(json_field portablePackages.0.name)" = "AxolotyWire" ] ||
+    fail_contract "portablePackages.0 is not AxolotyWire"
+
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
+# A private endpoint configuration for the real endpoint helper. The helper
+# is device C with no SDK dependency, so it compiles on the host unchanged;
+# the generated header supplies the operator values the device harness
+# generates per run.
+cat > "$tmp/axoloty_network_config.h" <<'EOF'
+#ifndef AXOLOTY_NETWORK_CONFIG_H
+#define AXOLOTY_NETWORK_CONFIG_H
+#define AXOLOTY_NETWORK_CONFIGURED 1
+static const char axoloty_zenoh_host[] = { '1', '2', '7', '.', '0', '.', '0', '.', '1', 0 };
+static const unsigned int axoloty_zenoh_port = 7447U;
+#endif
+EOF
+
+swift_sources() {
+    for source in "$1"/*.swift; do
+        [ -f "$source" ] && printf '%s\n' "$source"
+    done
+}
+
+# The portable packages compile as the host, exactly as run-host-smoke-test.sh
+# compiles them: same sources, same order, same Lifetimes feature.
+swiftc -swift-version 6 -enable-experimental-feature Lifetimes -package-name IkigaJSON -parse-as-library -wmo \
+    -module-name _JSONCore \
+    -emit-module -emit-module-path "$tmp/_JSONCore.swiftmodule" \
+    -c $(swift_sources "$json_core_dir") $(swift_sources "$json_core_dir/Parser") $(swift_sources "$json_core_dir/SIMD") \
+    -o "$tmp/_JSONCore.o"
+swiftc -swift-version 6 -enable-experimental-feature Lifetimes -parse-as-library -wmo \
+    -module-name AxolotyWire \
+    -I "$tmp" \
+    -emit-module -emit-module-path "$tmp/AxolotyWire.swiftmodule" \
+    -c $(swift_sources "$wire_dir") -o "$tmp/AxolotyWire.o"
+swiftc -swift-version 6 -enable-experimental-feature Lifetimes -parse-as-library -wmo \
+    -module-name AxolotyZenohCore \
+    -I "$tmp" \
+    -Xcc -fmodule-map-file="$facade_modulemap" \
+    -emit-module -emit-module-path "$tmp/AxolotyZenohCore.swiftmodule" \
+    -c $(swift_sources "$zenoh_core_dir") -o "$tmp/AxolotyZenohCore.o"
 
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
     -I "$transport_main" -I "$facade_include" -I "$repo_root/Interop" \
@@ -206,15 +278,26 @@ trap 'rm -rf "$tmp"' EXIT
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
     -I "$transport_main" -I "$facade_include" \
     -c "$transport_main/zenoh_pico_queue.c" -o "$tmp/queue.o"
+"$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
+    -I "$transport_main" -I "$tmp" \
+    -c "$transport_main/zenoh_endpoint.c" -o "$tmp/endpoint.o"
+# The real carrier and probe sources the firmware image compiles. The host
+# test flag exposes the host-only test module for the platform clock the
+# carrier waits on; the device links the SDK originals through its bridging
+# header instead. No test overlay: the host test exercises the production path.
 swiftc -D EMBEDDED_ZENOH_HOST_TEST \
+    -I "$tmp" \
     -I "$transport_main" \
     -I "$script_dir" \
     -I "$repo_root/Interop" \
+    -Xcc -I"$transport_main" \
     -Xcc -fmodule-map-file="$facade_modulemap" \
     -Xcc -fmodule-map-file="$script_dir/zenoh_host_test.modulemap" \
-    "$transport_main/EmbeddedZenohClient.swift" \
+    "$transport_main/ZenohCarrier.swift" \
+    "$transport_main/ZenohNetworkProbe.swift" \
     "$script_dir/zenoh-host-test.swift" \
-    "$tmp/hal.o" "$tmp/queue.o" "$tmp/queue-test.o" "$tmp/validation.o" \
+    "$tmp/hal.o" "$tmp/queue.o" "$tmp/queue-test.o" "$tmp/validation.o" "$tmp/endpoint.o" \
+    "$tmp/_JSONCore.o" "$tmp/AxolotyWire.o" "$tmp/AxolotyZenohCore.o" \
     -o "$tmp/embedded-zenoh-host-test"
 
 # Nix's standalone Swift compiler does not always add the dispatch library to

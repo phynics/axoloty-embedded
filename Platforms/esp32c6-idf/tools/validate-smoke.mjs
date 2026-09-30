@@ -88,6 +88,11 @@ export function checksum(record, previous = 0) {
   mixUInt32(record.schemaVersion); mixText(record.runId); mixUInt32(record.sequence);
   mixText(record.caseId); mixText(record.operation); mixText(record.stage); mixText(record.status);
   mixUInt32(record.counts?.passed ?? 0); mixUInt32(record.counts?.failed ?? 0);
+  // Keep the frozen checksum for historical images. A profile that emits an
+  // unsupported result binds its non-zero unsupported count into summary and
+  // completion checksums.
+  const unsupported = record.counts?.unsupported ?? 0;
+  if (unsupported !== 0) mixUInt32(unsupported);
   mixUInt32(previous);
   return hash >>> 0;
 }
@@ -116,8 +121,9 @@ export function failureResult(stage, reason) {
 }
 
 /** Validates structured JSON Lines emitted by the Embedded Swift smoke firmware. */
-export function createEmbeddedSwiftSmokeValidator(expectedTests = expectedSmokeTests) {
+export function createEmbeddedSwiftSmokeValidator(expectedTests = expectedSmokeTests, unsupportedTestsAllowed = new Set()) {
   const seenTests = new Set();
+  const unsupportedTests = new Set();
   let expectedSequence = 0;
   let previousChecksum = 0;
   let bootSeen = false;
@@ -159,6 +165,13 @@ export function createEmbeddedSwiftSmokeValidator(expectedTests = expectedSmokeT
     if (expectedTests.has(record.caseId)) {
       if (!bootSeen || summary || completionSeen || record.operation !== "smokeCheck" || record.stage !== "execute") return reject("execute", "test record out of order");
       if (seenTests.has(record.caseId)) return reject("execute", `duplicate test record: ${record.caseId}`);
+      if (record.status === "unsupported") {
+        if (!unsupportedTestsAllowed.has(record.caseId)) return reject("execute", `unsupported status is not allowed for ${record.caseId}`);
+        if (record.diagnostic !== undefined) return reject("execute", `unsupported test record has a failure diagnostic: ${record.caseId}`);
+        unsupportedTests.add(record.caseId);
+        seenTests.add(record.caseId);
+        return false;
+      }
       if (record.status !== "passed") {
         if (typeof record.diagnostic !== "string" || record.diagnostic.length === 0 || record.diagnostic.length > maxDiagnosticLength) return reject("execute", `failed test record: ${record.caseId}: missing or unbounded diagnostic`);
         return reject("execute", record.diagnostic);
@@ -168,11 +181,13 @@ export function createEmbeddedSwiftSmokeValidator(expectedTests = expectedSmokeT
     if (record.caseId === "summary") {
       if (!bootSeen || summary || completionSeen || record.operation !== "summary" || record.stage !== "summary" || !["completed", "failed"].includes(record.status) || !validCounts(record.counts)) return reject("summary", "invalid summary record");
       if (record.status === "failed") return reject("summary", record.diagnostic ?? "summary reports failed execution checks");
+      if ((record.counts.unsupported ?? 0) !== unsupportedTests.size) return reject("summary", "unsupported count does not match unsupported records");
+      if (unsupportedTests.size > 0 && record.counts.unsupported === undefined) return reject("summary", "summary omits the unsupported count");
       summary = record.counts; return false;
     }
     if (record.caseId === "completion") {
       if (!summary) return reject("summary", "missing summary record");
-      if (completionSeen || record.operation !== "complete" || record.stage !== "completion" || !["completed", "failed"].includes(record.status) || !validCounts(record.counts) || record.counts.passed !== summary.passed || record.counts.failed !== summary.failed || record.finalChecksum !== record.checksum) return reject("completion", "invalid completion record");
+      if (completionSeen || record.operation !== "complete" || record.stage !== "completion" || !["completed", "failed"].includes(record.status) || !validCounts(record.counts) || record.counts.passed !== summary.passed || record.counts.failed !== summary.failed || (record.counts.unsupported ?? 0) !== (summary.unsupported ?? 0) || record.finalChecksum !== record.checksum) return reject("completion", "invalid completion record");
       if (record.status === "failed") return reject("completion", record.diagnostic ?? "completion reports failed execution checks");
       completionMetrics = record.metrics ?? null;
       completionSeen = true; return true;
@@ -182,7 +197,8 @@ export function createEmbeddedSwiftSmokeValidator(expectedTests = expectedSmokeT
 
   function validCounts(counts) {
     return counts && Number.isInteger(counts.passed) && counts.passed >= 0 &&
-      Number.isInteger(counts.failed) && counts.failed >= 0;
+      Number.isInteger(counts.failed) && counts.failed >= 0 &&
+      (counts.unsupported === undefined || (Number.isInteger(counts.unsupported) && counts.unsupported >= 0));
   }
 
   function result() {
@@ -191,11 +207,11 @@ export function createEmbeddedSwiftSmokeValidator(expectedTests = expectedSmokeT
     if (seenTests.size !== expectedTests.size) return failureResult("execute", "missing expected test records");
     if (!summary) return failureResult("summary", "missing summary record");
     if (!completionSeen) return failureResult("completion", "missing completion record");
-    if (summary.failed !== 0 || summary.passed !== expectedTests.size) return failureResult("summary", "invalid summary counts");
+    if (summary.failed !== 0 || summary.passed + (summary.unsupported ?? 0) !== expectedTests.size) return failureResult("summary", "invalid summary counts");
     return {
       passed: true,
       reason: "all structured smoke records passed",
-      counts: { passed: expectedTests.size, failed: 0 },
+      counts: { passed: summary.passed, failed: 0, ...(summary.unsupported ? { unsupported: summary.unsupported } : {}) },
       metrics: completionMetrics,
     };
   }

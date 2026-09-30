@@ -58,6 +58,17 @@ private struct EmbeddedMQTTHostTest {
                 host_mqtt_set_failures(0)
                 precondition(client.subscribe(topic: topicSpan, deadlineMS: 1))
 
+                // The application installs three profile-interest shapes.
+                // A second distinct subscription is accepted while the
+                // carrier remains subscribed, and removal of one leaves the
+                // other active.
+                let secondTopic = Array("coaty/3/test/*/*".utf8)
+                secondTopic.withUnsafeBufferPointer { secondBuffer in
+                    let secondSpan = Span(_unsafeStart: secondBuffer.baseAddress!, count: secondTopic.count)
+                    precondition(client.subscribe(topic: secondSpan, deadlineMS: 1))
+                    precondition(client.unsubscribe(topic: secondSpan, deadlineMS: 1))
+                }
+
                 host_mqtt_set_failures(failPublish | failLoopback)
                 precondition(!client.publish(topic: topicSpan, payload: payloadSpan))
                 precondition(!client.waitForLoopback(deadlineMS: 1))
@@ -114,7 +125,7 @@ private struct EmbeddedMQTTHostTest {
                 host_mqtt_set_failures(0)
                 precondition(client.unsubscribe(
                     topic: topicSpan, deadlineMS: 1))
-                precondition(host_mqtt_call_count(7) == 2 && host_mqtt_call_count(8) == 3)
+                precondition(host_mqtt_call_count(7) == 3 && host_mqtt_call_count(8) == 3)
 
                 // Reconnect remains subscribed and asks the HAL to resubscribe.
                 host_mqtt_set_failures(failReconnect)

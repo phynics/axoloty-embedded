@@ -28,6 +28,9 @@ enum {
     FAIL_POLL = 1 << 3,
     FAIL_UNSUBSCRIBE = 1 << 4,
     FAIL_CLOSE = 1 << 5,
+    FAIL_ROUTERS = 1 << 6,
+    FAIL_ROUTER_DROP_AFTER_ONE = 1 << 7,
+    FAIL_ROUTER_DROP_THEN_RESTORE = 1 << 8,
 };
 
 enum {
@@ -66,6 +69,13 @@ static HostSubscription host_subscriptions[HOST_MAX_SESSIONS][HOST_MAX_SUBSCRIPT
 static uint32_t host_last_publish_key_length;
 static uint32_t host_last_publish_payload_length;
 
+// Deterministic platform clock for the carrier's deadline waits. Delaying
+// advances the clock instead of sleeping, so timeout tests run instantly and
+// repeatably. Reset with host_zenoh_reset.
+static int64_t host_fake_time_us;
+static int host_router_zero_observed;
+static uint32_t host_router_query_count;
+
 void host_zenoh_reset(void) {
     host_failures = 0;
     memset(host_calls, 0, sizeof(host_calls));
@@ -79,9 +89,25 @@ void host_zenoh_reset(void) {
     memset(host_subscriptions, 0, sizeof(host_subscriptions));
     host_last_publish_key_length = 0;
     host_last_publish_payload_length = 0;
+    host_fake_time_us = 0;
+    host_router_zero_observed = 0;
+    host_router_query_count = 0;
 }
 
 void host_zenoh_set_failures(unsigned failures) { host_failures = failures; }
+
+int64_t esp_timer_get_time(void) { return host_fake_time_us; }
+
+void vTaskDelay(uint32_t ticks) { host_fake_time_us += (int64_t)ticks * 1000; }
+
+int64_t host_zenoh_fake_time_us(void) { return host_fake_time_us; }
+
+uint32_t host_zenoh_ticks_from_ms(uint32_t milliseconds) {
+    if (milliseconds == 0u) return 0u;
+    // The firmware configuration is 1000 Hz; round upward exactly as
+    // pdMS_TO_TICKS does so sub-tick waits still make progress.
+    return milliseconds;
+}
 
 unsigned host_zenoh_call_count(unsigned operation) {
     return operation < (unsigned)CALL_COUNT ? host_calls[operation] : 0;
@@ -189,6 +215,25 @@ axoloty_zenoh_result_t axoloty_zenoh_connected_router_count(const axoloty_zenoh_
     if (session_index < 0 || !out_count) return AXOLOTY_ZENOH_INVALID_ARGUMENT;
     *out_count = 0;
     if (!host_session_open[session_index]) return AXOLOTY_ZENOH_NOT_OPEN;
+    if ((host_failures & FAIL_ROUTER_DROP_THEN_RESTORE) != 0) {
+        ++host_router_query_count;
+        if (host_router_query_count == 1u) {
+            *out_count = 1u;
+        } else if (host_router_query_count == 2u) {
+            host_router_zero_observed = 1;
+        } else {
+            *out_count = 1u;
+        }
+        return AXOLOTY_ZENOH_OK;
+    }
+    if ((host_failures & FAIL_ROUTERS) != 0) {
+        host_router_zero_observed = 1;
+        return AXOLOTY_ZENOH_OK;
+    }
+    if ((host_failures & FAIL_ROUTER_DROP_AFTER_ONE) != 0 && !host_router_zero_observed) {
+        *out_count = 1;
+        return AXOLOTY_ZENOH_OK;
+    }
     *out_count = host_session_open[session_index] ? 1u : 0u;
     return AXOLOTY_ZENOH_OK;
 }

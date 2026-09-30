@@ -174,10 +174,28 @@ func runDeviceAgentExchange(
             result.insert(.connected)
             seam.exchangeMilestone(DeviceSmokeExchangeMilestone.connected.rawValue)
 
-            let filter: StaticString = "coaty/3/axoloty-embedded/#"
-            let subscribed = seam.carrier.subscribe(
-                filter.utf8Start, Int32(filter.utf8CodeUnitCount), deadline.remaining(using: seam)
+            let hashFilter: StaticString = "coaty/3/axoloty-embedded/#"
+            let twoLevelFilter: StaticString = "coaty/3/axoloty-embedded/*/*"
+            let threeLevelFilter: StaticString = "coaty/3/axoloty-embedded/*/*/*"
+            // Profile interest covers every inbound topic this agent handles:
+            // the hash shape matches all levels under the namespace, while
+            // the two star shapes match exactly the two-level topics
+            // (advertise, deadvertise) and the three-level topics (discover,
+            // resolve and their peers) the host installs as key expressions.
+            // Each carrier matches the shapes written in its own wildcard
+            // grammar and treats the others as literals that match nothing,
+            // so all three subscriptions are required on every carrier and
+            // the previously proven single-filter behavior is preserved
+            // wherever it already held.
+            var subscribed = seam.carrier.subscribe(
+                hashFilter.utf8Start, Int32(hashFilter.utf8CodeUnitCount), deadline.remaining(using: seam)
             ) != 0
+            subscribed = seam.carrier.subscribe(
+                twoLevelFilter.utf8Start, Int32(twoLevelFilter.utf8CodeUnitCount), deadline.remaining(using: seam)
+            ) != 0 && subscribed
+            subscribed = seam.carrier.subscribe(
+                threeLevelFilter.utf8Start, Int32(threeLevelFilter.utf8CodeUnitCount), deadline.remaining(using: seam)
+            ) != 0 && subscribed
             if subscribed {
                 result.insert(.subscribed)
                 seam.exchangeMilestone(DeviceSmokeExchangeMilestone.subscribed.rawValue)
@@ -214,6 +232,21 @@ func runDeviceAgentExchange(
                         )
                     }
                 }
+            }
+            if !subscribed {
+                // A failed multi-shape install may have declared an earlier
+                // shape successfully. Remove every shape before teardown so
+                // a retry cannot inherit stale receive interest. Disconnect
+                // below is the final cleanup if an undeclare itself fails.
+                _ = seam.carrier.unsubscribe(
+                    hashFilter.utf8Start, Int32(hashFilter.utf8CodeUnitCount), deadline.remaining(using: seam)
+                )
+                _ = seam.carrier.unsubscribe(
+                    twoLevelFilter.utf8Start, Int32(twoLevelFilter.utf8CodeUnitCount), deadline.remaining(using: seam)
+                )
+                _ = seam.carrier.unsubscribe(
+                    threeLevelFilter.utf8Start, Int32(threeLevelFilter.utf8CodeUnitCount), deadline.remaining(using: seam)
+                )
             }
         }
     }

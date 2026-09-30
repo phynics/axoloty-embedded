@@ -109,6 +109,23 @@ public struct DeviceSmokeSeam {
     var networkCopyPayload: @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32
     /// Tears the network façade down, returning non-zero on success.
     var networkCleanup: @convention(c) () -> UInt32
+    /// Runs the transport-supplied carrier probe and reports every step.
+    ///
+    /// The probe lives in the selected transport: each carrier answers the
+    /// network scenario with its own mechanics and record shapes, so the
+    /// application never names a probe implementation. The network operations
+    /// arrive as the same function pointers above, and `record` receives one
+    /// bounded result per step. Called only after `networkConfigured`
+    /// reports configuration and the device role selects the probe path.
+    var runCarrierProbe: (
+        @convention(c) (UInt32) -> UInt32,
+        @convention(c) (UInt32) -> UInt32,
+        @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
+        @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
+        @convention(c) () -> UInt32,
+        (StaticString, Bool) -> Void,
+        (StaticString) -> Void
+    ) -> Void
     /// Bounded carrier operations used by the application-owned exchange.
     var carrier: DeviceSmokeCarrierOperations
     /// Reports an application exchange milestone to an optional host harness.
@@ -138,6 +155,15 @@ public struct DeviceSmokeSeam {
         networkCopyTopic: @escaping @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
         networkCopyPayload: @escaping @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
         networkCleanup: @escaping @convention(c) () -> UInt32,
+        runCarrierProbe: @escaping (
+            @convention(c) (UInt32) -> UInt32,
+            @convention(c) (UInt32) -> UInt32,
+            @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
+            @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
+            @convention(c) () -> UInt32,
+            (StaticString, Bool) -> Void,
+            (StaticString) -> Void
+        ) -> Void,
         carrier: DeviceSmokeCarrierOperations,
         exchangeMilestone: @escaping @convention(c) (UInt32) -> Void,
         deviceDisplayName: @escaping @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32
@@ -163,6 +189,7 @@ public struct DeviceSmokeSeam {
         self.networkCopyTopic = networkCopyTopic
         self.networkCopyPayload = networkCopyPayload
         self.networkCleanup = networkCleanup
+        self.runCarrierProbe = runCarrierProbe
         self.carrier = carrier
         self.exchangeMilestone = exchangeMilestone
         self.deviceDisplayName = deviceDisplayName

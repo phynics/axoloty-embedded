@@ -48,7 +48,10 @@ public struct EmbeddedMQTTClient {
         topic: Span<UInt8>,
         deadlineMS: UInt32
     ) -> Bool {
-        guard state == .connected, !topic.isEmpty,
+        // The C layer owns the filter set and admits up to four concurrent
+        // filters; Swift tracks the lifecycle phase only, so subscribing
+        // while subscribed installs another filter and stays subscribed.
+        guard state == .connected || state == .subscribed, !topic.isEmpty,
               topic.count <= WireBufferConfig.maxTopicLength,
               axoloty_mqtt_subscribe_wait(topic, deadlineMS) != 0 else { return false }
         state = .subscribed

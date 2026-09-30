@@ -60,6 +60,24 @@ if ! axoloty_verify_profile_selection; then
     exit 64
 fi
 
+# Prepare the pinned Zenoh C dependency only for a profile that selected its
+# transport. The ESP-IDF component requirements pass does not inherit cache
+# variables, so the report path must be exported by the caller of idf.py.
+# Other profiles do not fetch or prepare the Zenoh dependency.
+selected_transport=$(basename "$AXOLOTY_TRANSPORT_DIR")
+if [ "$selected_transport" = "zenoh-pico" ]; then
+    if [ -z "${AXOLOTY_ZENOH_PICO_REPORT:-}" ]; then
+        AXOLOTY_SCRATCH="$scratch" "$repo_root/Tools/prepare-zenoh-pico.sh" >/dev/null
+        AXOLOTY_ZENOH_PICO_REPORT="$scratch/zenoh-pico-preparation.json"
+    fi
+    if [ ! -f "$AXOLOTY_ZENOH_PICO_REPORT" ]; then
+        echo "error: AXOLOTY_ZENOH_PICO_REPORT is not a file: $AXOLOTY_ZENOH_PICO_REPORT" >&2
+        exit 64
+    fi
+    AXOLOTY_ZENOH_PICO_REPORT=$(realpath -e -- "$AXOLOTY_ZENOH_PICO_REPORT")
+    export AXOLOTY_ZENOH_PICO_REPORT
+fi
+
 mkdir -p "$build_dir" "$evidence_dir" "$proof_root"
 # A retried build must not inherit a prior artifact, provenance record, or
 # generated ESP-IDF project. Clearing them prevents a failed retry from being

@@ -111,6 +111,26 @@ private func hostNetworkCopyPayload(_ buffer: UnsafeMutablePointer<UInt8>, _ cap
 }
 @inline(__always)
 private func hostNetworkCleanup() -> UInt32 { 1 }
+// The offline host run never configures a network, so the probe path is
+// never taken. The stub exists only to satisfy the seam; reaching it would
+// mean the offline corpus changed shape.
+private func hostCarrierProbe(
+    _ networkPrepare: @convention(c) (UInt32) -> UInt32,
+    _ networkReconnect: @convention(c) (UInt32) -> UInt32,
+    _ networkCopyTopic: @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
+    _ networkCopyPayload: @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
+    _ networkCleanup: @convention(c) () -> UInt32,
+    _ record: (StaticString, Bool) -> Void,
+    _ recordUnsupported: (StaticString) -> Void
+) {
+    _ = networkPrepare
+    _ = networkReconnect
+    _ = networkCopyTopic
+    _ = networkCopyPayload
+    _ = networkCleanup
+    _ = record
+    _ = recordUnsupported
+}
 @inline(__always)
 private func hostCarrierConfigureLastWill(
     _ topic: UnsafePointer<UInt8>, _ topicLength: Int32,
@@ -179,6 +199,7 @@ func hostSmokeSeam() -> DeviceSmokeSeam {
         networkCopyTopic: hostNetworkCopyTopic,
         networkCopyPayload: hostNetworkCopyPayload,
         networkCleanup: hostNetworkCleanup,
+        runCarrierProbe: hostCarrierProbe,
         carrier: DeviceSmokeCarrierOperations(
             configureLastWill: hostCarrierConfigureLastWill,
             connect: hostCarrierConnect,

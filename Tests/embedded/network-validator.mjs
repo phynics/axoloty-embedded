@@ -28,3 +28,32 @@ export const expectedNetworkTests = new Set([
 export function createEmbeddedNetworkValidator() {
   return createEmbeddedSwiftSmokeValidator(expectedNetworkTests);
 }
+
+// The Zenoh probe reports the same transport-neutral steps with two honest
+// differences: the broker last-will and the single-client loopback receive
+// have no equivalent in its client profile, so it records explicit
+// unsupported capabilities instead of the MQTT will/connect/receive cases.
+// The strict validator accepts `unsupported` only for these two declared
+// case IDs, and their count is separate from passed checks in the summary.
+export const expectedZenohNetworkTests = new Set([
+  ...expectedEmbeddedSwiftTests,
+  "network:wifi",
+  "network:ip",
+  "network:zenohConnect",
+  "network:subscribe",
+  "network:lastWillUnsupported",
+  "network:reconnect",
+  "network:publish",
+  "network:receiveUnsupported",
+  "network:disconnect",
+  "network:rejectOutOfOrder",
+  "network:rejectOversize",
+]);
+
+/** Creates the strict validator for the Zenoh network firmware stream. */
+export function createEmbeddedZenohNetworkValidator() {
+  return createEmbeddedSwiftSmokeValidator(expectedZenohNetworkTests, new Set([
+    "network:lastWillUnsupported",
+    "network:receiveUnsupported",
+  ]));
+}

@@ -36,6 +36,10 @@ func esp32c6SmokeSeam() -> DeviceSmokeSeam {
         networkCopyTopic: { axoloty_network_copy_topic($0, $1) },
         networkCopyPayload: { axoloty_network_copy_payload($0, $1) },
         networkCleanup: { axoloty_network_cleanup() },
+        // The probe implementation arrives with the selected transport: both
+        // carriers declare this neutral operation, so this seam names the
+        // operation rather than a carrier.
+        runCarrierProbe: runCarrierNetworkProbe,
         carrier: DeviceSmokeCarrierOperations(
             configureLastWill: embeddedExchangeConfigureLastWill,
             connect: embeddedExchangeConnect,

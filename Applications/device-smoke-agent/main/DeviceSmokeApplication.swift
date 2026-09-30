@@ -16,9 +16,6 @@ import StaticDeviceAgentInterop
 #endif
 import AxolotyProtocol
 import AxolotyObjectModel
-#if HOST_AGENT_EXCHANGE
-import DeviceSmokeHostSupport
-#endif
 
 @inline(__always)
 /// Records that the registry invoked its handler.
@@ -311,6 +308,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     var rollingChecksum: UInt32 = 0
     var passed: UInt32 = 0
     var failed: UInt32 = 0
+    var unsupported: UInt32 = 0
     let networkRole = seam.networkRole()
     let networkScenario = seam.networkScenario()
     var emittingExchangeEvidence = false
@@ -373,7 +371,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
                       _ stage: StaticString,
                       _ status: StaticString, _ prior: UInt32,
                       _ currentSequence: UInt32, _ currentPassed: UInt32 = 0,
-                      _ currentFailed: UInt32 = 0) -> UInt32 {
+                      _ currentFailed: UInt32 = 0, _ currentUnsupported: UInt32 = 0) -> UInt32 {
         var result: UInt32 = 2166136261
         result = mix(result, schemaVersion)
         result = mix(result, runId)
@@ -384,6 +382,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
         result = mix(result, status)
         result = mix(result, currentPassed)
         result = mix(result, currentFailed)
+        if currentUnsupported != 0 { result = mix(result, currentUnsupported) }
         return mix(result, prior)
     }
 
@@ -433,6 +432,22 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
         } else {
             failed &+= 1
         }
+    }
+
+    /// Emits an explicit unsupported capability without treating it as a
+    /// pass or a failure. A profile-specific validator must name this case ID
+    /// and expect the unsupported status before the evidence stream can pass.
+    @inline(__always)
+    func recordUnsupported(_ name: StaticString) {
+        if networkRole != 0 && !emittingExchangeEvidence { return }
+        let status: StaticString = "unsupported"
+        let checksum = nextChecksum(name, "smokeCheck", "execute", status, rollingChecksum, sequence)
+        printPrefix(name, "smokeCheck", "execute", status, checksum)
+        seam.print("}\n")
+        seam.delay(1)
+        rollingChecksum = checksum
+        sequence &+= 1
+        unsupported &+= 1
     }
 
     // Vector checks deliberately use the production APIs and fixed storage.
@@ -634,25 +649,18 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     // without changing the existing corpus or its counts.
     if seam.networkConfigured() != 0 {
         if networkRole == 0 {
-            #if HOST_AGENT_EXCHANGE
-            runDeviceSmokeHostNetworkProbe(
-                networkPrepare: seam.networkPrepare,
-                networkReconnect: seam.networkReconnect,
-                networkCopyTopic: seam.networkCopyTopic,
-                networkCopyPayload: seam.networkCopyPayload,
-                networkCleanup: seam.networkCleanup,
-                record: record
+            // The probe implementation arrives with the seam: each carrier
+            // answers the network scenario with its own mechanics, so this
+            // call site names no probe and no carrier.
+            seam.runCarrierProbe(
+                seam.networkPrepare,
+                seam.networkReconnect,
+                seam.networkCopyTopic,
+                seam.networkCopyPayload,
+                seam.networkCleanup,
+                record,
+                recordUnsupported
             )
-            #else
-            runCarrierNetworkProbe(
-                networkPrepare: seam.networkPrepare,
-                networkReconnect: seam.networkReconnect,
-                networkCopyTopic: seam.networkCopyTopic,
-                networkCopyPayload: seam.networkCopyPayload,
-                networkCleanup: seam.networkCleanup,
-                record: record
-            )
-            #endif
         } else {
             emittingExchangeEvidence = true
             let exchangeBits = runDeviceAgentExchange(
@@ -691,12 +699,16 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
 
     let summaryStatus: StaticString = failed == 0 ? "completed" : "failed"
     rollingChecksum = nextChecksum("summary", "summary", "summary", summaryStatus,
-                                   rollingChecksum, sequence, passed, failed)
+                                   rollingChecksum, sequence, passed, failed, unsupported)
     printPrefix("summary", "summary", "summary", summaryStatus, rollingChecksum)
     seam.print(",\"counts\":{\"passed\":")
     seam.printUInt("", passed)
     seam.print(",\"failed\":")
     seam.printUInt("", failed)
+    if unsupported != 0 {
+        seam.print(",\"unsupported\":")
+        seam.printUInt("", unsupported)
+    }
     seam.print("}")
     if failed != 0 {
         seam.print(",\"diagnostic\":\"one or more execution checks failed\"")
@@ -705,12 +717,16 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     sequence &+= 1
 
     let completionChecksum = nextChecksum("completion", "complete", "completion", summaryStatus,
-                                          rollingChecksum, sequence, passed, failed)
+                                          rollingChecksum, sequence, passed, failed, unsupported)
     printPrefix("completion", "complete", "completion", summaryStatus, completionChecksum)
     seam.print(",\"counts\":{\"passed\":")
     seam.printUInt("", passed)
     seam.print(",\"failed\":")
     seam.printUInt("", failed)
+    if unsupported != 0 {
+        seam.print(",\"unsupported\":")
+        seam.printUInt("", unsupported)
+    }
     seam.print("},\"finalChecksum\":")
     seam.printUInt("", completionChecksum)
     if failed != 0 {

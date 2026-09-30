@@ -13,6 +13,17 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+// Converts milliseconds into scheduler ticks for bounded polling waits. Keep
+// the SDK macro at the C boundary; Embedded Swift does not import C macros.
+#ifndef AXOLOTY_TICKS_FROM_MS_DEFINED
+#define AXOLOTY_TICKS_FROM_MS_DEFINED
+static inline unsigned int axoloty_ticks_from_ms(unsigned int milliseconds) {
+    if (milliseconds == 0U) return 0U;
+    TickType_t ticks = pdMS_TO_TICKS(milliseconds);
+    return ticks == 0 ? 1U : (unsigned int)ticks;
+}
+#endif
+
 #include "sdkconfig.h"
 
 // Carrier declarations are owned by the selected transport. The include path
@@ -24,6 +35,11 @@
 // the include path; the platform names no carrier operation of its own.
 #if __has_include("axoloty_zenoh.h")
 #include "axoloty_zenoh.h"
+#endif
+// The Zenoh transport's operator-endpoint helper. Present only when that
+// transport is selected; other profiles are unaffected.
+#if __has_include("zenoh_endpoint.h")
+#include "zenoh_endpoint.h"
 #endif
 
 // The selected application owns its C-callable device-agent seam.

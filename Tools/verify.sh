@@ -162,6 +162,9 @@ if wanted build; then
     check_script profile-isolation \
         'node is not available for the profile isolation check' \
         Tests/embedded/run-profile-isolation-test.sh
+    check_script unsupported-validator \
+        'node is not available for the unsupported-status validator check' \
+        node Tests/embedded/test-unsupported-validator.mjs
     check_script zenoh-host-seam \
         'swiftc or a host C compiler is not available for the Zenoh seam check' \
         Tests/embedded/run-zenoh-host-test.sh

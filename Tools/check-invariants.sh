@@ -327,6 +327,13 @@ else
     require_component_text "$component_root/axoloty_static_runtime/CMakeLists.txt" 'AXOLOTY_STATIC_RUNTIME_SOURCE_DIR' 'the static-runtime component does not compile prepared sources'
     require_component_text "$component_root/axoloty_static_runtime/CMakeLists.txt" 'axoloty_protocol_module_alias' 'the static-runtime component does not wait for AxolotyProtocol'
     require_component_text "$main_component" 'axoloty_static_runtime_module_alias' 'the main component does not wait for AxolotyStaticRuntime'
+    require_component_text "$source_resolver" 'AXOLOTY_ZENOH_CORE_SOURCE_DIR' "$source_resolver does not resolve AXOLOTY_ZENOH_CORE_SOURCE_DIR from the preparation report"
+    require_component_text "$component_root/axoloty_zenoh_core/CMakeLists.txt" '"${AXOLOTY_ZENOH_CORE_SOURCE_DIR}/*.swift"' 'the Zenoh-core component does not compile the prepared AxolotyZenohCore sources'
+    require_component_text "$component_root/axoloty_zenoh_core/CMakeLists.txt" 'axoloty_wire_module_alias' 'the Zenoh-core component does not wait for AxolotyWire'
+    require_component_text "$component_root/axoloty_zenoh_core/CMakeLists.txt" 'fmodule-map-file=${AXOLOTY_ZENOH_FACADE_MODULE_MAP}' 'the Zenoh-core component does not bind the Core-generated facade module map'
+    require_component_text "$component_root/axoloty_zenoh_core/CMakeLists.txt" 'AXOLOTY_ZENOH_FACADE_MODULE_DIR' 'the Zenoh-core component does not add the generated facade module-map directory to Swift Clang search paths'
+    require_component_text "$component_root/axoloty_zenoh_core/CMakeLists.txt" 'add_custom_target(axoloty_zenoh_core_module_alias' 'the Zenoh-core component does not publish its importable module alias'
+    require_component_text "$main_component" 'axoloty_zenoh_core_module_alias' 'the main component does not wait for AxolotyZenohCore'
     [ "$component_order_bad" -eq 0 ] && pass core-component-order 'ESP-IDF compiles prepared Core modules and preserves their import order'
 fi
 
@@ -406,11 +413,19 @@ if "mqtt" not in mqtt_requires:
 
 zenoh_sources = flattened(set_values(zenoh, "AXOLOTY_TRANSPORT_C_SOURCES"))
 zenoh_requires = flattened(set_values(zenoh, "AXOLOTY_TRANSPORT_IDF_REQUIRES"))
-for source in ("zenoh_sample_validation.c", "zenoh_pico_queue.c", "zenoh_pico_facade.c"):
+zenoh_swift_sources = flattened(set_values(zenoh, "AXOLOTY_TRANSPORT_SWIFT_SOURCES"))
+for source in ("zenoh_sample_validation.c", "zenoh_pico_queue.c", "zenoh_pico_facade.c", "zenoh_endpoint.c"):
     if not any(source in entry for entry in zenoh_sources):
         problems.append("Zenoh manifest no longer selects %s" % source)
+for source in ("ZenohCarrier.swift", "ZenohNetworkProbe.swift"):
+    if not any(source in entry for entry in zenoh_swift_sources):
+        problems.append("Zenoh manifest no longer selects %s" % source)
+if "EmbeddedZenohClient.swift" in str(zenoh_swift_sources):
+    problems.append("Zenoh manifest still selects the superseded EmbeddedZenohClient.swift")
 if "zenoh_pico" not in zenoh_requires:
     problems.append("Zenoh manifest does not require zenoh_pico")
+if "axoloty_zenoh_core" not in zenoh_requires:
+    problems.append("Zenoh manifest does not require axoloty_zenoh_core")
 if "mqtt" in zenoh_requires or any("mqtt" in entry.lower() for entry in zenoh_sources):
     problems.append("Zenoh manifest selects an MQTT component or source")
 
@@ -495,6 +510,10 @@ facade_require "$facade_manifest" 'axoloty_zenoh.h' \
     'the Zenoh transport does not name the Core facade header it implements'
 facade_require "$facade_manifest" 'FATAL_ERROR' \
     'the Zenoh transport does not fail closed when the Core facade header is absent'
+facade_require 'Platforms/esp32c6-idf/tools/build.sh' 'AXOLOTY_ZENOH_PICO_REPORT' \
+    'the selected Zenoh profile does not prepare and export its pinned dependency report before idf.py'
+facade_require 'Platforms/esp32c6-idf/tools/build.sh' 'Tools/prepare-zenoh-pico.sh' \
+    'the selected Zenoh profile does not reach dependency preparation through Tools/prepare-zenoh-pico.sh'
 
 # The host seam compiles against the same report, so it enforces the same
 # contract. An optional digest or a locally generated module map there would let

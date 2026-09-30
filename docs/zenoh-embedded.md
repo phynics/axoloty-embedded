@@ -13,13 +13,13 @@ re-scoped for the repository split by
 | Concern | Repository | State |
 |---|---|---|
 | Portable/shared Zenoh contracts, the `axoloty_zenoh_*` facade ABI | `phynics/axoloty` | Landed (`#956`) |
-| `AxolotyZenohCore` (Embedded-Swift-safe Swift types over the facade) | `phynics/axoloty` | Landed (`#974`); reported, not yet composed here |
+| `AxolotyZenohCore` (Embedded-Swift-safe Swift types over the facade) | `phynics/axoloty` | Landed (`#974`); compiled in place by the Zenoh profile |
 | `zenoh-c` host backend (`CZenohC` + `CAxolotyZenoh`) | `phynics/axoloty` | Landed (`#956`); not consumed by a device image |
 | `AxolotyZenoh` host runtime transport, host parity | `phynics/axoloty` | Landed (`ZenohBinding: AxolotyRuntimeTransport` at `68e46c76`); not consumed by a device image |
-| `EmbeddedZenohClient` (bounded device client) | here | Adapted to the facade ABI |
+| Device carrier adapter | here | `ZenohCarrier` adapts the Core-owned session and frame-storage types |
 | `zenoh-pico` backend of the facade | here | Landed here (`#814`), compiles and links, not qualified |
 | ESP-IDF component wiring for pinned `zenoh-pico` | here | Pin and wrapper landed; the wrapper publishes its platform profile |
-| Embedded route/subscription wiring | here | Not landed (proposed) |
+| Embedded route/subscription wiring | here | Application installs the two host-equivalent profile-interest key expressions |
 | Device/resource qualification | here | Not landed; needs a board (proposed) |
 
 The C seam this repository compiles is Axoloty's: the header Core names in the
@@ -88,13 +88,12 @@ Two things this repository deliberately does **not** do:
   file. `Tests/embedded/run-zenoh-host-test.sh` reads the same report, requires
   all six fields, checks the same paths and digest, and uses Core's generated
   module map instead of reconstructing one.
-- **No ESP-IDF composition of `AxolotyZenohCore` yet.** Core's module is the
-  Swift side of the same facade ABI that `EmbeddedZenohClient` already
-  implements on the device, and `docs/zenoh-embedded.md` already recorded that
-  the reconciliation between the two is a Core decision, not this repository's.
-  Composing Core's module into the image now would put a second, unimported
-  copy of the same client in the firmware. It belongs with the application
-  runtime integration below.
+- **The Core session module is now composed.** The ESP-IDF component
+  `axoloty_zenoh_core` compiles the Core-reported `AxolotyZenohCore` sources in
+  place with the report-generated `CAxolotyZenoh` module map. `ZenohCarrier`
+  adapts `ZenohSession`, `ZenohSubscription`, and `ZenohFrameStorage` for the
+  application carrier seam; the former firmware-local direct facade client is
+  removed. The host seam compiles the same Core sources and carrier.
 
 Failing closed stays scoped to the selected transport. The resolver never fails
 a profile that did not select Zenoh, and
@@ -142,9 +141,9 @@ and leaves every consumer on `#error "Unknown platform"`.
 
 The facade bounds come from Core and are not restated here. The device client's
 own limits mirror the MQTT transport and `AxolotyWire`: a key of at most 256
-bytes and a payload of at most 2048 bytes. The constants are duplicated in
-`EmbeddedZenohClient.swift` (production reads `AxolotyWire`; the host overlay
-restates them), in `zenoh_sample_validation.c`, and in the C guard
+bytes and a payload of at most 2048 bytes. The Swift carrier reads these from
+Core's `ZenohFrameStorage`; the bounds are also enforced in
+`zenoh_sample_validation.c` and in the C guard
 `axoloty_zenoh_sample_is_valid` the callback runs, so a future change must move
 all of them. A zero-length payload is a legal sample; a null pointer with a
 non-zero length is not.
@@ -199,13 +198,13 @@ backend; each is visible in the code or in a returned result code.
 
 - `Tools/verify.sh --tier repo` passes.
 - `Tests/embedded/run-zenoh-host-test.sh` passes with the prepared Core: it
-  compiles the real client, the real validator, and the real bounded queue
-  against a host-only fake carrier, and it runs the queue and counter
-  conformance, the sample-validator vectors, and the facade contract's
-  close/state/foreign-handle behaviour. It needs the Core preparation report
-  (`AXOLOTY_PREPARATION_REPORT`, or the default `Tools/prepare-core.sh`
-  scratch) and reports 69 when there is no report at all, which is a skip, not a
-  pass.
+  compiles the real `AxolotyZenohCore` and transport carrier/probe, the real
+  endpoint helper, validator, and bounded queue against a host-only facade.
+  It runs queue conformance, the sample vectors, multiple subscriptions,
+  operation order, bounds, will-unsupported reporting, router-count success,
+  bounded timeout and closed-session behavior. It needs the Core preparation
+  report and reports 69 when no report or tool is available, which is a skip,
+  not a pass.
 - `Tests/embedded/check-zenoh-report-validation.sh` passes: it proves the seam
   above *refuses* a report that breaks the contract — a missing
   `facadeHeaderSHA256` or `moduleMap`, a digest that is not 64 lowercase hex,
@@ -220,40 +219,37 @@ backend; each is visible in the code or in a returned result code.
   `zenoh-pico 1.10.0` with no warnings, and a relocatable link of the backend
   objects against `libzenoh_pico.a` leaves no undefined Zenoh symbol. It
   defines all eleven `axoloty_zenoh_*` entry points.
-- **The image does not link.** Built on its own in a fresh
-  `AXOLOTY_SCRATCH`, the Zenoh profile resolves the Core contract and compiles
-  the pinned zenoh-pico library and `EmbeddedZenohClient.swift`, then ESP-IDF
-  stops in the main Swift compile. The Swift application seam is still
-  MQTT-shaped: `DeviceSmokeApplication.swift` calls `runCarrierNetworkProbe`
-  and `Esp32c6SmokeSeam.swift` wires `embeddedExchangeConfigureLastWill`,
-  `embeddedExchangeConnect`, `embeddedExchangeSubscribe`,
-  `embeddedExchangeUnsubscribe`, `embeddedExchangePublish`,
-  `embeddedExchangePollOneEvent`, `embeddedExchangeWaitForReconnect`, and
-  `embeddedExchangeDisconnect`. Only the MQTT transport provides them. Those
-  operations are last-will setup, a reconnect check, and a network probe, which
-  a Zenoh image has to answer with Zenoh semantics or not at all. That is
-  #816/#817 work and is deliberately not attempted here.
-- **Profile build isolation has landed, so only the seam above blocks the build.**
+- **Both images build.** The main application seam receives the selected
+  transport's carrier probe as an injected operation, so application source
+  names neither a transport probe nor its carrier-specific adapters. Both
+  profiles build from isolated workspaces and use the production
+  `AxolotyProtocol` path. The Zenoh probe reports unsupported will and
+  self-loopback capabilities explicitly, and reconnect observation polls the
+  real router count without closing or reopening the session. ESP32-C6 image
+  builds produced by the local `axoloty-embedded-dev` container: MQTT
+  `660736` bytes and Zenoh `837152` bytes. The images' build outputs were
+  confirmed before the profile release-manifest check.
+- **Profile build isolation is verified.** Each profile builds in its own proof workspace
   Each profile builds in its own proof workspace
   (`<scratch>/firmware-<profile>`), the platform verifies the selection
   against the profile before configuring, and a build directory whose cached
   selection names another profile is cleared before reuse. The earlier
   second-profile failure on `mqtt_carrier_espidf.c` from the shared build
-  directory no longer occurs.
+  directory no longer occurs. Reproducible-build and Swift-linker checks pass
+  for both profiles; the observed MQTT reproducible hash was
+  `123cf479116c4169512c544602d8ccb67d68b1bedafe567309517e15acdf1e2f`.
 - **No device or resource evidence.** None was produced and none was invented.
   See `docs/evidence/esp32c6-zenoh-*.json`.
 
 ## Ambiguities and honest gaps
 
-- **`AxolotyZenohCore` landed and is not composed here.** Core `#974` publishes
-  it in the report, and it is the Swift side of this ABI. `EmbeddedZenohClient`
-  is the firmware overlay the device builds today and covers the same facade, so
-  one of them is redundant and the reconciliation is a Core decision, not this
-  repository's. The firmware build reads and validates Core's reported
-  `sourceDir` and `moduleMap` so they are available the moment that decision
-  lands; nothing compiles the module in the meantime, because a second
-  unimported copy of the same client in the image is a cost with no
-  verification behind it.
+- **The release manifest generator still lacks a Zenoh backend identity.**
+  `Platforms/esp32c6-idf/tools/write-release-manifest.mjs` maps
+  `transport.backend` only for `mqtt-espidf` and reads the backend version from
+  the `idf` entry of `dependencies.lock`. That generator is release provenance
+  work (`axoloty-embedded#3`) and is left untouched here. The Zenoh image was
+  built and its image artifact observed; a release manifest for it is not
+  claimed by this change.
 - **The release manifest does not know the Zenoh backend.**
   `Platforms/esp32c6-idf/tools/write-release-manifest.mjs` maps
   `transport.backend` only for `mqtt-espidf` and reads the backend version from

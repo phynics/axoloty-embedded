@@ -5,6 +5,11 @@
 
 #include <stdint.h>
 
+// The real endpoint helper declaration, so the host test binds the same
+// signature the firmware image compiles. The C build supplies the header's
+// directory; the Swift build receives it through this umbrella.
+#include "zenoh_endpoint.h"
+
 enum {
     HOST_ZENOH_FAIL_OPEN = 1 << 0,
     HOST_ZENOH_FAIL_SUBSCRIBE = 1 << 1,
@@ -12,6 +17,9 @@ enum {
     HOST_ZENOH_FAIL_POLL = 1 << 3,
     HOST_ZENOH_FAIL_UNSUBSCRIBE = 1 << 4,
     HOST_ZENOH_FAIL_CLOSE = 1 << 5,
+    HOST_ZENOH_FAIL_ROUTERS = 1 << 6,
+    HOST_ZENOH_FAIL_ROUTER_DROP_AFTER_ONE = 1 << 7,
+    HOST_ZENOH_FAIL_ROUTER_DROP_THEN_RESTORE = 1 << 8,
 };
 
 void host_zenoh_reset(void);
@@ -24,6 +32,14 @@ uint32_t host_zenoh_publish_payload_length(void);
 void host_zenoh_set_sample(
     const unsigned char *key, int key_length,
     const unsigned char *payload, int payload_length);
+
+/// Deterministic platform clock backing the carrier's deadline waits.
+/// `vTaskDelay` advances it instead of sleeping; the device links the SDK
+/// originals of both symbols, so the same carrier source runs unmodified.
+int64_t esp_timer_get_time(void);
+void vTaskDelay(uint32_t ticks);
+int64_t host_zenoh_fake_time_us(void);
+uint32_t host_zenoh_ticks_from_ms(uint32_t milliseconds);
 
 /// The bounded-sample guard vectors.
 int host_zenoh_sample_validation_tests(void);

@@ -8,7 +8,8 @@ public func runDeviceSmokeHostNetworkProbe(
     networkCopyTopic: @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
     networkCopyPayload: @convention(c) (UnsafeMutablePointer<UInt8>, Int32) -> Int32,
     networkCleanup: @convention(c) () -> UInt32,
-    record: (StaticString, Bool) -> Void
+    record: (StaticString, Bool) -> Void,
+    recordUnsupported: (StaticString) -> Void
 ) {
     runCarrierNetworkProbe(
         networkPrepare: networkPrepare,
@@ -16,6 +17,7 @@ public func runDeviceSmokeHostNetworkProbe(
         networkCopyTopic: networkCopyTopic,
         networkCopyPayload: networkCopyPayload,
         networkCleanup: networkCleanup,
-        record: record
+        record: record,
+        recordUnsupported: recordUnsupported
     )
 }
