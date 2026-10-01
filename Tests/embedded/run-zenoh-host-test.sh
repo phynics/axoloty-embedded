@@ -310,3 +310,72 @@ dispatch_dir=$(dirname "$(find /nix/store -name libdispatch.so 2>/dev/null | hea
 LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}:$swift_runtime:$dispatch_dir" \
     "$tmp/embedded-zenoh-host-test"
 echo "embedded Zenoh host seam tests passed"
+
+# Compile the real key-expression conformance test from the exact prepared
+# zenoh-pico pin. This independently proves the selected wildcard shapes with
+# the production parser, not the fake facade's accept-all subscription stub.
+pico_report=${AXOLOTY_ZENOH_PICO_REPORT:-"$scratch/zenoh-pico-preparation.json"}
+if [ ! -f "$pico_report" ]; then
+    if ! AXOLOTY_SCRATCH="$scratch" "$repo_root/Tools/prepare-zenoh-pico.sh" >/dev/null 2>&1; then
+        echo "embedded Zenoh host test: zenoh-pico preparation did not produce $pico_report" >&2
+        exit 69
+    fi
+fi
+[ -f "$pico_report" ] || {
+    echo "embedded Zenoh host test: pinned zenoh-pico report is missing: $pico_report" >&2
+    exit 69
+}
+pico_dir=$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).sourceDir)' "$pico_report")
+is_absolute "$pico_dir" || fail_contract "zenoh-pico sourceDir is not absolute: $pico_dir"
+[ -d "$pico_dir" ] || fail_contract "zenoh-pico sourceDir is not a directory: $pico_dir"
+is_canonical "$pico_dir" || fail_contract "zenoh-pico sourceDir is not canonical: $pico_dir"
+
+pico_work="$tmp/zenoh-pico-parser"
+mkdir -p "$pico_work"
+mkdir -p "$pico_work/.cmake/api/v1/query"
+touch "$pico_work/.cmake/api/v1/query/codemodel-v2"
+cmake -S "$pico_dir" -B "$pico_work" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_STANDARD=11 \
+    -DBUILD_TESTING=ON \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DBUILD_TOOLS=OFF \
+    -DBUILD_EXAMPLES=OFF \
+    -DZ_FEATURE_UNSTABLE_API=ON \
+    >"$pico_work/configure.log" 2>&1 || {
+        echo "embedded Zenoh host test: pinned zenoh-pico parser configuration failed" >&2
+        tail -n 20 "$pico_work/configure.log" >&2
+        exit 1
+    }
+cmake --build "$pico_work" --target z_keyexpr_test -j2 >"$pico_work/build.log" 2>&1 || {
+    echo "embedded Zenoh host test: pinned zenoh-pico key-expression test build failed" >&2
+    tail -n 20 "$pico_work/build.log" >&2
+    exit 1
+}
+"$pico_work/tests/z_keyexpr_test"
+zenoh_pico_library=$(python3 - "$pico_work" <<'PY'
+import glob, json, os, sys
+root = sys.argv[1]
+index_path = sorted(glob.glob(os.path.join(root, ".cmake/api/v1/reply/index-*.json")))[-1]
+index = json.load(open(index_path))
+codemodel_name = index["reply"]["codemodel-v2"]["jsonFile"]
+codemodel = json.load(open(os.path.join(root, ".cmake/api/v1/reply", codemodel_name)))
+configuration = codemodel["configurations"][0]
+for target_ref in configuration["targets"]:
+    target = json.load(open(os.path.join(root, ".cmake/api/v1/reply", target_ref["jsonFile"])))
+    if target["name"] != "zenohpico_static" or target["type"] != "STATIC_LIBRARY":
+        continue
+    artifact = target["artifacts"][0]["path"]
+    print(os.path.join(root, artifact))
+    break
+else:
+    raise SystemExit("pinned zenoh-pico codemodel has no static zenohpico target")
+PY
+)
+"$compiler" -std=c11 -O2 -Wall -Wextra -Werror -DZENOH_LINUX \
+    -I "$pico_dir/include" -I "$pico_work/include" \
+    "$script_dir/zenoh-route-parser.c" \
+    "$zenoh_pico_library" \
+    -o "$pico_work/zenoh-route-parser-test"
+"$pico_work/zenoh-route-parser-test"
+echo "pinned zenoh-pico key-expression tests passed"

@@ -41,7 +41,12 @@ It does not build or link `zenoh-pico`.
 - The application installs the same two profile-interest shapes as Core's host
   binding: `coaty/3/<namespace>/*/*` and
   `coaty/3/<namespace>/*/*/*`. The application passes them as borrowed key
-  expressions; the transport does not interpret them.
+  expressions; the transport does not interpret them. The legacy MQTT
+  `coaty/3/<namespace>/#` filter is retained as a third operation for MQTT
+  compatibility; pinned `zenoh-pico` parses `#` literally, so it is not used
+  as Zenoh wildcard coverage and may match a literal-hash key. The two `*`
+  expressions are the Zenoh wildcard forms, and the pinned parser accepts
+  both.
 - The v1 client profile has no broker last-will. `configureLastWill` returns
   failure and the probe emits `network:lastWillUnsupported`; it does not
   substitute a normal deadvertise for crash semantics.

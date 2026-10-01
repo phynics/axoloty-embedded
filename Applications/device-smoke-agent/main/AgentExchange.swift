@@ -174,16 +174,11 @@ func runDeviceAgentExchange(
             result.insert(.connected)
             seam.exchangeMilestone(DeviceSmokeExchangeMilestone.connected.rawValue)
 
-            // Profile interest covers every inbound topic this agent handles:
-            // the hash shape matches all levels under the namespace, while
-            // the two star shapes match exactly the two-level topics
-            // (advertise, deadvertise) and the three-level topics (discover,
-            // resolve and their peers) the host installs as key expressions.
-            // Each carrier matches the shapes written in its own wildcard
-            // grammar and treats the others as literals that match nothing,
-            // so all three subscriptions are required on every carrier and
-            // the previously proven single-filter behavior is preserved
-            // wherever it already held.
+            // Profile interest includes the two key-expression forms Core's
+            // host binding installs: exactly two and exactly three levels
+            // after the namespace. The legacy hash-shaped filter is retained
+            // for compatibility; in the selected key grammar its hash is a
+            // literal chunk, not wildcard coverage.
             let subscribed = installDeviceAgentProfileInterest(
                 subscribe: seam.carrier.subscribe,
                 unsubscribe: seam.carrier.unsubscribe,
