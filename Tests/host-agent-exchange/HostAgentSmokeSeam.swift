@@ -6,6 +6,7 @@
 // EmbeddedMQTTClient boundary.
 
 import DeviceSmokeApplication
+import DeviceSmokeHostSupport
 import EmbeddedMQTTClient
 import Foundation
 import MQTTNIO
@@ -576,6 +577,7 @@ func hostAgentSmokeSeam() -> DeviceSmokeSeam {
         networkCopyTopic: hostNetworkCopyTopic,
         networkCopyPayload: hostNetworkCopyPayload,
         networkCleanup: hostNetworkCleanup,
+        runCarrierProbe: runDeviceSmokeHostNetworkProbe,
         carrier: DeviceSmokeCarrierOperations(
             configureLastWill: hostExchangeConfigureLastWill,
             connect: hostExchangeConnect,

@@ -1,53 +1,76 @@
 # Transports/zenoh-pico
 
-The embedded Zenoh transport ([axoloty-embedded#4], re-scoped by
-[axoloty#853], part of epic [axoloty#796]). It owns the device side of the
-Zenoh transport: the bounded client, the `zenoh-pico` backend, ESP-IDF backend
-wiring, embedded route/subscription wiring, and device resource qualification.
+The embedded Zenoh transport ([axoloty-embedded#8], part of the split epic
+[axoloty#845]). It owns the device side of the transport: the bounded session
+adapter, `zenoh-pico` facade backend, router endpoint helper, carrier-specific
+network probe, and ESP-IDF composition metadata. It owns carrier mechanics
+only; the application owns protocol behavior and route interest.
 
 Host and shared Zenoh work stays in `phynics/axoloty`: the portable facade
-contract, `AxolotyZenohCore`, the `zenoh-c` host backend, the host runtime
+contract, `AxolotyZenohCore`, the `zenoh-c` host backend, host runtime
 transport, and host parity.
 
 ## What is here
 
 | File | Owns |
 |---|---|
-| `main/EmbeddedZenohClient.swift` | The bounded, synchronous, non-allocating client surface: open, subscribe, publish, poll, unsubscribe, close, over the Core facade ABI. Borrowed key/payload buffers with explicit lengths, consumed synchronously and never retained. |
-| `main/zenoh_pico_facade.c` | The `zenoh-pico` backend of the Core-owned `axoloty_zenoh_*` ABI. Zenoh calls in, bounded bytes out, no retained pointer. |
-| `main/zenoh_pico_queue.{h,c}` | The fixed session and subscriber registries, the bounded receive queue, its drop counters, and the generation token that rejects a late callback. No Zenoh and no SDK header, so the host seam checks it with no board. |
-| `main/zenoh_sample_validation.{h,c}` | The byte-bound guard the `zenoh-pico` sample callback runs before copying an inbound sample into the bounded queue. |
-| `main/idf_sources.cmake` | Declarative source list the platform includes, and the request for the Core facade include directory. No protocol rule. |
+| `main/ZenohCarrier.swift` | A bounded, synchronous adapter over Core's `ZenohSession` and `ZenohFrameStorage`: open, up to eight subscriptions, publish, poll, unsubscribe, reconnect observation, and close. Borrowed bytes are consumed synchronously. No callback enters Swift. |
+| `main/ZenohNetworkProbe.swift` | Zenoh-specific network probe mechanics. It records broker last-will and single-client loopback receive as explicitly unsupported; it does not emit a pass for either. |
+| `main/zenoh_pico_facade.c` | The `zenoh-pico` backend of Core's `axoloty_zenoh_*` ABI. Zenoh calls in, bounded bytes out, no retained caller pointer. |
+| `main/zenoh_pico_queue.{h,c}` | Fixed session and subscriber registries, bounded receive queues, drop counters, and generation tokens that reject late callbacks. No Zenoh or SDK header, so host tests check it without a board. |
+| `main/zenoh_sample_validation.{h,c}` | Byte-bound guard used before the `zenoh-pico` callback copies a sample into the bounded queue. |
+| `main/zenoh_endpoint.{h,c}` | Copies the private operator router host/port configuration into caller storage. It validates the resulting bounded printable endpoint before session open. |
+| `main/idf_sources.cmake` | Declarative source list and requests for the prepared Core facade and session modules. It contains no protocol rule. |
 
-The C seam this transport compiles is Axoloty's, not a local declaration:
-`axoloty_zenoh.h` comes from the prepared Core checkout through
-`Tools/prepare-core.sh`, and the manifest fails closed when the prepared Core
-does not carry it.
+The C facade header and `AxolotyZenohCore` sources come from the prepared Core
+checkout through `Tools/prepare-core.sh` and its report. The ESP-IDF component
+compiles those sources in place; it does not copy Core source. The component
+also uses the report-generated module map for the Core-owned `CAxolotyZenoh`
+facade module. Both consumers fail closed when the prepared Core does not
+publish the required artifacts.
 
-The host-only seam test lives at `Tests/embedded/run-zenoh-host-test.sh` and
-runs in the `build` tier. It needs the Core facade header and reports a skip
-without it.
+The production host test lives at `Tests/embedded/run-zenoh-host-test.sh` and
+runs in the `build` tier. It compiles the same carrier/probe sources and Core
+session sources used by the firmware against a deterministic host facade. It
+checks operation order, bounds, multiple profile-interest shapes, queue
+handling, explicit unsupported results, router polling deadlines, and errors.
+It does not build or link `zenoh-pico`.
 
-## What is not here yet
+## Observable profile limits
 
-These need a Core-owned contract that has not landed, or a transport-neutral
-application seam, so they are deliberately absent rather than stubbed. They are
-tracked as [axoloty-embedded#4] and its neighbors.
+- The application installs the same two profile-interest shapes as Core's host
+  binding: `coaty/3/<namespace>/*/*` and
+  `coaty/3/<namespace>/*/*/*`. The application passes them as borrowed key
+  expressions; the transport does not interpret them. The legacy MQTT
+  `coaty/3/<namespace>/#` filter is retained as a third operation for MQTT
+  compatibility; pinned `zenoh-pico` parses `#` literally, so it is not used
+  as Zenoh wildcard coverage and may match a literal-hash key. The two `*`
+  expressions are the Zenoh wildcard forms, and the pinned parser accepts
+  both.
+- The v1 client profile has no broker last-will. `configureLastWill` returns
+  failure and the probe emits `network:lastWillUnsupported`; it does not
+  substitute a normal deadvertise for crash semantics.
+- The profile disables local delivery of a session's own publications. The
+  single-client probe emits `network:receiveUnsupported` rather than claiming
+  loopback. The two-participant exchange is where bidirectional delivery is
+  checked.
+- Reconnect observation polls the real session's router count until the
+  supplied deadline. It succeeds when the open session observes a router; it
+  does not close or reopen the session. An already-connected observation is
+  connectivity, not evidence of recovery. A recovery claim needs an observed
+  loss and restoration plus subscriptions and bidirectional traffic on a
+  physical device.
+- A configured endpoint is `tcp/<host>:<port>`. The network-config generator
+  accepts `AXOLOTY_ZENOH_HOST` and `AXOLOTY_ZENOH_PORT` (default port `7447`);
+  absent an explicit Zenoh host, the configured host is reused as the router
+  address.
 
-- **The application carrier seam.** `runCarrierNetworkProbe` /
-  `emitAgentExchange` in the MQTT transport are MQTT-shaped and the application
-  calls them directly. A Zenoh image cannot link until the application seam is
-  made transport-neutral and given a carrier locator. That is `#816`/`#817`
-  work and is not done here.
-- **Device qualification.** Needs a board, a router, and the backend.
-- **A portable Swift wrapper over the facade.** `AxolotyZenohCore` is Core's
-  and has not landed; `EmbeddedZenohClient` is the firmware overlay that builds
-  today.
+Device qualification still needs a physical board and router. No hardware
+result is inferred from a host test or image build.
 
 See [docs/zenoh-embedded.md](../../docs/zenoh-embedded.md) for the ownership
-split, the pinned revision, the Core contract dependency, the documented
-`zenoh-pico` incompatibilities, and the tuning values.
+split, pinned revision, Core contract, documented `zenoh-pico` differences,
+build results, and qualification gaps.
 
-[axoloty-embedded#4]: https://github.com/phynics/axoloty-embedded/issues/4
-[axoloty#853]: https://github.com/phynics/axoloty/issues/853
-[axoloty#796]: https://github.com/phynics/axoloty/issues/796
+[axoloty-embedded#8]: https://github.com/phynics/axoloty-embedded/issues/8
+[axoloty#845]: https://github.com/phynics/axoloty/issues/845

@@ -174,10 +174,16 @@ func runDeviceAgentExchange(
             result.insert(.connected)
             seam.exchangeMilestone(DeviceSmokeExchangeMilestone.connected.rawValue)
 
-            let filter: StaticString = "coaty/3/axoloty-embedded/#"
-            let subscribed = seam.carrier.subscribe(
-                filter.utf8Start, Int32(filter.utf8CodeUnitCount), deadline.remaining(using: seam)
-            ) != 0
+            // Profile interest includes the two key-expression forms Core's
+            // host binding installs: exactly two and exactly three levels
+            // after the namespace. The legacy hash-shaped filter is retained
+            // for compatibility; in the selected key grammar its hash is a
+            // literal chunk, not wildcard coverage.
+            let subscribed = installDeviceAgentProfileInterest(
+                subscribe: seam.carrier.subscribe,
+                unsubscribe: seam.carrier.unsubscribe,
+                deadlineMS: deadline.remaining(using: seam)
+            )
             if subscribed {
                 result.insert(.subscribed)
                 seam.exchangeMilestone(DeviceSmokeExchangeMilestone.subscribed.rawValue)

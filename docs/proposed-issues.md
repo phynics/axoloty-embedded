@@ -89,10 +89,11 @@ Supersedes `phynics/axoloty#814`. **Implemented in this repository** as
 `Transports/zenoh-pico/main/zenoh_pico_facade.c` over the Core-owned header; the
 bounded receive state is `zenoh_pico_queue.c` and is host-conformant. The
 `ZP-2` conformance suite and the device run it names are still open, and the
-image still does not link because the application seam is MQTT-shaped.
+firmware image now links with the application carrier seam selected by the
+profile.
 
 **Outcome.** The pico backend implements the device carrier seam
-(`axoloty_zenoh_*`) so `EmbeddedZenohClient` compiles and links against
+(`axoloty_zenoh_*`) so the Core-session carrier adapter compiles and links against
 `zenoh-pico`, without changing the public facade contract.
 
 **Scope.**
@@ -110,30 +111,29 @@ image still does not link because the application seam is MQTT-shaped.
 - No silent divergent semantics; incompatibilities are documented.
 - `ZP-2` conformance runs against this backend.
 
-## ZP-5 — `[ZENOH] Implement EmbeddedZenohClient`
+## ZP-5 — `[ZENOH] Adapt the carrier to AxolotyZenohCore`
 
 Supersedes `phynics/axoloty#815`.
 
-**Outcome.** The bounded client lands in `Transports/zenoh-pico/` with the
-same shape as `EmbeddedMQTTClient`: open/subscribe/publish/poll/unsubscribe/
-close, borrowed buffers, explicit lengths, no Foundation, no implicit
-allocation, no callback into Swift.
+**Outcome.** The Zenoh carrier adapts Core's `ZenohSession` and
+`ZenohFrameStorage` with open/subscribe/publish/poll/unsubscribe/close,
+borrowed buffers, explicit lengths, no Foundation, no implicit allocation,
+and no callback into Swift.
 
 **Scope.**
 
-- The skeleton is already in this repository
-  (`Transports/zenoh-pico/main/EmbeddedZenohClient.swift`) with a host seam
-  test. This issue completes it against the real backend and the landed facade
-  ABI, then removes the provisional carrier declarations.
+- `AxolotyZenohCore` is compiled in place by the ESP-IDF component
+  `axoloty_zenoh_core`; `Transports/zenoh-pico/main/ZenohCarrier.swift` adapts
+  its session and frame APIs. The prior direct-C client overlay is removed.
 
 **Acceptance criteria.**
 
-- API surface matches `EmbeddedMQTTClient`'s shape closely enough that `ZP-6`
-  needs no carrier-specific branching beyond client selection.
+- The carrier operation table matches the MQTT adapter's shape closely enough
+  for the application to select probe behavior through the injected seam.
 - No Foundation dependency; no implicit heap allocation in steady-state.
 - The host seam test passes in the `build` tier.
 
-## ZP-6 — `[ZENOH] Wire EmbeddedZenohClient into shared AxolotyProtocol runtime path`
+## ZP-6 — `[ZENOH] Wire Zenoh carrier into shared AxolotyProtocol runtime path`
 
 Supersedes `phynics/axoloty#816`.
 
@@ -143,10 +143,10 @@ production code.
 
 **Scope.**
 
-- Generalize the application carrier seam so a transport supplies its carrier
-  probe and locator instead of the application naming `runCarrierNetworkProbe`
-  and `emitAgentExchange`.
-- Wire `EmbeddedZenohClient` frames into the same processor as MQTT Embedded.
+- Generalize the application carrier seam so the selected transport supplies
+  its carrier probe instead of the application naming a probe implementation
+  or carrier adapters.
+- Wire Zenoh frames into the same processor as MQTT Embedded.
 
 **Acceptance criteria.**
 
@@ -164,7 +164,7 @@ the host's.
 
 **Scope.**
 
-- Install the two route shapes the host uses, as keys, unchanged.
+- Install the two key-expression shapes the host uses, unchanged.
 - Confirm `zenoh-pico` key-expression matching is equivalent to `zenoh-c`'s
   for those shapes.
 

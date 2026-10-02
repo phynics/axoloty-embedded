@@ -9,22 +9,27 @@
 # The platform sets AXOLOTY_TRANSPORT_MAIN_DIR before including this file.
 
 set(AXOLOTY_TRANSPORT_SWIFT_SOURCES
-    "${AXOLOTY_TRANSPORT_MAIN_DIR}/EmbeddedZenohClient.swift"
+    "${AXOLOTY_TRANSPORT_MAIN_DIR}/ZenohCarrier.swift"
+    "${AXOLOTY_TRANSPORT_MAIN_DIR}/ZenohNetworkProbe.swift"
 )
 
 # The facade is implemented on the device. zenoh_pico_queue.c holds the bounded
 # receive queue, its counters, and the session and subscriber registries; it
 # includes no Zenoh and no SDK header, so the host seam can check it with no
 # board. zenoh_pico_facade.c is the `axoloty_zenoh_*` entry points over the
-# pinned zenoh-pico.
+# pinned zenoh-pico. zenoh_endpoint.c derives the operator-configured router
+# endpoint from the private network configuration header.
 set(AXOLOTY_TRANSPORT_C_SOURCES
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_sample_validation.c"
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_pico_queue.c"
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_pico_facade.c"
+    "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_endpoint.c"
 )
 
-# The pinned zenoh-pico wrapper component supplies the carrier seam backend.
-set(AXOLOTY_TRANSPORT_IDF_REQUIRES "zenoh_pico")
+# The pinned zenoh-pico wrapper component supplies the carrier seam backend,
+# and the prepared AxolotyZenohCore module supplies the portable session types
+# the carrier is written against.
+set(AXOLOTY_TRANSPORT_IDF_REQUIRES "zenoh_pico" "axoloty_zenoh_core")
 
 # The C seam this transport declares is the Core-owned Axoloty Zenoh facade
 # header, resolved by the platform from the `zenohCore` entry of the Core

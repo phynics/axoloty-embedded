@@ -66,6 +66,15 @@ transport=$(node -e 'const p = JSON.parse(require("fs").readFileSync(process.arg
 export AXOLOTY_PREPARATION_REPORT="$report"
 export AXOLOTY_APPLICATION_DIR="$repo_root/Applications/$application"
 export AXOLOTY_TRANSPORT_DIR="$repo_root/Transports/$transport"
+if [ "$transport" = "zenoh-pico" ]; then
+    zenoh_report=${AXOLOTY_ZENOH_PICO_REPORT:-"$scratch/zenoh-pico-preparation.json"}
+    if [ ! -f "$zenoh_report" ]; then
+        echo "EMBEDDED SWIFT LINKER FAIL: no zenoh-pico preparation report at $zenoh_report" >&2
+        exit 1
+    fi
+    AXOLOTY_ZENOH_PICO_REPORT=$(realpath -e -- "$zenoh_report")
+    export AXOLOTY_ZENOH_PICO_REPORT
+fi
 cd "$project_dir" || exit 1
 echo "== build (Unicode linker probe) =="
 idf.py -B "$build_dir" \

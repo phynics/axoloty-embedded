@@ -12,8 +12,16 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-
 #include "sdkconfig.h"
+
+// Exposes the selected scheduler frequency to the transport's bounded wait
+// calculation. Embedded Swift does not import the SDK's config macros.
+#ifndef AXOLOTY_TICKS_FROM_MS_DEFINED
+#define AXOLOTY_TICKS_FROM_MS_DEFINED
+static inline unsigned int axoloty_scheduler_hz(void) {
+    return configTICK_RATE_HZ;
+}
+#endif
 
 // Carrier declarations are owned by the selected transport. The include path
 // is supplied by that transport's composition metadata.
@@ -24,6 +32,11 @@
 // the include path; the platform names no carrier operation of its own.
 #if __has_include("axoloty_zenoh.h")
 #include "axoloty_zenoh.h"
+#endif
+// The Zenoh transport's operator-endpoint helper. Present only when that
+// transport is selected; other profiles are unaffected.
+#if __has_include("zenoh_endpoint.h")
+#include "zenoh_endpoint.h"
 #endif
 
 // The selected application owns its C-callable device-agent seam.

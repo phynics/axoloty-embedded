@@ -3,7 +3,10 @@
   "profile": "esp32c6-zenoh",
   "check": "firmware-build",
   "tier": "build",
-  "status": "unexecuted",
+  "status": "passed",
   "recordedAt": "2026-09-30",
-  "reason": "Attempted against locked Core 68e46c764a555a027f2779c74e8dd04a6bc4bb06, and no image was produced. Built on its own in a fresh AXOLOTY_SCRATCH, the Core Zenoh contract resolved from the new report: the platform passed the reported facade include directory to the transport, the pinned zenoh-pico library compiled 132 C objects, and EmbeddedZenohClient.swift compiled. ESP-IDF then stopped in the main Swift compile because the application and platform seam is still MQTT-shaped: DeviceSmokeApplication.swift cannot find runCarrierNetworkProbe, and Esp32c6SmokeSeam.swift cannot find embeddedExchangeConfigureLastWill, embeddedExchangeConnect, embeddedExchangeSubscribe, embeddedExchangeUnsubscribe, embeddedExchangePublish, embeddedExchangePollOneEvent, embeddedExchangeWaitForReconnect, or embeddedExchangeDisconnect, none of which the Zenoh transport provides. Each profile now builds in its own proof workspace, so the earlier second-profile shared-cache failure no longer occurs; the MQTT-shaped seam above is the remaining build blocker. An executed build record must name firmwareSHA256 and no run produced an image; inventing one is the one failure that cannot be repaired, so the state stays unexecuted with this reason. Generalizing the application seam is runtime integration work outside this change."
+  "firmwareSHA256": "3d21aaa40f5133a070d548c782ffee2cbd6bc6183c5b283763c82b433607fc88",
+  "coreRevision": "68e46c764a555a027f2779c74e8dd04a6bc4bb06",
+  "result": "ESP-IDF image built and linked for the esp32c6-zenoh profile; both the AxolotyZenohCore component and ZenohCarrier compiled from the Core preparation report. Device qualification remains unexecuted.",
+  "toolchain": "axoloty-embedded-dev local image, Swift 6.4, ESP-IDF v5.4"
 }
