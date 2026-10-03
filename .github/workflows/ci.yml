@@ -92,8 +92,26 @@ jobs:
       # The build tier runs the hardware-free host firmware checks and then
       # attempts each profile image build. This runner has no ESP-IDF image, so
       # the image build reports UNAVAILABLE, which is honest and never a pass.
-      - name: Host firmware checks and profile image
-        run: Tools/verify.sh --tier build
+      #
+      # Each host check below is named in --require. Without a requirement an
+      # absent toolchain turns a check into a SKIP and the run stays green, which
+      # is how this job reported success while the Zenoh seam, the report
+      # contract, the CMake escape check and the host smoke test had never run.
+      # `--require build` is deliberately absent: it would demand a firmware
+      # image, so the job could never be green on a runner without ESP-IDF. The
+      # image stays an explicit SKIP.
+      - name: Host firmware checks
+        run: >-
+          Tools/verify.sh --tier build
+          --require build:runtime-identity
+          --require build:shared-flags
+          --require build:mqtt-host-seam
+          --require build:profile-isolation
+          --require build:unsupported-validator
+          --require build:zenoh-host-seam
+          --require build:zenoh-report-contract
+          --require build:cmake-escape
+          --require build:host-smoke
 
       # The broker tier self-provisions an ephemeral in-process broker when no
       # operator broker is configured. It needs no board or container broker.
