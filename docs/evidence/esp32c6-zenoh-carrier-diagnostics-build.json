@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "profile": "esp32c6-zenoh",
+  "check": "carrier-diagnostics-build",
+  "tier": "build",
+  "status": "passed",
+  "recordedAt": "2026-10-03",
+  "firmwareRevision": "e63e7bd26c2469434cc2b0100fc10520dbe13a8a",
+  "firmwareSHA256": "11808e2a68d2019ce77dab4dc40387ec0362978fe05d46e85d0d38c227efd7f9",
+  "firmwareSizeBytes": 841120,
+  "coreRevision": "68e46c764a555a027f2779c74e8dd04a6bc4bb06",
+  "toolchain": {
+    "swift": "Swift 6.4 (swift-6.4-RELEASE)",
+    "espIdf": "ESP-IDF v5.4",
+    "target": "esp32c6",
+    "containerImageId": "sha256:300977549cef51e03728784ab59d3a351c5eb4d60e9b5f3a47fb6d16462b2994"
+  },
+  "result": "Clean locked-Core image built and reproduced byte-for-byte. Production carrier_diagnostics.c compiled for RV32IMAC; the linked ELF contains carrier_diagnostics_add and carrier_diagnostics_set_active_subscriptions, with no undefined __atomic dependency. Production carrier host conformance and concurrent C counter tests passed. Device qualification remains unexecuted.",
+  "verification": {
+    "proofRunId": "kbz-phase1-431d",
+    "logsRoot": "/data/tmp/opencode/kbz-phase1-431d",
+    "fullVerifierExit": 124,
+    "fullVerifierResult": "1800-second timeout during the final Zenoh linker check; no aggregate summary was produced",
+    "targetedContinuationExit": 0,
+    "targetedContinuationResult": "Completed the existing Zenoh linker project with the production checker's configure and ELF/map assertions; inspected both profile selections and image checksums; ran missing C checks with CC=clang and broker, device, and repo tiers."
+  }
+}
