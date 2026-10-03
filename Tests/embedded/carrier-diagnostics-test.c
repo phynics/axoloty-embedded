@@ -16,6 +16,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <pthread.h>
 
 static int check(int condition, const char *what) {
     if (condition) return 1;
@@ -53,6 +54,14 @@ static uint32_t parse_field(const char *json, const char *key) {
 // cases below are exercised by shrinking capacity rather than by a hostile
 // allocation.
 #define REPORT_BUFFER 512
+
+static void *concurrent_writer(void *unused) {
+    (void)unused;
+    for (unsigned index = 0; index < 50000u; ++index) {
+        carrier_diagnostics_add(CARRIER_METRIC_FRAMES_RECEIVED, 1u);
+    }
+    return NULL;
+}
 
 int host_carrier_diagnostics_tests(void) {
     char report[REPORT_BUFFER];
@@ -180,14 +189,45 @@ int host_carrier_diagnostics_tests(void) {
     written = carrier_diagnostics_write_json(report, sizeof(report));
     if (!check(written > 0u, "a saturated report still fits the bound")) return 0;
     if (!check(parse_field(report, "framesReceived") == UINT32_MAX,
-               "a saturated counter is reported in full, not abbreviated")) return 0;
+                "a saturated counter is reported in full, not abbreviated")) return 0;
 
-    // --- The report is exactly the promised capacity, with no slack wasted on
-    //     a trailing newline that would corrupt the JSON Lines frame it lands in.
+    // All fields at their maximum must fit exactly, leaving only the null byte.
+    for (int index = 0; index < CARRIER_METRIC_COUNT; ++index) {
+        carrier_diagnostics_add(metrics[index], UINT32_MAX);
+    }
+    carrier_diagnostics_set_active_subscriptions(UINT32_MAX);
+    memset(report, 'x', sizeof(report));
+    written = carrier_diagnostics_write_json(report, needed);
+    if (!check(written + 1u == needed, "the maximum report fills the exact capacity")) return 0;
+    if (!check(report[needed] == 'x', "the writer stays within caller capacity")) return 0;
+
+    // The report is one terminated JSON object with no trailing newline.
     if (!check(report[written] == '\0', "the report is terminated")) return 0;
     if (!check(strchr(report, '\n') == NULL, "the report carries no newline")) return 0;
     if (!check(report[0] == '{' && report[written - 1u] == '}',
-               "the report is one JSON object")) return 0;
+                "the report is one JSON object")) return 0;
+
+    // Two writers and a snapshot reader share the production atomic storage.
+    carrier_diagnostics_reset();
+    pthread_t writers[2];
+    if (!check(pthread_create(&writers[0], NULL, concurrent_writer, NULL) == 0,
+               "start first concurrent writer")) return 0;
+    if (pthread_create(&writers[1], NULL, concurrent_writer, NULL) != 0) {
+        pthread_join(writers[0], NULL);
+        return check(0, "start second concurrent writer");
+    }
+    uint32_t previous = 0;
+    int valid_snapshots = 1;
+    for (unsigned index = 0; index < 10000u; ++index) {
+        uint32_t current = carrier_diagnostics_get().frames_received;
+        if (current < previous || current > 100000u) valid_snapshots = 0;
+        previous = current;
+    }
+    pthread_join(writers[0], NULL);
+    pthread_join(writers[1], NULL);
+    if (!check(valid_snapshots, "concurrent snapshots never tear or go backwards")) return 0;
+    if (!check(carrier_diagnostics_get().frames_received == 100000u,
+               "concurrent increments lose no updates")) return 0;
 
     carrier_diagnostics_reset();
     return 1;

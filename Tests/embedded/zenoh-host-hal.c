@@ -349,16 +349,12 @@ axoloty_zenoh_result_t axoloty_zenoh_poll(const axoloty_zenoh_session_t *session
     if (index < 0) return AXOLOTY_ZENOH_INVALID_ARGUMENT;
     if (!key || !out_key_length || !payload || !out_payload_length) return AXOLOTY_ZENOH_INVALID_ARGUMENT;
     HostSubscription *state = &host_subscriptions[session_index][index];
-    // The real queue reports a pending drop or oversize once, on the first
-    // poll that finds the queue drained, and then goes quiet again. Mirroring
-    // that exactly is what makes the carrier's counter test meaningful: a
-    // counter that counted the notification instead of the event would look
-    // right here and wrong on the device.
-    if ((host_failures & REPORT_QUEUE_FULL) != 0) {
+    // Like the production queue, emit a coalesced notification only after drain.
+    if (state->depth == 0 && (host_failures & REPORT_QUEUE_FULL) != 0) {
         host_failures &= ~(unsigned)REPORT_QUEUE_FULL;
         return AXOLOTY_ZENOH_QUEUE_FULL;
     }
-    if ((host_failures & REPORT_FRAME_TOO_LARGE) != 0) {
+    if (state->depth == 0 && (host_failures & REPORT_FRAME_TOO_LARGE) != 0) {
         host_failures &= ~(unsigned)REPORT_FRAME_TOO_LARGE;
         return AXOLOTY_ZENOH_FRAME_TOO_LARGE;
     }

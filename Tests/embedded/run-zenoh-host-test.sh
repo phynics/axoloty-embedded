@@ -315,6 +315,7 @@ swiftc -D EMBEDDED_ZENOH_HOST_TEST \
     "$tmp/hal.o" "$tmp/queue.o" "$tmp/queue-test.o" "$tmp/validation.o" "$tmp/endpoint.o" \
     "$tmp/diagnostics.o" "$tmp/diagnostics-test.o" \
     "$tmp/_JSONCore.o" "$tmp/AxolotyWire.o" "$tmp/AxolotyZenohCore.o" \
+    -Xlinker -lpthread \
     -o "$tmp/embedded-zenoh-host-test"
 
 # Nix's standalone Swift compiler does not always add the dispatch library to

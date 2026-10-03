@@ -14,16 +14,17 @@
 
 #include "carrier_diagnostics.h"
 
-#include <string.h>
+// The firmware target must implement these atomics without an out-of-line
+// libatomic dependency. Fail at compile time if a new target cannot.
+_Static_assert(__atomic_always_lock_free(sizeof(uint32_t), 0),
+               "carrier diagnostics requires lock-free 32-bit atomics");
 
 // The one live counter set. Fixed storage, so there is nothing to allocate and
 // nothing to free, and a reader always has a valid snapshot address.
-CarrierDiagnostics carrier_diagnostics_state;
+static CarrierDiagnostics carrier_diagnostics_state;
 
 // The counters as one addressable table, so a metric selects a field without
 // this module having to name any meaning. The order matches `CarrierMetric`.
-// Every entry is a `uint32_t` in the same struct, so the cast below is a
-// pointer rebind and not an arithmetic step.
 #define CARRIER_METRIC_TABLE(X)                        \
     X(CARRIER_METRIC_PUBLISH_ATTEMPTS, publish_attempts)      \
     X(CARRIER_METRIC_PUBLISH_FAILURES, publish_failures)      \
@@ -66,10 +67,26 @@ static void saturating_add(uint32_t *field, uint32_t amount) {
     }
 }
 
-CarrierDiagnostics carrier_diagnostics_get(void) { return carrier_diagnostics_state; }
+CarrierDiagnostics carrier_diagnostics_get(void) {
+    CarrierDiagnostics snapshot;
+#define CARRIER_LOAD(metric, field) \
+    snapshot.field = __atomic_load_n(&carrier_diagnostics_state.field, __ATOMIC_RELAXED);
+    CARRIER_METRIC_TABLE(CARRIER_LOAD)
+#undef CARRIER_LOAD
+    snapshot.active_subscriptions = __atomic_load_n(
+        &carrier_diagnostics_state.active_subscriptions, __ATOMIC_RELAXED);
+    snapshot.active_subscriptions_peak = __atomic_load_n(
+        &carrier_diagnostics_state.active_subscriptions_peak, __ATOMIC_RELAXED);
+    return snapshot;
+}
 
 void carrier_diagnostics_reset(void) {
-    memset(&carrier_diagnostics_state, 0, sizeof(carrier_diagnostics_state));
+#define CARRIER_CLEAR(metric, field) \
+    __atomic_store_n(&carrier_diagnostics_state.field, 0u, __ATOMIC_RELAXED);
+    CARRIER_METRIC_TABLE(CARRIER_CLEAR)
+#undef CARRIER_CLEAR
+    __atomic_store_n(&carrier_diagnostics_state.active_subscriptions, 0u, __ATOMIC_RELAXED);
+    __atomic_store_n(&carrier_diagnostics_state.active_subscriptions_peak, 0u, __ATOMIC_RELAXED);
 }
 
 static bool metric_is_known(CarrierMetric metric) {
@@ -102,9 +119,8 @@ void carrier_diagnostics_set_active_subscriptions(uint32_t active) {
 
 // --- Bounded JSON writer ---------------------------------------------------
 //
-// The device gate needs these numbers on the serial console and cannot link a
-// JSON library, so they are written by hand into caller storage. Nothing here
-// allocates, and every append is bounds-checked before it writes.
+// A serial reporter can use these numbers without linking a JSON library.
+// Nothing here allocates, and every append is bounds-checked before it writes.
 
 typedef struct {
     char *buffer;
@@ -165,19 +181,21 @@ static void sink_append_unsigned(JsonSink *sink, uint32_t value) {
 #define CARRIER_JSON_CLOSE "}"
 
 #define CARRIER_JSON_KEYS                                                    \
-    sizeof(CARRIER_JSON_PUBLISH_ATTEMPTS) + sizeof(CARRIER_JSON_PUBLISH_FAILURES) + \
-    sizeof(CARRIER_JSON_FRAMES_RECEIVED) + sizeof(CARRIER_JSON_FRAMES_DROPPED) +    \
-    sizeof(CARRIER_JSON_FRAMES_OVERSIZED) + sizeof(CARRIER_JSON_POLL_ERRORS) +      \
-    sizeof(CARRIER_JSON_SESSION_OPENS) + sizeof(CARRIER_JSON_SESSION_CLOSES) +      \
-    sizeof(CARRIER_JSON_SESSION_FAILURES) + sizeof(CARRIER_JSON_RECONNECTS) +       \
-    sizeof(CARRIER_JSON_ACTIVE) + sizeof(CARRIER_JSON_ACTIVE_PEAK)
+    (sizeof(CARRIER_JSON_PUBLISH_ATTEMPTS) - 1u) + (sizeof(CARRIER_JSON_PUBLISH_FAILURES) - 1u) + \
+    (sizeof(CARRIER_JSON_FRAMES_RECEIVED) - 1u) + (sizeof(CARRIER_JSON_FRAMES_DROPPED) - 1u) +    \
+    (sizeof(CARRIER_JSON_FRAMES_OVERSIZED) - 1u) + (sizeof(CARRIER_JSON_POLL_ERRORS) - 1u) +      \
+    (sizeof(CARRIER_JSON_SESSION_OPENS) - 1u) + (sizeof(CARRIER_JSON_SESSION_CLOSES) - 1u) +      \
+    (sizeof(CARRIER_JSON_SESSION_FAILURES) - 1u) + (sizeof(CARRIER_JSON_RECONNECTS) - 1u) +       \
+    (sizeof(CARRIER_JSON_ACTIVE) - 1u) + (sizeof(CARRIER_JSON_ACTIVE_PEAK) - 1u)
 
 // Every counter can reach UINT32_MAX, which is ten decimal digits, so this
 // bound holds for any value the counters can hold.
 #define CARRIER_JSON_FIELDS (12u * 10u)
+#define CARRIER_JSON_COMMAS 11u
 
 size_t carrier_diagnostics_json_capacity(void) {
-    return CARRIER_JSON_KEYS + CARRIER_JSON_FIELDS + sizeof(CARRIER_JSON_CLOSE);
+    return CARRIER_JSON_KEYS + CARRIER_JSON_COMMAS + CARRIER_JSON_FIELDS
+        + sizeof(CARRIER_JSON_CLOSE);
 }
 
 size_t carrier_diagnostics_write_json(char *buffer, size_t capacity) {

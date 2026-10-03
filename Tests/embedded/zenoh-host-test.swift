@@ -488,11 +488,11 @@ private struct EmbeddedZenohHostTest {
         var outKeyLength: Int32 = 0
         var outPayloadLength: Int32 = 0
 
-        func poll(_ carrier: inout ZenohCarrier) -> Int32 {
+        func poll(_ carrier: inout ZenohCarrier, keyCapacity: Int32 = 256) -> Int32 {
             outKey.withUnsafeMutableBufferPointer { keyBuffer in
                 outPayload.withUnsafeMutableBufferPointer { payloadBuffer in
                     carrier.pollOneEvent(
-                        topic: keyBuffer.baseAddress!, topicCapacity: Int32(keyBuffer.count), topicLength: &outKeyLength,
+                        topic: keyBuffer.baseAddress!, topicCapacity: keyCapacity, topicLength: &outKeyLength,
                         payload: payloadBuffer.baseAddress!, payloadCapacity: Int32(payloadBuffer.count),
                         payloadLength: &outPayloadLength)
                 }
@@ -500,8 +500,12 @@ private struct EmbeddedZenohHostTest {
         }
 
         func queueSample() {
-            host_zenoh_set_sample(key.withUnsafeBufferPointer { $0.baseAddress! }, Int32(key.count),
-                                  payload.withUnsafeBufferPointer { $0.baseAddress! }, Int32(payload.count))
+            key.withUnsafeBufferPointer { keyBuffer in
+                payload.withUnsafeBufferPointer { payloadBuffer in
+                    host_zenoh_set_sample(keyBuffer.baseAddress!, Int32(key.count),
+                                          payloadBuffer.baseAddress!, Int32(payload.count))
+                }
+            }
         }
 
         // A reset phase starts from a known zero, so every number below is
@@ -544,6 +548,13 @@ private struct EmbeddedZenohHostTest {
         host_zenoh_set_failures(0)
         check(metric(publishAttempts) == 2, "two publish attempts")
         check(metric(publishFailures) == 1, "one publish failure")
+        check(metric(sessionFailures) == 2, "open and facade publish failures are session failures")
+        let oversizedPayload = [UInt8](repeating: 0, count: 2_049)
+        check(!withTwoSpans(key, oversizedPayload) { carrier.publish(topic: $0, payload: $1) },
+              "oversized local publication is refused")
+        check(metric(publishAttempts) == 3 && metric(publishFailures) == 2,
+              "local refusal counts as a failed publication attempt")
+        check(metric(sessionFailures) == 2, "local publish refusal has no facade session result")
 
         // An idle poll is not an event. Counting it would make every steady
         // state look like a busy one and hide a real drop inside noise.
@@ -555,6 +566,9 @@ private struct EmbeddedZenohHostTest {
 
         // A delivered frame counts as received.
         queueSample()
+        check(poll(&carrier, keyCapacity: 1) == -1, "small output retains the pending frame")
+        check(metric(framesReceived) == 0, "pending frame is not yet delivered")
+        check(metric(framesOversized) == 0, "small caller storage is not an oversized frame")
         check(poll(&carrier) == 1, "queued frame reports one")
         check(metric(framesReceived) == 1, "one frame received")
 
@@ -595,7 +609,7 @@ private struct EmbeddedZenohHostTest {
         check(metric(reconnectsObserved) == 0, "an absent router is no reconnect")
         host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_ROUTER_DROP_THEN_RESTORE))
         check(carrier.waitForReconnect(deadlineMS: 500), "an observed loss and restoration succeeds")
-        check(metric(reconnectsObserved) == 1, "one observed reconnect")
+        check(metric(reconnectsObserved) == 1, "restoration at entry counts the previously observed loss")
         // Restoration that finished before the wait began never showed this
         // carrier a loss, so it is connectivity, not a reconnect.
         host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_ROUTER_DROP_RESTORE_BEFORE_ENTRY))
@@ -644,6 +658,37 @@ private struct EmbeddedZenohHostTest {
         check(tiny.withUnsafeMutableBufferPointer { buffer in
             ZenohCarrier.writeDiagnosticsJSON(into: buffer.baseAddress!, capacity: 0)
         } == 0, "a zero-capacity report buffer reports that it did not fit")
+
+        // Observe a complete loss/restoration inside one wait. The HAL's first
+        // query is consumed by connect, its second reports loss, its third restores.
+        host_zenoh_reset()
+        ZenohCarrier.resetDiagnostics()
+        host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_ROUTER_DROP_THEN_RESTORE))
+        var restored = ZenohCarrier()
+        check(restored.connect(deadlineMS: 5_000), "open before router loss")
+        check(withSpan(key, count: key.count) { restored.subscribe(topic: $0, deadlineMS: 1_000) },
+              "subscribe before router loss")
+        check(restored.waitForReconnect(deadlineMS: 500), "restoration within the wait succeeds")
+        check(metric(reconnectsObserved) == 1, "loss at the entry query is preserved")
+        check(host_zenoh_router_query_count() == 3, "diagnostics add no router queries")
+        host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_SUBSCRIBE))
+        check(!withSpan(second, count: second.count) { restored.subscribe(topic: $0, deadlineMS: 1_000) },
+              "failed subscribe does not change the gauge")
+        check(ZenohCarrier.activeSubscriptions == 1 && metric(sessionFailures) == 1,
+              "failed subscribe increments only the failure count")
+        host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_UNSUBSCRIBE))
+        check(!withSpan(key, count: key.count) { restored.unsubscribe(topic: $0, deadlineMS: 1_000) },
+              "failed unsubscribe retains the slot")
+        check(ZenohCarrier.activeSubscriptions == 1 && metric(sessionFailures) == 2,
+              "failed unsubscribe is counted without losing its declaration")
+        host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_UNSUBSCRIBE | HOST_ZENOH_FAIL_CLOSE))
+        check(!restored.disconnect(), "failed close still performs terminal cleanup")
+        check(metric(sessionCloses) == 0 && metric(sessionFailures) == 4,
+              "teardown unsubscribe and close failures are counted separately")
+        check(ZenohCarrier.activeSubscriptions == 0 && ZenohCarrier.activeSubscriptionsPeak == 1,
+              "failed teardown clears the live gauge but retains the peak")
+        check(!restored.disconnect() && metric(sessionFailures) == 4,
+              "terminal repeated teardown produces no facade result")
 
         ZenohCarrier.resetDiagnostics()
         host_zenoh_reset()

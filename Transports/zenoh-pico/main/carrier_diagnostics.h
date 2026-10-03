@@ -26,33 +26,34 @@
 //   healthy traffic; saturation reports "at least this many", which is the only
 //   reading a diagnostic can be trusted to carry. This mirrors the bounded
 //   receive queue's own saturating add.
-// - **Concurrent-safe, and written from two task contexts.** The carrier task
-//   records publishes, session outcomes, and reconnect observations; a receive
-//   callback runs on a carrier-owned task. Both touch these fields, so every
-//   update is one atomic operation.
+// - **Concurrent-safe.** Updates and reads use lock-free 32-bit atomics. Each
+//   counter is independent; a snapshot is not a transaction across fields.
 
 /// Bounded carrier diagnostics. Every field is a count since the last reset,
 /// except `active_subscriptions` and `active_subscriptions_peak`, which are
 /// gauges.
 typedef struct {
-    /// Publications the carrier handed to its transport.
+    /// Publish calls, including calls refused locally before the facade.
     uint32_t publish_attempts;
-    /// The subset of those the transport refused.
+    /// Publish calls refused locally or by the facade.
     uint32_t publish_failures;
     /// Frames copied out of the receive path into caller storage.
     uint32_t frames_received;
-    /// Frames the carrier's receive path reported as dropped.
+    /// Queue-full notifications observed by polling. Several dropped frames
+    /// can coalesce into one notification; this is not an exact loss total.
     uint32_t frames_dropped;
-    /// Frames the carrier's receive path rejected as exceeding its bound.
+    /// Oversized-frame notifications observed by polling. Several rejected
+    /// frames can coalesce into one notification.
     uint32_t frames_oversized;
-    /// Receive attempts that failed for a reason other than a drop, an
-    /// oversize frame, or an empty queue.
+    /// Facade poll errors other than not-open, drop, oversize, or empty queue.
     uint32_t poll_errors;
     /// Sessions opened successfully.
     uint32_t session_opens;
     /// Sessions closed successfully.
     uint32_t session_closes;
-    /// Every failed session or subscription operation the carrier saw.
+    /// Failed facade open, close, and publish calls, failed subscription
+    /// operations including local refusals, and poll errors or not-open results.
+    /// Local publish/open/poll refusals and router queries do not add here.
     uint32_t session_failures;
     /// Router loss-to-restoration transitions actually observed.
     uint32_t reconnects_observed;
@@ -80,18 +81,13 @@ typedef enum {
     CARRIER_METRIC_COUNT
 } CarrierMetric;
 
-// The single process-wide counter set. It is fixed storage, so there is
-// nothing to allocate and nothing to free.
-extern CarrierDiagnostics carrier_diagnostics_state;
-
-/// The live counter set. A concurrent writer may be mid-update, which is
-/// acceptable for a diagnostic snapshot: every field is naturally aligned and
-/// updated with a single atomic word operation, so a reader sees a valid value
-/// and never a torn one.
+/// The live counter set. Each field is read atomically, so a concurrent writer
+/// cannot tear a value. This is a per-field diagnostic snapshot, not one
+/// transaction across all fields: related counters can reflect adjacent instants.
 CarrierDiagnostics carrier_diagnostics_get(void);
 
-/// Clears every counter and the gauge. Used at boot and by the qualification
-/// runner between phases, so each phase reports against a known zero.
+/// Clears every counter and the gauge using atomic stores. Call only when no
+/// producer is active; resetting during traffic can discard an update.
 void carrier_diagnostics_reset(void);
 
 /// Adds `delta` to one counter, saturating at UINT32_MAX. Returns false for an
@@ -114,8 +110,7 @@ void carrier_diagnostics_set_active_subscriptions(uint32_t active);
 /// report of zero counts.
 size_t carrier_diagnostics_write_json(char *buffer, size_t capacity);
 
-/// The buffer size `carrier_diagnostics_write_json` always needs, including the
-/// terminating null. Lets a caller size storage once instead of guessing.
+/// A fixed buffer size that always suffices for the JSON, including its null.
 size_t carrier_diagnostics_json_capacity(void);
 
 // This module classifies nothing.

@@ -95,23 +95,16 @@ private func notePublishRefusedLocally() {
     _ = carrier_diagnostics_add(CARRIER_METRIC_PUBLISH_FAILURES, 1)
 }
 
-/// Records one receive outcome in the transport-neutral carrier counters.
-///
-/// A queue-full verdict is a drop and an over-bound verdict is an oversized
-/// frame, because that is what Core's own poll results mean. An empty queue is
-/// not an event: counting idle polls would make the steady-state numbers
-/// meaningless. A closed session is a session failure rather than a receive
-/// error, because that is what "the session is not open" reports.
+/// Counts facade notifications. Drop and oversize reports can each coalesce
+/// several rejected frames; they are observations, not exact frame-loss totals.
 @inline(__always)
 private func notePollOutcome(_ result: ZenohResult) {
     switch result {
-    case .success:
-        _ = carrier_diagnostics_add(CARRIER_METRIC_FRAMES_RECEIVED, 1)
     case .queueFull:
         _ = carrier_diagnostics_add(CARRIER_METRIC_FRAMES_DROPPED, 1)
     case .frameTooLarge:
         _ = carrier_diagnostics_add(CARRIER_METRIC_FRAMES_OVERSIZED, 1)
-    case .queueEmpty:
+    case .success, .queueEmpty:
         break
     case .notOpen:
         _ = carrier_diagnostics_add(CARRIER_METRIC_SESSION_FAILURES, 1)
@@ -152,24 +145,15 @@ private func noteSubscriptionFailure() {
 /// retained. Lifecycle calls must be serialized; the facade registry carries
 /// no locks and this value keeps none.
 ///
-/// Every operation also reports its outcome to the transport-neutral carrier
-/// counters in `carrier_diagnostics.c`. Each counter records the verdict Core's
-/// own result already reached — a queue-full result is counted as a drop, an
-/// over-bound result as an oversized frame — so a drop here means exactly what
-/// a drop means in `AxolotyZenohCore`, and nothing in the counters module
-/// restates what any result code means. Keeping that state in C rather than in
-/// this value is deliberate: a Zenoh receive callback runs on a Zenoh-owned
-/// task, and one bounded, saturating, atomically updated counter set is
-/// readable by the Swift carrier, the C-only qualification runner, and the
-/// device gate alike.
+/// Carrier outcomes update the fixed C counter set. Readers can take atomic
+/// per-field snapshots without changing this value's lifecycle ownership.
 struct ZenohCarrier: ~Copyable {
     /// The facade's fixed per-session subscription capacity.
     static let maximumSubscriptions = 8
     /// Milliseconds between router observations while waiting.
     static let reconnectPollIntervalMS: UInt32 = 20
 
-    /// Clears every carrier counter. Boot, and the qualification runner between
-    /// phases, so each phase reports against a known zero.
+    /// Clears every carrier counter. Call before starting traffic.
     static func resetDiagnostics() {
         carrier_diagnostics_reset()
     }
@@ -184,9 +168,7 @@ struct ZenohCarrier: ~Copyable {
         carrier_diagnostics_get().active_subscriptions
     }
 
-    /// The subscription high-water mark: the most declarations ever held at
-    /// once. It survives teardown on purpose, which is what makes a
-    /// stale-subscription leak visible after the fact.
+    /// Most declarations held at once since reset. Survives teardown.
     static var activeSubscriptionsPeak: UInt32 {
         carrier_diagnostics_get().active_subscriptions_peak
     }
@@ -289,12 +271,7 @@ struct ZenohCarrier: ~Copyable {
         return count
     }
 
-    /// Publishes the subscription gauge after any change to the slot table.
-    ///
-    /// The gauge is a level, not a tally, so it is set rather than incremented,
-    /// and the high-water mark it feeds only ever grows. That is what makes a
-    /// stale-subscription leak visible across a long run without keeping a
-    /// sample history on a device that has no room for one.
+    /// Updates the live slot count and its high-water mark.
     private func publishSubscriptionGauge() {
         carrier_diagnostics_set_active_subscriptions(UInt32(activeSlotCount()))
     }
@@ -503,10 +480,7 @@ struct ZenohCarrier: ~Copyable {
                     payload: payload, payloadCapacity: payloadCapacity, payloadLength: payloadLength
                 )
             case .result(let result):
-                // The verdict is Core's, so it is Core's verdict that is
-                // counted: a queue-full result becomes a drop and an
-                // over-bound result becomes an oversized frame, before either
-                // is folded into the one return code this seam reports.
+                // Count the facade notification before folding it into the seam code.
                 notePollOutcome(result)
                 switch result {
                 case .queueEmpty:
@@ -574,8 +548,17 @@ struct ZenohCarrier: ~Copyable {
         let endMS = durationMS > UInt64.max - startMS ? UInt64.max : startMS + durationMS
         switch session.connectedRouterCount() {
         case .count(let routers):
-            connectedRouterObserved = routers > 0
-            if routers > 0 { return true }
+            if routers == 0 {
+                if connectedRouterObserved { routerLossObserved = true }
+                connectedRouterObserved = false
+            } else {
+                if routerLossObserved {
+                    routerLossObserved = false
+                    _ = carrier_diagnostics_add(CARRIER_METRIC_RECONNECTS_OBSERVED, 1)
+                }
+                connectedRouterObserved = true
+                return true
+            }
         case .failure(let result):
             if result == .notOpen { return false }
         }
@@ -619,6 +602,8 @@ struct ZenohCarrier: ~Copyable {
                 if session.unsubscribe(handle) == .success {
                     slot = ZenohCarrierSlot()
                     setSlotAt(index, slot)
+                } else {
+                    noteSubscriptionFailure()
                 }
             }
         }
@@ -627,9 +612,7 @@ struct ZenohCarrier: ~Copyable {
         for index in 0..<Self.maximumSubscriptions {
             setSlotAt(index, ZenohCarrierSlot())
         }
-        // Every declaration is released by the close whatever it reported, so
-        // the gauge drops to zero. A non-zero gauge after this would be a stale
-        // subscription, and the device gate checks exactly that.
+        // Close releases every declaration regardless of its result.
         publishSubscriptionGauge()
         hasPendingFrame = false
         connectedRouterObserved = false
@@ -713,45 +696,4 @@ func embeddedExchangeWaitForReconnect(_ deadlineMS: UInt32) -> Int32 {
 
 func embeddedExchangeDisconnect() -> Int32 {
     applicationExchangeCarrier.disconnect() ? 1 : 0
-}
-
-// --- Transport-neutral carrier diagnostics, readable from C -----------------
-//
-// The counters live in C so the Swift carrier, the C-only pub/sub
-// qualification runner, and the device gate all observe one set of numbers.
-// These entry points are what the runner and the gate bind; they name a
-// counter set and nothing about the carrier behind it.
-
-// Clears every counter. Called at boot and between qualification phases.
-func embeddedCarrierDiagnosticsReset() {
-    carrier_diagnostics_reset()
-}
-
-// Reads the subscription gauge.
-func embeddedCarrierDiagnosticsActiveSubscriptions() -> UInt32 {
-    carrier_diagnostics_get().active_subscriptions
-}
-
-// Reads the subscription high-water mark.
-func embeddedCarrierDiagnosticsActiveSubscriptionsPeak() -> UInt32 {
-    carrier_diagnostics_get().active_subscriptions_peak
-}
-
-/// The buffer `embeddedCarrierDiagnosticsWriteJSON` always needs, including the
-/// terminating null. A caller sizes storage from this rather than guessing, so
-/// a report can never be silently truncated.
-func embeddedCarrierDiagnosticsJSONCapacity() -> UInt32 {
-    UInt32(carrier_diagnostics_json_capacity())
-}
-
-/// Writes the counters as one bounded JSON object into caller storage.
-///
-/// Returns the byte count written, or 0 when the buffer is too small. A caller
-/// must treat 0 as "the report did not fit", never as a report of zero counts:
-/// a truncated metric is not a measurement.
-func embeddedCarrierDiagnosticsWriteJSON(
-    _ buffer: UnsafeMutablePointer<CChar>, _ capacity: Int32
-) -> Int32 {
-    guard capacity > 0 else { return 0 }
-    return Int32(carrier_diagnostics_write_json(buffer, Int(capacity)))
 }

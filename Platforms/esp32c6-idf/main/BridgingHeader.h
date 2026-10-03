@@ -40,9 +40,7 @@ static inline unsigned int axoloty_scheduler_hz(void) {
 #endif
 // The transport-neutral carrier diagnostics the selected transport populates
 // from its own carrier results. Present only when that transport is selected;
-// other profiles are unaffected. The header is transport-neutral on purpose:
-// it declares counters and the Core-owned result codes it is fed, and no
-// carrier type of its own.
+// other profiles are unaffected. It declares counters without facade types.
 #if __has_include("carrier_diagnostics.h")
 #include "carrier_diagnostics.h"
 #endif
