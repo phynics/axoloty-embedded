@@ -12,7 +12,9 @@
   "toolchain": "axoloty-embedded-dev image sha256:300977549cef51e03728784ab59d3a351c5eb4d60e9b5f3a47fb6d16462b2994 — Swift version 6.4 (swift-6.4-RELEASE)\nTarget: x86_64-unknown-linux-gnu, ESP-IDF v5.4, target esp32c6",
   "dockerfileSHA256": "34c2b624b658ca77e06444cc23025d387fd9c84f624928aa6b0ed7a7036469e4",
   "coreContractSHA256": "27254ace9481cd6b0d7d51063f29ac61b29b25b5f795d2aafe6087f406de0a7d",
-  "firmwareRevision": "5eff44a4b39ac30670ce915917904d65d2ffb7b3",
+  "configurationFingerprint": "71b5e8a7ba4d6c1fecce895dd1305df0b450c51865d6a7f32d2159991a0ad879",
+  "provenanceRunId": "zenoh-followup-8ce5bb6-clean",
+  "firmwareRevision": "8ce5bb62a1d6981710052256de2d35299fc7cc20",
   "runtimeResourceMetrics": {
     "status": "unexecuted",
     "freeHeapBytes": null,
