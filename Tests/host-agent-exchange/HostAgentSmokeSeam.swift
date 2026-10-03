@@ -579,6 +579,7 @@ func hostAgentSmokeSeam() -> DeviceSmokeSeam {
         networkCleanup: hostNetworkCleanup,
         runCarrierProbe: runDeviceSmokeHostNetworkProbe,
         carrier: DeviceSmokeCarrierOperations(
+            supportsLastWill: { 1 },
             configureLastWill: hostExchangeConfigureLastWill,
             connect: hostExchangeConnect,
             subscribe: hostExchangeSubscribe,

@@ -17,10 +17,24 @@ require_network_env() {
         echo "$device_runner_name: AXOLOTY_WIFI_SSID and AXOLOTY_WIFI_PASSWORD are required; they are never guessed" >&2
         exit 69
     fi
-    if [ -z "${AXOLOTY_MQTT_HOST:-}" ]; then
-        echo "$device_runner_name: AXOLOTY_MQTT_HOST is required; the broker is never guessed" >&2
-        exit 69
-    fi
+    case "${1:-esp32c6-mqtt}" in
+        esp32c6-mqtt)
+            if [ -z "${AXOLOTY_MQTT_HOST:-}" ]; then
+                echo "$device_runner_name: AXOLOTY_MQTT_HOST is required; the broker is never guessed" >&2
+                exit 69
+            fi
+            ;;
+        esp32c6-zenoh)
+            if [ -z "${AXOLOTY_ZENOH_HOST:-}" ]; then
+                echo "$device_runner_name: AXOLOTY_ZENOH_HOST is required; the router is never guessed" >&2
+                exit 69
+            fi
+            ;;
+        *)
+            echo "$device_runner_name: unsupported profile '$1'" >&2
+            exit 64
+            ;;
+    esac
 }
 
 # Enters the ESP-IDF Python environment and sets `esptool` to its esptool.py.

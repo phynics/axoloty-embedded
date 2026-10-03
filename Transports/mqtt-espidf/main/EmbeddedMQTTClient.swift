@@ -133,6 +133,8 @@ func embeddedExchangeConfigureLastWill(
     ) ? 1 : 0
 }
 
+func embeddedExchangeSupportsLastWill() -> Int32 { 1 }
+
 func embeddedExchangeConnect(_ deadlineMS: UInt32) -> Int32 {
     applicationExchangeClient.connect(deadlineMS: deadlineMS) ? 1 : 0
 }

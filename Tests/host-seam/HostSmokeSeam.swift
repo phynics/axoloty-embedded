@@ -201,6 +201,7 @@ func hostSmokeSeam() -> DeviceSmokeSeam {
         networkCleanup: hostNetworkCleanup,
         runCarrierProbe: hostCarrierProbe,
         carrier: DeviceSmokeCarrierOperations(
+            supportsLastWill: { 0 },
             configureLastWill: hostCarrierConfigureLastWill,
             connect: hostCarrierConnect,
             subscribe: hostCarrierSubscribe,

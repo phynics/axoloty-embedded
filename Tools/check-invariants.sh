@@ -514,6 +514,10 @@ facade_require 'Platforms/esp32c6-idf/tools/build.sh' 'AXOLOTY_ZENOH_PICO_REPORT
     'the selected Zenoh profile does not prepare and export its pinned dependency report before idf.py'
 facade_require 'Platforms/esp32c6-idf/tools/build.sh' 'Tools/prepare-zenoh-pico.sh' \
     'the selected Zenoh profile does not reach dependency preparation through Tools/prepare-zenoh-pico.sh'
+facade_require 'Tests/embedded/run-network-test.sh' 'createEmbeddedZenohNetworkValidator' \
+    'the network device harness does not select the Zenoh-specific validator for the Zenoh profile'
+facade_require 'Tests/embedded/run-network-test.sh' 'AXOLOTY_NETWORK_PROFILE' \
+    'the network device harness has no profile selector for profile-specific network evidence'
 
 # The host seam compiles against the same report, so it enforces the same
 # contract. An optional digest or a locally generated module map there would let

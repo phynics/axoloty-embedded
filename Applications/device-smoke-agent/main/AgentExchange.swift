@@ -137,10 +137,13 @@ func runDeviceAgentExchange(
     if (networkBits & 2) != 0 { result.insert(.ip) }
 
     var connected = false
+    var disconnectedDuringInterestSetup = false
     if (networkBits & 3) == 3 {
-        let configuredWill: Bool
-        if role == .roleA {
-            configuredWill = withUnsafeTemporaryAllocation(
+        let roleA = role == .roleA
+        let willSupported = roleA && seam.carrier.supportsLastWill() != 0
+        let willConfigurationSucceeded: Bool
+        if willSupported {
+            willConfigurationSucceeded = withUnsafeTemporaryAllocation(
                 of: UInt8.self, capacity: WireBufferConfig.maxTopicLength
             ) { willTopic in
                 withUnsafeTemporaryAllocation(
@@ -165,8 +168,16 @@ func runDeviceAgentExchange(
                 }
             }
         } else {
-            configuredWill = true
+            willConfigurationSucceeded = false
         }
+        // Unsupported broker-will semantics block only the scenario whose
+        // acceptance depends on that guarantee. Other exchanges still run.
+        let configuredWill = agentMayConnectAfterWillSetup(
+            isRoleA: roleA,
+            scenarioNeedsWill: scenario == .lastWill,
+            carrierSupportsWill: willSupported,
+            willConfigurationSucceeded: willConfigurationSucceeded
+        )
 
         if configuredWill && deadline.remaining(using: seam) > 0 &&
             seam.carrier.connect(deadline.remaining(using: seam)) != 0 {
@@ -179,11 +190,14 @@ func runDeviceAgentExchange(
             // after the namespace. The legacy hash-shaped filter is retained
             // for compatibility; in the selected key grammar its hash is a
             // literal chunk, not wildcard coverage.
-            let subscribed = installDeviceAgentProfileInterest(
+            let interest = installDeviceAgentProfileInterest(
                 subscribe: seam.carrier.subscribe,
                 unsubscribe: seam.carrier.unsubscribe,
-                deadlineMS: deadline.remaining(using: seam)
+                disconnect: seam.carrier.disconnect,
+                remainingMS: { deadline.remaining(using: seam) }
             )
+            let subscribed = interest.installed
+            disconnectedDuringInterestSetup = interest.disconnected
             if subscribed {
                 result.insert(.subscribed)
                 seam.exchangeMilestone(DeviceSmokeExchangeMilestone.subscribed.rawValue)
@@ -224,7 +238,8 @@ func runDeviceAgentExchange(
         }
     }
 
-    let carrierDisconnected = connected && seam.carrier.disconnect() != 0
+    let carrierDisconnected = connected &&
+        (disconnectedDuringInterestSetup || seam.carrier.disconnect() != 0)
     let networkCleaned = seam.networkCleanup() != 0
     if carrierDisconnected && networkCleaned { result.insert(.disconnected) }
     return result

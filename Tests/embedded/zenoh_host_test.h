@@ -22,6 +22,7 @@ enum {
     HOST_ZENOH_FAIL_ROUTER_DROP_THEN_RESTORE = 1 << 8,
     HOST_ZENOH_FAIL_ROUTER_COUNT_ERROR = 1 << 9,
     HOST_ZENOH_FAIL_ROUTER_DROP_RESTORE_BEFORE_ENTRY = 1 << 10,
+    HOST_ZENOH_FAIL_ROUTER_APPEARS_AFTER_DEADLINE = 1 << 11,
 };
 
 void host_zenoh_reset(void);
@@ -40,6 +41,7 @@ void host_zenoh_set_sample(
 int64_t esp_timer_get_time(void);
 void vTaskDelay(uint32_t ticks);
 int64_t host_zenoh_fake_time_us(void);
+uint32_t host_zenoh_router_query_count(void);
 uint32_t host_zenoh_scheduler_hz(void);
 void host_zenoh_set_scheduler_hz(uint32_t hz);
 

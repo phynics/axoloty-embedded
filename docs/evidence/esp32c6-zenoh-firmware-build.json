@@ -5,8 +5,10 @@
   "tier": "build",
   "status": "passed",
   "recordedAt": "2026-09-30",
-  "firmwareSHA256": "3d21aaa40f5133a070d548c782ffee2cbd6bc6183c5b283763c82b433607fc88",
+  "firmwareSHA256": "66787e9737f55578882113c0058ee5c6909e81c6c6ad87577411fb0e3f23551b",
   "coreRevision": "68e46c764a555a027f2779c74e8dd04a6bc4bb06",
-  "result": "ESP-IDF image built and linked for the esp32c6-zenoh profile; both the AxolotyZenohCore component and ZenohCarrier compiled from the Core preparation report. Device qualification remains unexecuted.",
+  "result": "ESP-IDF image built and linked for the esp32c6-zenoh profile from firmware source revision e02a882a8bf7f3c593c83f39c69abd36005796a2. Build provenance reports Core 68e46c764a555a027f2779c74e8dd04a6bc4bb06, dirty=false, and sourceCopied=false. Both the AxolotyZenohCore component and ZenohCarrier compiled from the prepared Core report. Device qualification remains unexecuted.",
+  "firmwareRevision": "e02a882a8bf7f3c593c83f39c69abd36005796a2",
+  "firmwareSizeBytes": 838720,
   "toolchain": "axoloty-embedded-dev local image, Swift 6.4, ESP-IDF v5.4"
 }

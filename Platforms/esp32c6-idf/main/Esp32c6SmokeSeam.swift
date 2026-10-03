@@ -41,6 +41,7 @@ func esp32c6SmokeSeam() -> DeviceSmokeSeam {
         // operation rather than a carrier.
         runCarrierProbe: runCarrierNetworkProbe,
         carrier: DeviceSmokeCarrierOperations(
+            supportsLastWill: embeddedExchangeSupportsLastWill,
             configureLastWill: embeddedExchangeConfigureLastWill,
             connect: embeddedExchangeConnect,
             subscribe: embeddedExchangeSubscribe,

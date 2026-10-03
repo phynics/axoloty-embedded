@@ -38,7 +38,8 @@ import ZenohHostTest
 func zenohPollingWaitTicks(milliseconds: UInt32, schedulerHz: UInt32) -> UInt32 {
     guard milliseconds > 0, schedulerHz > 0 else { return 0 }
     let product = UInt64(milliseconds) * UInt64(schedulerHz)
-    let rounded = (product + 999) / 1_000
+    let quotient = product / 1_000
+    let rounded = quotient + (product % 1_000 == 0 ? 0 : 1)
     return UInt32(min(max(rounded, 1), UInt64(UInt32.max)))
 }
 
@@ -377,6 +378,8 @@ struct ZenohCarrier: ~Copyable {
     mutating func waitForReconnect(deadlineMS: UInt32) -> Bool {
         guard phase == .subscribed else { return false }
         let startMS = UInt64(max(0, esp_timer_get_time() / 1_000))
+        let durationMS = UInt64(deadlineMS)
+        let endMS = durationMS > UInt64.max - startMS ? UInt64.max : startMS + durationMS
         switch session.connectedRouterCount() {
         case .count(let routers):
             connectedRouterObserved = routers > 0
@@ -385,7 +388,12 @@ struct ZenohCarrier: ~Copyable {
             if result == .notOpen { return false }
         }
         while true {
-            switch session.connectedRouterCount() {
+            let nowMS = UInt64(max(0, esp_timer_get_time() / 1_000))
+            guard nowMS < endMS else { return false }
+            let routerResult = session.connectedRouterCount()
+            let afterQueryMS = UInt64(max(0, esp_timer_get_time() / 1_000))
+            guard afterQueryMS < endMS else { return false }
+            switch routerResult {
             case .count(let routers):
                 if routers == 0 {
                     if connectedRouterObserved { routerLossObserved = true }
@@ -397,10 +405,7 @@ struct ZenohCarrier: ~Copyable {
             case .failure(let result):
                 if result == .notOpen { return false }
             }
-            let nowMS = UInt64(max(0, esp_timer_get_time() / 1_000))
-            let elapsed = nowMS >= startMS ? nowMS - startMS : 0
-            guard UInt64(deadlineMS) > elapsed else { return false }
-            let remainingMS = UInt64(deadlineMS) - elapsed
+            let remainingMS = endMS - afterQueryMS
             let waitMS = UInt32(min(remainingMS, UInt64(Self.reconnectPollIntervalMS)))
             vTaskDelay(zenohWaitTicks(milliseconds: waitMS))
         }
@@ -452,6 +457,8 @@ func embeddedExchangeConfigureLastWill(
     _ = payloadLength
     return 0
 }
+
+func embeddedExchangeSupportsLastWill() -> Int32 { 0 }
 
 func embeddedExchangeConnect(_ deadlineMS: UInt32) -> Int32 {
     applicationExchangeCarrier.connect(deadlineMS: deadlineMS) ? 1 : 0

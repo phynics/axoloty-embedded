@@ -9,10 +9,12 @@ import path from "node:path";
 
 const output = process.argv[2];
 if (!output) throw new Error("usage: generate-network-config.mjs <output.h>");
+const transport = process.env.AXOLOTY_NETWORK_PROFILE || "esp32c6-mqtt";
+if (!["esp32c6-mqtt", "esp32c6-zenoh"].includes(transport)) throw new Error("unsupported network profile");
 const values = {
   ssid: process.env.AXOLOTY_WIFI_SSID,
   password: process.env.AXOLOTY_WIFI_PASSWORD,
-  host: process.env.AXOLOTY_MQTT_HOST,
+  host: process.env.AXOLOTY_MQTT_HOST || process.env.AXOLOTY_ZENOH_HOST,
   port: process.env.AXOLOTY_MQTT_PORT || "1883",
   zenohHost: process.env.AXOLOTY_ZENOH_HOST || process.env.AXOLOTY_MQTT_HOST,
   zenohPort: process.env.AXOLOTY_ZENOH_PORT || "7447",
@@ -21,8 +23,14 @@ const values = {
   runtimeIdentity: process.env.AXOLOTY_RUNTIME_IDENTITY || "",
 };
 if (!values.ssid || !values.password) throw new Error("Wi-Fi configuration is required");
-if (!values.host) throw new Error("AXOLOTY_MQTT_HOST is required");
-if (!/^[0-9]+$/.test(values.port) || Number(values.port) < 1 || Number(values.port) > 65535) {
+if (transport === "esp32c6-mqtt" && !process.env.AXOLOTY_MQTT_HOST) {
+  throw new Error("AXOLOTY_MQTT_HOST is required for esp32c6-mqtt");
+}
+if (transport === "esp32c6-zenoh" && !process.env.AXOLOTY_ZENOH_HOST) {
+  throw new Error("AXOLOTY_ZENOH_HOST is required for esp32c6-zenoh");
+}
+if (!values.host) throw new Error("a host address is required for the selected profile");
+if (transport === "esp32c6-mqtt" && (!/^[0-9]+$/.test(values.port) || Number(values.port) < 1 || Number(values.port) > 65535)) {
   throw new Error("invalid MQTT port");
 }
 if (!/^[0-9]+$/.test(values.zenohPort) || Number(values.zenohPort) < 1 || Number(values.zenohPort) > 65535) {
