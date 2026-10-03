@@ -315,8 +315,35 @@ foreach(AXOLOTY_SCRATCH_VALUE IN ITEMS
 endforeach()
 if(NOT IS_ABSOLUTE "${AXOLOTY_STATIC_RUNTIME_MACRO_TOOL}" OR
    NOT EXISTS "${AXOLOTY_STATIC_RUNTIME_MACRO_TOOL}" OR
-   NOT IS_EXECUTABLE "${AXOLOTY_STATIC_RUNTIME_MACRO_TOOL}")
+   IS_DIRECTORY "${AXOLOTY_STATIC_RUNTIME_MACRO_TOOL}")
     message(FATAL_ERROR "static-runtime macro executable is missing")
+endif()
+# Executability is a second test because `IS_EXECUTABLE` is not an `if()`
+# operator before CMake 3.29, and CMake treats an unknown operator as a hard
+# error rather than as a false condition:
+#
+#   CMake Error at axoloty-source.cmake:316 (if):
+#     if given arguments:
+#       "NOT" "IS_ABSOLUTE" "..." "OR" "NOT" "EXISTS" "..." "OR"
+#       "NOT" "IS_EXECUTABLE" "..."
+#     Unknown arguments specified
+#
+# ESP-IDF accepts CMake 3.16 and CI provides 3.22, so that error was reached on
+# every configure there, not only in the check that found it. `if()` reads its
+# condition when it runs, so guarding the call is enough: the operator is never
+# evaluated on a CMake that would refuse it.
+#
+# A CMake older than 3.29 therefore checks that the tool exists, is absolute,
+# is canonical and is contained, and does not check that it is executable. That
+# weaker state is stated rather than hidden: the variable below is FALSE on
+# those versions, so a caller can report it, and it is a fact the
+# path-escape check prints on every run.
+set(AXOLOTY_STATIC_RUNTIME_MACRO_EXECUTABILITY_CHECKED FALSE)
+if(NOT CMAKE_VERSION VERSION_LESS 3.29)
+    if(NOT IS_EXECUTABLE "${AXOLOTY_STATIC_RUNTIME_MACRO_TOOL}")
+        message(FATAL_ERROR "static-runtime macro executable is not executable")
+    endif()
+    set(AXOLOTY_STATIC_RUNTIME_MACRO_EXECUTABILITY_CHECKED TRUE)
 endif()
 file(REAL_PATH "${AXOLOTY_STATIC_RUNTIME_MACRO_TOOL}" AXOLOTY_MACRO_REAL)
 if(NOT "${AXOLOTY_STATIC_RUNTIME_MACRO_TOOL}" STREQUAL "${AXOLOTY_MACRO_REAL}")
