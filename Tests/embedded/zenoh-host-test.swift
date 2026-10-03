@@ -48,6 +48,7 @@ private struct EmbeddedZenohHostTest {
 
         carrierLifecycle()
         partialProfileInterestCleanup()
+        willCapabilityScenarioGate()
         carrierBounds()
         carrierPollMapping()
         willIsUnsupported()
@@ -135,25 +136,64 @@ private struct EmbeddedZenohHostTest {
     static func partialProfileInterestCleanup() {
         var subscribeCalls = 0
         var unsubscribeCalls: [String] = []
-        let subscribe: (UnsafePointer<UInt8>, Int32, UInt32) -> Int32 = { key, length, _ in
+        var disconnectCalls = 0
+        var deadlineMS: UInt32 = 1_000
+        var observedSubscribeDeadlines: [UInt32] = []
+        var observedUnsubscribeDeadlines: [UInt32] = []
+        let subscribe: (UnsafePointer<UInt8>, Int32, UInt32) -> Int32 = { key, length, remaining in
             subscribeCalls += 1
+            observedSubscribeDeadlines.append(remaining)
+            if subscribeCalls == 1 { deadlineMS = 250 }
             // Fail the second shape after the first declaration succeeded.
             return subscribeCalls == 2 ? 0 : (length > 0 && key.pointee != 0 ? 1 : 0)
         }
-        let unsubscribe: (UnsafePointer<UInt8>, Int32, UInt32) -> Int32 = { key, length, _ in
+        let unsubscribe: (UnsafePointer<UInt8>, Int32, UInt32) -> Int32 = { key, length, remaining in
+            observedUnsubscribeDeadlines.append(remaining)
             unsubscribeCalls.append(String(
                 decoding: UnsafeBufferPointer(start: key, count: Int(length)), as: UTF8.self
             ))
             return 1
         }
-        let installed = installDeviceAgentProfileInterest(
+        let disconnect: () -> Int32 = {
+            disconnectCalls += 1
+            return 1
+        }
+        let outcome = installDeviceAgentProfileInterest(
             subscribe: subscribe,
             unsubscribe: unsubscribe,
-            deadlineMS: 1_000
+            disconnect: disconnect,
+            remainingMS: { deadlineMS }
         )
-        check(!installed, "partial profile-interest install reports failure")
+        check(!outcome.installed, "partial profile-interest install reports failure")
+        check(outcome.disconnected, "partial profile-interest install closes the carrier session")
         check(subscribeCalls == 2, "remaining shapes are not declared after failure")
+        check(observedSubscribeDeadlines == [1_000, 250], "each sequential subscribe receives current remaining budget")
         check(unsubscribeCalls == ["coaty/3/axoloty-embedded/#"], "earlier successful shape is removed")
+        check(observedUnsubscribeDeadlines == [250], "cleanup receives recomputed remaining budget")
+        check(disconnectCalls == 1, "carrier disconnect runs once during partial cleanup")
+    }
+
+    static func willCapabilityScenarioGate() {
+        check(agentMayConnectAfterWillSetup(
+            isRoleA: true, scenarioNeedsWill: false, carrierSupportsWill: false,
+            willConfigurationSucceeded: false
+        ), "unsupported will does not block ordinary role-A exchange")
+        check(agentMayConnectAfterWillSetup(
+            isRoleA: true, scenarioNeedsWill: false, carrierSupportsWill: false,
+            willConfigurationSucceeded: false
+        ), "unsupported will does not block broker restart")
+        check(!agentMayConnectAfterWillSetup(
+            isRoleA: true, scenarioNeedsWill: true, carrierSupportsWill: false,
+            willConfigurationSucceeded: false
+        ), "will-dependent scenario is not run without will capability")
+        check(!agentMayConnectAfterWillSetup(
+            isRoleA: true, scenarioNeedsWill: false, carrierSupportsWill: true,
+            willConfigurationSucceeded: false
+        ), "a supported but failed will configuration still blocks connection")
+        check(agentMayConnectAfterWillSetup(
+            isRoleA: false, scenarioNeedsWill: true, carrierSupportsWill: false,
+            willConfigurationSucceeded: false
+        ), "observer role does not configure will")
     }
 
     // MARK: - Bounds
@@ -378,6 +418,8 @@ private struct EmbeddedZenohHostTest {
         check(zenohPollingWaitTicks(milliseconds: 1, schedulerHz: 100) == 1, "sub-tick wait rounds up")
         check(zenohPollingWaitTicks(milliseconds: 10, schedulerHz: 100) == 1, "one tick duration maps to one")
         check(zenohPollingWaitTicks(milliseconds: 11, schedulerHz: 100) == 2, "fractional tick rounds up")
+        check(zenohPollingWaitTicks(milliseconds: .max, schedulerHz: .max) == .max,
+              "conversion saturates without overflow at maximum inputs")
 
         host_zenoh_reset()
         host_zenoh_set_scheduler_hz(100)
@@ -398,6 +440,23 @@ private struct EmbeddedZenohHostTest {
         check(elapsed == 30_000, "20 ms poll plus one rounded 100 Hz tick reaches 30 ms")
         host_zenoh_set_failures(0)
         check(carrier.disconnect(), "100 Hz teardown")
+
+        // A router that becomes available only after the deadline must not
+        // turn the following iteration into a false success. The wait checks
+        // the deadline before issuing another router query.
+        host_zenoh_reset()
+        host_zenoh_set_scheduler_hz(100)
+        var appearsLate = ZenohCarrier()
+        check(appearsLate.connect(deadlineMS: 5_000), "open for late-available router")
+        check(withSpan(key, count: key.count) {
+            appearsLate.subscribe(topic: $0, deadlineMS: 1_000)
+        }, "subscribe for late-available router")
+        host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_ROUTER_APPEARS_AFTER_DEADLINE))
+        check(!appearsLate.waitForReconnect(deadlineMS: 21), "router appearing after expiry is not accepted")
+        check(host_zenoh_fake_time_us() == 30_000, "late availability is beyond rounded deadline")
+        check(host_zenoh_router_query_count() == 3, "late router is not sampled after expiry")
+        host_zenoh_set_failures(0)
+        check(appearsLate.disconnect(), "late-available router teardown")
         host_zenoh_reset()
     }
 

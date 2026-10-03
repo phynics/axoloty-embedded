@@ -33,6 +33,7 @@ enum {
     FAIL_ROUTER_DROP_THEN_RESTORE = 1 << 8,
     FAIL_ROUTER_COUNT_ERROR = 1 << 9,
     FAIL_ROUTER_DROP_RESTORE_BEFORE_ENTRY = 1 << 10,
+    FAIL_ROUTER_APPEARS_AFTER_DEADLINE = 1 << 11,
 };
 
 enum {
@@ -107,6 +108,7 @@ void vTaskDelay(uint32_t ticks) {
 }
 
 int64_t host_zenoh_fake_time_us(void) { return host_fake_time_us; }
+uint32_t host_zenoh_router_query_count(void) { return host_router_query_count; }
 
 uint32_t host_zenoh_scheduler_hz(void) { return host_scheduler_hz; }
 
@@ -238,6 +240,12 @@ axoloty_zenoh_result_t axoloty_zenoh_connected_router_count(const axoloty_zenoh_
     if ((host_failures & FAIL_ROUTER_DROP_RESTORE_BEFORE_ENTRY) != 0) {
         host_router_zero_observed = 1;
         *out_count = 1;
+        return AXOLOTY_ZENOH_OK;
+    }
+    if ((host_failures & FAIL_ROUTER_APPEARS_AFTER_DEADLINE) != 0) {
+        if (host_fake_time_us >= 25000) *out_count = 1;
+        else host_router_zero_observed = 1;
+        ++host_router_query_count;
         return AXOLOTY_ZENOH_OK;
     }
     if ((host_failures & FAIL_ROUTERS) != 0) {

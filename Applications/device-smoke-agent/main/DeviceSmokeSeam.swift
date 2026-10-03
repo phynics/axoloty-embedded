@@ -15,6 +15,8 @@
 /// one complete frame, `0` when no frame is ready, `-1` for an error, and `-2`
 /// when the carrier has closed.
 public struct DeviceSmokeCarrierOperations {
+    /// Non-zero when this carrier can configure broker last-will semantics.
+    var supportsLastWill: @convention(c) () -> Int32
     var configureLastWill: @convention(c) (UnsafePointer<UInt8>, Int32, UnsafePointer<UInt8>, Int32) -> Int32
     var connect: @convention(c) (UInt32) -> Int32
     var subscribe: @convention(c) (UnsafePointer<UInt8>, Int32, UInt32) -> Int32
@@ -28,6 +30,7 @@ public struct DeviceSmokeCarrierOperations {
     var disconnect: @convention(c) () -> Int32
 
     public init(
+        supportsLastWill: @escaping @convention(c) () -> Int32,
         configureLastWill: @escaping @convention(c) (UnsafePointer<UInt8>, Int32, UnsafePointer<UInt8>, Int32) -> Int32,
         connect: @escaping @convention(c) (UInt32) -> Int32,
         subscribe: @escaping @convention(c) (UnsafePointer<UInt8>, Int32, UInt32) -> Int32,
@@ -40,6 +43,7 @@ public struct DeviceSmokeCarrierOperations {
         waitForReconnect: @escaping @convention(c) (UInt32) -> Int32,
         disconnect: @escaping @convention(c) () -> Int32
     ) {
+        self.supportsLastWill = supportsLastWill
         self.configureLastWill = configureLastWill
         self.connect = connect
         self.subscribe = subscribe

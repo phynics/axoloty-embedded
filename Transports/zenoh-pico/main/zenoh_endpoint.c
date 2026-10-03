@@ -10,9 +10,11 @@
 // network configuration header the MQTT transport reads.
 
 #include "zenoh_endpoint.h"
+#include "network_bootstrap.h"
 
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #if __has_include("axoloty_network_config.h")
 #include "axoloty_network_config.h"
@@ -38,6 +40,36 @@ int axoloty_zenoh_copy_endpoint(unsigned char *buffer, int capacity) {
         unsigned char byte = buffer[index];
         if (byte < 0x20u || byte > 0x7Eu || byte == '"' || byte == '\\') return -1;
     }
+    return length;
+#endif
+}
+
+// Bounded test route and payload for the profile-selected network probe.
+// These are transport-neutral carrier test bytes, not Coaty protocol routes.
+int axoloty_network_copy_topic(unsigned char *buffer, int capacity) {
+#if !AXOLOTY_NETWORK_CONFIGURED
+    (void)buffer;
+    (void)capacity;
+    return 0;
+#else
+    static const unsigned char topic[] = "axoloty/network/probe";
+    const int length = (int)(sizeof(topic) - 1u);
+    if (!buffer || capacity < length) return 0;
+    memcpy(buffer, topic, (size_t)length);
+    return length;
+#endif
+}
+
+int axoloty_network_copy_payload(unsigned char *buffer, int capacity) {
+#if !AXOLOTY_NETWORK_CONFIGURED
+    (void)buffer;
+    (void)capacity;
+    return 0;
+#else
+    static const unsigned char payload[] = "axoloty-zenoh-probe";
+    const int length = (int)(sizeof(payload) - 1u);
+    if (!buffer || capacity < length) return 0;
+    memcpy(buffer, payload, (size_t)length);
     return length;
 #endif
 }

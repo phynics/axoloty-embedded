@@ -281,7 +281,7 @@ swiftc -swift-version 6 -enable-experimental-feature Lifetimes -parse-as-library
     -I "$transport_main" -I "$facade_include" \
     -c "$transport_main/zenoh_pico_queue.c" -o "$tmp/queue.o"
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
-    -I "$transport_main" -I "$tmp" \
+    -I "$transport_main" -I "$tmp" -I "$repo_root/Platforms/esp32c6-idf/main" \
     -c "$transport_main/zenoh_endpoint.c" -o "$tmp/endpoint.o"
 # The real carrier and probe sources the firmware image compiles. The host
 # test flag exposes the host-only test module for the platform clock the
@@ -329,6 +329,24 @@ pico_dir=$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(p
 is_absolute "$pico_dir" || fail_contract "zenoh-pico sourceDir is not absolute: $pico_dir"
 [ -d "$pico_dir" ] || fail_contract "zenoh-pico sourceDir is not a directory: $pico_dir"
 is_canonical "$pico_dir" || fail_contract "zenoh-pico sourceDir is not canonical: $pico_dir"
+PICO_REPORT="$pico_report" PICO_LOCK="$repo_root/Platforms/esp32c6-idf/dependencies/zenoh-pico.lock.json" \
+    PICO_SOURCE="$pico_dir" node --input-type=module <<'JS'
+import crypto from "node:crypto";
+import fs from "node:fs";
+import { execFileSync } from "node:child_process";
+
+const report = JSON.parse(fs.readFileSync(process.env.PICO_REPORT, "utf8"));
+const lockBytes = fs.readFileSync(process.env.PICO_LOCK);
+const lock = JSON.parse(lockBytes.toString("utf8"));
+const pin = lock;
+const revision = execFileSync("git", ["-C", process.env.PICO_SOURCE, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+const pinDigest = crypto.createHash("sha256").update(lockBytes).digest("hex");
+if (report.schemaVersion !== 1 || report.status !== "prepared" ||
+    report.revision !== pin.revision || report.version !== pin.version ||
+    revision !== pin.revision || report.pinSha256 !== pinDigest) {
+  throw new Error("pinned zenoh-pico parser input does not match the checked-in lock and prepared report");
+}
+JS
 
 pico_work="$tmp/zenoh-pico-parser"
 mkdir -p "$pico_work"

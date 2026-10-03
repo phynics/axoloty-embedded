@@ -50,9 +50,21 @@ firmware image; a device run must name the board and the protocol it drove.
 
 | `tier` | An executed record must name |
 |---|---|
-| `build` | `firmwareSHA256`, `coreRevision`, `result`, `toolchain` |
+| `build` | `firmwareSHA256`, `firmwareRevision`, `coreRevision`, `result`, `toolchain` |
 | `component` | `component`, `artifactSHA256`, `coreRevision`, `result`, `toolchain` |
 | `device` | `firmwareSHA256`, `coreRevision`, `result`, `device`, `protocol` |
+
+A `build` record names the firmware source revision it built
+(`firmwareRevision`). Nothing in the image carries that revision, so a
+checksum alone cannot be traced back to a commit, and a record whose checksum
+was refreshed once kept a stale revision unnoticed. Write the value from the
+build's `build-provenance.json` `firmware.revision`, and never from `HEAD` at
+the time you edit the record.
+
+`firmwareRevision` is a claim about one build, not about the current checkout. A
+record stays true after later commits land; what stops being true is the
+qualification claim that reads it as "this profile works", and that needs a
+device record matching the artifact's `firmwareSHA256`.
 
 A `component` record names the component (`component`, for example
 `eclipse-zenoh/zenoh-pico 1.10.0`) and the SHA-256 of the artifact it compiled

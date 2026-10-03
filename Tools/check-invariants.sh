@@ -514,6 +514,10 @@ facade_require 'Platforms/esp32c6-idf/tools/build.sh' 'AXOLOTY_ZENOH_PICO_REPORT
     'the selected Zenoh profile does not prepare and export its pinned dependency report before idf.py'
 facade_require 'Platforms/esp32c6-idf/tools/build.sh' 'Tools/prepare-zenoh-pico.sh' \
     'the selected Zenoh profile does not reach dependency preparation through Tools/prepare-zenoh-pico.sh'
+facade_require 'Tests/embedded/run-network-test.sh' 'createEmbeddedZenohNetworkValidator' \
+    'the network device harness does not select the Zenoh-specific validator for the Zenoh profile'
+facade_require 'Tests/embedded/run-network-test.sh' 'AXOLOTY_NETWORK_PROFILE' \
+    'the network device harness has no profile selector for profile-specific network evidence'
 
 # The host seam compiles against the same report, so it enforces the same
 # contract. An optional digest or a locally generated module map there would let
@@ -707,13 +711,24 @@ if status in {"passed", "failed"}:
     else:
         required = ["firmwareSHA256", "coreRevision", "result"]
         if tier == "build":
-            required.append("toolchain")
+            # A build record also names the firmware source revision it built.
+            # Without it, an artifact checksum and a Core revision describe a
+            # build that cannot be located in this repository's history, and a
+            # record whose other fields were refreshed kept naming a revision
+            # from three commits earlier without anything noticing: the image
+            # embeds no revision string, so the field is out-of-band and can
+            # only be checked by being mandatory. Presence is all this enforces;
+            # the value itself rests on the build provenance.
+            required.extend(["firmwareRevision", "toolchain"])
         else:
             required.extend(["device", "protocol"])
     for field in required:
         if not record.get(field):
             problems.append("%s: an executed %s record must name %s"
                             % (path, tier or "device", field))
+    firmware_revision = str(record.get("firmwareRevision", ""))
+    if firmware_revision and not re.fullmatch(r"[0-9a-f]{40}", firmware_revision):
+        problems.append("%s: firmwareRevision must be a full 40-character commit SHA" % path)
     checksum = str(record.get("firmwareSHA256", ""))
     if checksum and not re.fullmatch(r"[0-9a-f]{64}", checksum):
         problems.append("%s: firmwareSHA256 must be 64 lowercase hexadecimal characters" % path)

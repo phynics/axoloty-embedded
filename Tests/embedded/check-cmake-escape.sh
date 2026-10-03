@@ -14,9 +14,10 @@
 # a hard configure error.
 #
 # So this file loads the real resolver with real CMake, in script mode like the
-# requirements pass, and observes three things: that no escape or policy
-# diagnostic is emitted, that a real traversal is rejected, and that a directory
-# whose name merely starts with dots is not.
+# requirements pass, and observes four things: that no escape or policy
+# diagnostic is emitted, that a real traversal is rejected, that a directory
+# whose name merely starts with dots is not, and that a macro tool without the
+# executable bit is rejected on the CMake versions that can test it.
 #
 # The pattern under test is the one the resolver defines. Nothing here
 # reimplements the rule, and the escapes are produced by file(RELATIVE_PATH)
@@ -32,6 +33,10 @@
 #   sibling-prefix     a module map under a directory whose name starts with the
 #                      scratch path: rejected, because containment is not a
 #                      prefix test
+#   not-executable     a static-runtime macro tool without the executable bit:
+#                      rejected on CMake 3.29 and later, and reported as not
+#                      tested on anything older, because `IS_EXECUTABLE` is not
+#                      an `if()` operator before 3.29
 #   no-cmp0010         none of the runs emits an escape or policy warning
 #
 # Exit status: 0 passed, 1 failed, 69 cmake, python3, or the Core report is absent.
@@ -49,6 +54,12 @@ for tool in cmake python3; do
     }
 done
 
+# Reported on every run, because the resolver's strength is CMake-version
+# dependent: only CMake 3.29 and later can test a reported path for
+# executability, and a reviewer reading the summary should not have to open the
+# runner log to learn which one produced it.
+cmake_version=$(cmake --version | sed -n '1s/^cmake version //p')
+
 scratch=${AXOLOTY_SCRATCH:-"$repo_root/.axoloty"}
 report=${AXOLOTY_PREPARATION_REPORT:-"$scratch/core-preparation.json"}
 if [ ! -f "$report" ]; then
@@ -63,7 +74,7 @@ fi
 }
 
 # Every fixture this check creates is named with the run's pid and removed on
-# exit, including on failure. Two of them live outside $work, next to or under
+# exit, including on failure. Three of them live outside $work, next to or under
 # the caller scratch the report names, so a fixed name would collide with a
 # concurrent run and a leaked directory would outlive the check that made it.
 #
@@ -76,6 +87,7 @@ dots_dir=""
 dots_parent=""
 parent_dir=""
 sibling_dir=""
+notexec_file=""
 # `if` rather than `[ ... ] && rm`, because a failing `&&` list is itself a
 # failing command and `set -e` would abandon the trap half way through, leaving
 # the fixtures behind.
@@ -83,7 +95,7 @@ cleanup() {
     if [ -n "$work" ]; then
         rm -rf "$work"
     fi
-    for fixture in "$dots_dir" "$parent_dir" "$sibling_dir"; do
+    for fixture in "$dots_dir" "$parent_dir" "$sibling_dir" "$notexec_file"; do
         if [ -n "$fixture" ]; then
             rm -rf "$fixture"
         fi
@@ -101,9 +113,17 @@ trap cleanup EXIT
 # file in script mode, which is the mode the ESP-IDF requirements pass uses, so a
 # pattern CMake objects to here is a pattern CMake objects to there: the same
 # CMP0010 diagnostic and the same policy-dependent interpretation.
+#
+# The second STATUS line is the resolver's own statement of whether it could
+# test the static-runtime macro tool for executability. `IS_EXECUTABLE` is an
+# `if()` operator only from CMake 3.29, and CMake refuses an operator it does
+# not know instead of treating it as false, so on an older CMake the resolver
+# cannot make that test at all. Printing the flag keeps the weaker state visible
+# on every run rather than leaving it to be discovered in a failure.
 cat > "$work/probe.cmake" <<'PROBE'
 include("${RESOLVER}")
 message(STATUS "ACCEPTED module map: ${AXOLOTY_ZENOH_FACADE_MODULE_MAP}")
+message(STATUS "EXECUTABILITY_CHECKED: ${AXOLOTY_STATIC_RUNTIME_MACRO_EXECUTABILITY_CHECKED}")
 PROBE
 
 json_field() {
@@ -126,12 +146,17 @@ real_module_map=$(json_field "$report" zenohCore.moduleMap)
 # contract still validates and only the property under test can decide the run.
 build_case() {
     name="$1"
-    module_map="$2"
-    python3 - "$report" "$work/$name.json" "$module_map" <<'PY'
+    field="$2"
+    value="$3"
+    python3 - "$report" "$work/$name.json" "$field" "$value" <<'PY'
 import json, os, sys
 with open(sys.argv[1]) as handle:
     document = json.load(handle)
-document["zenohCore"]["moduleMap"] = sys.argv[3]
+target = document
+keys = sys.argv[3].split(".")
+for key in keys[:-1]:
+    target = target[key]
+target[keys[-1]] = sys.argv[4]
 with open(sys.argv[2], "w") as handle:
     json.dump(document, handle, indent=2, sort_keys=True)
 PY
@@ -179,6 +204,31 @@ run_case() {
                 return
             fi
             ;;
+        reject-or-untestable)
+            # This CMake can only make the test from 3.29, so on an older one the
+            # resolver accepts the file and says so. Both outcomes are correct
+            # and both are checked: what must never happen is the resolver
+            # rejecting the file for some other reason, or accepting it while
+            # claiming it tested executability.
+            if [ "$status" -ne 0 ]; then
+                if grep -q 'is not executable' "$work/$name.log"; then
+                    echo "ok   $description"
+                    return
+                fi
+                echo "check-cmake-escape: FAILED: $description failed for an unrelated reason" >&2
+                sed -n '1,12p' "$work/$name.log" >&2
+                failures=$((failures + 1))
+                return
+            fi
+            if ! grep -q 'EXECUTABILITY_CHECKED: FALSE' "$work/$name.log"; then
+                echo "check-cmake-escape: FAILED: $description was accepted while the" >&2
+                echo "check-cmake-escape: resolver reported that it tested executability" >&2
+                failures=$((failures + 1))
+                return
+            fi
+            echo "skip $description — this CMake cannot test executability"
+            return
+            ;;
     esac
     echo "ok   $description"
 }
@@ -187,6 +237,8 @@ echo "== the report as Core wrote it"
 # Copied verbatim, so the case measures the report and not a mutation of it.
 cp "$report" "$work/valid.json"
 run_case valid "the reported paths where the report names them" accept
+executability_state=$(sed -n 's/^-- EXECUTABILITY_CHECKED: //p' "$work/valid.log" | head -1)
+echo "check-cmake-escape: cmake $cmake_version, executability tested: ${executability_state:-unreported}"
 
 echo "== a directory whose name only starts with dots"
 # `...` is three dots, not two, so it is inside caller scratch and must be
@@ -196,7 +248,7 @@ dots_dir="$dots_parent/probe-$$"
 mkdir -p "$dots_dir"
 dots_map="$dots_dir/module.modulemap"
 cp "$real_module_map" "$dots_map"
-build_case dots "$dots_map"
+build_case dots zenohCore.moduleMap "$dots_map"
 run_case dots "a module map under a ... directory inside caller scratch" accept
 
 echo "== a real traversal"
@@ -204,7 +256,7 @@ parent_dir="$(dirname "$scratch_dir")/escape-check-$$"
 mkdir -p "$parent_dir"
 parent_map="$parent_dir/module.modulemap"
 cp "$real_module_map" "$parent_map"
-build_case parent "$parent_map"
+build_case parent zenohCore.moduleMap "$parent_map"
 run_case parent "a module map one level above caller scratch" reject
 
 echo "== a sibling whose name starts with the scratch path"
@@ -212,8 +264,19 @@ sibling_dir="$scratch_dir-sibling-$$"
 mkdir -p "$sibling_dir"
 sibling_map="$sibling_dir/module.modulemap"
 cp "$real_module_map" "$sibling_map"
-build_case sibling "$sibling_map"
+build_case sibling zenohCore.moduleMap "$sibling_map"
 run_case sibling "a module map under a sibling of caller scratch" reject
+
+echo "== a macro tool that is not executable"
+# A regular file inside caller scratch, so every other guard in the resolver
+# passes and the executability test is the only thing that can decide the run.
+# The fixture lives in the report's own scratch rather than in $work so that
+# the containment check is exercised on a real reported path.
+notexec_file="$scratch_dir/probe-$$-not-executable"
+: > "$notexec_file"
+chmod 644 "$notexec_file"
+build_case notexec staticRuntimeMacro.executable "$notexec_file"
+run_case notexec "a static-runtime macro tool without the executable bit" reject-or-untestable
 
 # The Core checkout is not written to, but the roots are reported so a failure
 # above names the paths it was reasoning about.

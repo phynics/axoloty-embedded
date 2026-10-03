@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "profile": "esp32c6-zenoh",
+  "check": "reproducible-build",
+  "tier": "build",
+  "status": "passed",
+  "recordedAt": "2026-10-03",
+  "result": "Two consecutive ESP-IDF builds of the esp32c6-zenoh profile in the same prepared environment produced a byte-identical axoloty-swift.bin, and both match the artifact the firmware-build record names. This is a reproducibility claim about firmware source revision 8ce5bb62a1d6981710052256de2d35299fc7cc20 only. A later firmware revision has no reproducibility evidence, and a green firmware-build record is not evidence for one.",
+  "firmwareRevision": "8ce5bb62a1d6981710052256de2d35299fc7cc20",
+  "firmwareSHA256": "9f548c50880fd0bd80266c7ead3672cd8484f50319d4cf51e82e7260290167cf",
+  "firmwareSizeBytes": 838864,
+  "coreRevision": "68e46c764a555a027f2779c74e8dd04a6bc4bb06",
+  "toolchain": "axoloty-embedded-dev image sha256:300977549cef51e03728784ab59d3a351c5eb4d60e9b5f3a47fb6d16462b2994 — Swift version 6.4 (swift-6.4-RELEASE), ESP-IDF v5.4, target esp32c6",
+  "dockerfileSHA256": "34c2b624b658ca77e06444cc23025d387fd9c84f624928aa6b0ed7a7036469e4",
+  "coreContractSHA256": "27254ace9481cd6b0d7d51063f29ac61b29b25b5f795d2aafe6087f406de0a7d",
+  "configurationFingerprint": "2c37b52f3f10d5efcb102aa90bfe704481e699e9d6cc98b3a7a3c3aa58253b5a",
+  "provenanceRunId": "zenoh-followup-8ce5bb6-clean",
+  "rebuilds": 2,
+  "allBuildsIdentical": true
+}
