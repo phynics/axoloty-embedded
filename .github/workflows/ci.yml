@@ -63,8 +63,13 @@ jobs:
   build:
     name: Firmware host checks and image
     runs-on: ubuntu-latest
-    needs: repo
+    needs: [repo, core]
     container: swift:6.4-jammy
+    env:
+      # The build job prepares its own report because Core reports contain
+      # absolute paths in this job's workspace; the report artifact from the
+      # separate core job cannot be reused as a host-test input.
+      AXOLOTY_DEVCONTAINER: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -74,16 +79,19 @@ jobs:
       - name: Install host test dependencies
         run: |
           apt-get update -qq
-          apt-get install -y -qq ca-certificates curl
+          apt-get install -y -qq build-essential clang cmake ca-certificates curl
           curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
           apt-get install -y -qq nodejs
 
-      # The build tier runs the hardware-free host firmware checks (runtime
-      # identity, shared flags, and the MQTT transport seam) and then attempts
-      # each profile image build. This runner has no pinned ESP-IDF + Swift
-      # image, so the image build reports UNAVAILABLE, which is honest and is
-      # never a pass. The tier is deliberately not required: requiring it would
-      # demand an ESP-IDF toolchain CI does not have.
+      # Prepare the locked Core checkout in this job. The host checks need the
+      # real generated module map and facade header, and those paths are local
+      # to this workspace rather than portable in the core-job artifact.
+      - name: Prepare Core for host checks
+        run: Tools/verify.sh --tier core --require core
+
+      # The build tier runs the hardware-free host firmware checks and then
+      # attempts each profile image build. This runner has no ESP-IDF image, so
+      # the image build reports UNAVAILABLE, which is honest and never a pass.
       - name: Host firmware checks and profile image
         run: Tools/verify.sh --tier build
 
