@@ -34,6 +34,16 @@ enum {
     FAIL_ROUTER_COUNT_ERROR = 1 << 9,
     FAIL_ROUTER_DROP_RESTORE_BEFORE_ENTRY = 1 << 10,
     FAIL_ROUTER_APPEARS_AFTER_DEADLINE = 1 << 11,
+    // Report a pending drop to the next poll. The real queue sets this when a
+    // full queue refuses the newest frame; here it is asked for directly, so
+    // the carrier's drop-counter path is observable without racing a producer.
+    // These two start at bit 12, not bit 11: bit 11 belongs to the
+    // late-router vector, and two vectors sharing a bit would make each test
+    // silently drive the other's path instead of the one it names.
+    REPORT_QUEUE_FULL = 1 << 12,
+    // Report a rejected over-bound frame to the next poll, exactly as the real
+    // queue does when its bounded-sample guard refuses a frame.
+    REPORT_FRAME_TOO_LARGE = 1 << 13,
 };
 
 enum {
@@ -339,6 +349,19 @@ axoloty_zenoh_result_t axoloty_zenoh_poll(const axoloty_zenoh_session_t *session
     if (index < 0) return AXOLOTY_ZENOH_INVALID_ARGUMENT;
     if (!key || !out_key_length || !payload || !out_payload_length) return AXOLOTY_ZENOH_INVALID_ARGUMENT;
     HostSubscription *state = &host_subscriptions[session_index][index];
+    // The real queue reports a pending drop or oversize once, on the first
+    // poll that finds the queue drained, and then goes quiet again. Mirroring
+    // that exactly is what makes the carrier's counter test meaningful: a
+    // counter that counted the notification instead of the event would look
+    // right here and wrong on the device.
+    if ((host_failures & REPORT_QUEUE_FULL) != 0) {
+        host_failures &= ~(unsigned)REPORT_QUEUE_FULL;
+        return AXOLOTY_ZENOH_QUEUE_FULL;
+    }
+    if ((host_failures & REPORT_FRAME_TOO_LARGE) != 0) {
+        host_failures &= ~(unsigned)REPORT_FRAME_TOO_LARGE;
+        return AXOLOTY_ZENOH_FRAME_TOO_LARGE;
+    }
     if (state->depth == 0) return AXOLOTY_ZENOH_QUEUE_EMPTY;
     if (state->key_length > key_capacity || state->payload_length > payload_capacity) {
         return AXOLOTY_ZENOH_INVALID_ARGUMENT;

@@ -10,6 +10,12 @@
 // directory; the Swift build receives it through this umbrella.
 #include "zenoh_endpoint.h"
 
+// The transport-neutral carrier diagnostics, reached the same way. The device
+// reaches these declarations through its bridging header instead, so both
+// builds bind the identical signatures and the host check exercises the
+// production counter implementation rather than a stand-in.
+#include "carrier_diagnostics.h"
+
 enum {
     HOST_ZENOH_FAIL_OPEN = 1 << 0,
     HOST_ZENOH_FAIL_SUBSCRIBE = 1 << 1,
@@ -23,6 +29,11 @@ enum {
     HOST_ZENOH_FAIL_ROUTER_COUNT_ERROR = 1 << 9,
     HOST_ZENOH_FAIL_ROUTER_DROP_RESTORE_BEFORE_ENTRY = 1 << 10,
     HOST_ZENOH_FAIL_ROUTER_APPEARS_AFTER_DEADLINE = 1 << 11,
+    // Bit 11 above belongs to the late-router vector, so the carrier-diagnostics
+    // drop and oversize vectors start at bit 12. A shared bit would let one
+    // vector satisfy another test's assertion.
+    HOST_ZENOH_REPORT_QUEUE_FULL = 1 << 12,
+    HOST_ZENOH_REPORT_FRAME_TOO_LARGE = 1 << 13,
 };
 
 void host_zenoh_reset(void);
@@ -51,5 +62,11 @@ int host_zenoh_sample_validation_tests(void);
 /// The bounded receive queue, its drop counters, and the handle generations,
 /// checked against the real `zenoh_pico_queue` the device links.
 int host_zenoh_queue_tests(void);
+
+/// The transport-neutral carrier counters, checked against the real
+/// `carrier_diagnostics` the device links: bounded storage, saturating
+/// increments, an exactly-sized report, and a gauge whose high-water mark only
+/// grows.
+int host_carrier_diagnostics_tests(void);
 
 #endif

@@ -44,6 +44,7 @@ private struct EmbeddedZenohHostTest {
     static func main() {
         check(host_zenoh_sample_validation_tests() != 0, "sample validation vectors")
         check(host_zenoh_queue_tests() != 0, "bounded receive queue conformance")
+        check(host_carrier_diagnostics_tests() != 0, "carrier diagnostics conformance")
         host_zenoh_reset()
 
         carrierLifecycle()
@@ -54,6 +55,7 @@ private struct EmbeddedZenohHostTest {
         willIsUnsupported()
         reconnectObservation()
         schedulerTickConversion()
+        carrierDiagnostics()
         probeRecords()
         facadeContract()
     }
@@ -457,6 +459,193 @@ private struct EmbeddedZenohHostTest {
         check(host_zenoh_router_query_count() == 3, "late router is not sampled after expiry")
         host_zenoh_set_failures(0)
         check(appearsLate.disconnect(), "late-available router teardown")
+        host_zenoh_reset()
+    }
+
+    // MARK: - Carrier diagnostics
+
+    /// Reads one counter out of the production set.
+    private static func metric(_ value: UInt32) -> UInt32 {
+        carrier_diagnostics_get_metric(CarrierMetric(rawValue: value))
+    }
+
+    private static let publishAttempts = UInt32(CARRIER_METRIC_PUBLISH_ATTEMPTS.rawValue)
+    private static let publishFailures = UInt32(CARRIER_METRIC_PUBLISH_FAILURES.rawValue)
+    private static let framesReceived = UInt32(CARRIER_METRIC_FRAMES_RECEIVED.rawValue)
+    private static let framesDropped = UInt32(CARRIER_METRIC_FRAMES_DROPPED.rawValue)
+    private static let framesOversized = UInt32(CARRIER_METRIC_FRAMES_OVERSIZED.rawValue)
+    private static let pollErrors = UInt32(CARRIER_METRIC_POLL_ERRORS.rawValue)
+    private static let sessionOpens = UInt32(CARRIER_METRIC_SESSION_OPENS.rawValue)
+    private static let sessionCloses = UInt32(CARRIER_METRIC_SESSION_CLOSES.rawValue)
+    private static let sessionFailures = UInt32(CARRIER_METRIC_SESSION_FAILURES.rawValue)
+    private static let reconnectsObserved = UInt32(CARRIER_METRIC_RECONNECTS_OBSERVED.rawValue)
+
+    static func carrierDiagnostics() {
+        let key = Array("sample/key".utf8)
+        let payload = Array("sample/payload".utf8)
+        var outKey = [UInt8](repeating: 0, count: 256)
+        var outPayload = [UInt8](repeating: 0, count: 2_048)
+        var outKeyLength: Int32 = 0
+        var outPayloadLength: Int32 = 0
+
+        func poll(_ carrier: inout ZenohCarrier) -> Int32 {
+            outKey.withUnsafeMutableBufferPointer { keyBuffer in
+                outPayload.withUnsafeMutableBufferPointer { payloadBuffer in
+                    carrier.pollOneEvent(
+                        topic: keyBuffer.baseAddress!, topicCapacity: Int32(keyBuffer.count), topicLength: &outKeyLength,
+                        payload: payloadBuffer.baseAddress!, payloadCapacity: Int32(payloadBuffer.count),
+                        payloadLength: &outPayloadLength)
+                }
+            }
+        }
+
+        func queueSample() {
+            host_zenoh_set_sample(key.withUnsafeBufferPointer { $0.baseAddress! }, Int32(key.count),
+                                  payload.withUnsafeBufferPointer { $0.baseAddress! }, Int32(payload.count))
+        }
+
+        // A reset phase starts from a known zero, so every number below is
+        // attributable to the operation under test.
+        host_zenoh_reset()
+        ZenohCarrier.resetDiagnostics()
+        check(ZenohCarrier.diagnostics.publish_attempts == 0, "reset clears every counter")
+
+        // A refused open is a visible failure, not a silent retry.
+        host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_OPEN))
+        var carrier = ZenohCarrier()
+        check(!carrier.connect(deadlineMS: 5_000), "refused open reports failure")
+        check(metric(sessionOpens) == 0, "a refused open is not an open")
+        check(metric(sessionFailures) == 1, "a refused open is a session failure")
+        host_zenoh_set_failures(0)
+
+        check(carrier.connect(deadlineMS: 5_000), "open succeeds")
+        check(metric(sessionOpens) == 1, "one successful open")
+        check(!carrier.connect(deadlineMS: 5_000), "second open is rejected")
+        check(metric(sessionOpens) == 1, "a rejected second open is not an open")
+        check(metric(sessionFailures) == 1, "a rejected second open is not a session failure either")
+
+        // The subscription gauge is a level, and its high-water mark only grows.
+        check(withSpan(key, count: key.count) { carrier.subscribe(topic: $0, deadlineMS: 1_000) }, "subscribe")
+        check(ZenohCarrier.activeSubscriptions == 1, "one active subscription")
+        let second = Array("sample/other".utf8)
+        check(withSpan(second, count: second.count) { carrier.subscribe(topic: $0, deadlineMS: 1_000) }, "second subscribe")
+        check(ZenohCarrier.activeSubscriptions == 2, "two active subscriptions")
+        check(withSpan(second, count: second.count) { carrier.unsubscribe(topic: $0, deadlineMS: 1_000) }, "unsubscribe")
+        check(ZenohCarrier.activeSubscriptions == 1, "the gauge follows removal down")
+        check(ZenohCarrier.activeSubscriptionsPeak == 2,
+              "the high-water mark remembers the highest level")
+
+        // Publish: a success and a transport refusal are told apart.
+        check(withTwoSpans(key, payload) { carrier.publish(topic: $0, payload: $1) }, "publish succeeds")
+        check(metric(publishAttempts) == 1, "one publish attempt")
+        check(metric(publishFailures) == 0, "no publish failure")
+        host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_PUBLISH))
+        check(!(withTwoSpans(key, payload) { carrier.publish(topic: $0, payload: $1) }), "refused publish")
+        host_zenoh_set_failures(0)
+        check(metric(publishAttempts) == 2, "two publish attempts")
+        check(metric(publishFailures) == 1, "one publish failure")
+
+        // An idle poll is not an event. Counting it would make every steady
+        // state look like a busy one and hide a real drop inside noise.
+        check(poll(&carrier) == 0, "empty queue polls clean")
+        for _ in 0..<8 { _ = poll(&carrier) }
+        check(metric(framesReceived) == 0, "idle polls record no frame")
+        check(metric(pollErrors) == 0, "idle polls record no error")
+        check(metric(framesDropped) == 0, "idle polls record no drop")
+
+        // A delivered frame counts as received.
+        queueSample()
+        check(poll(&carrier) == 1, "queued frame reports one")
+        check(metric(framesReceived) == 1, "one frame received")
+
+        // A drop is counted because Core's own poll result said the queue was
+        // full, and it is not double-counted as a receive error.
+        host_zenoh_set_failures(UInt32(HOST_ZENOH_REPORT_QUEUE_FULL))
+        check(poll(&carrier) == -1, "a drop surfaces as an error to the caller")
+        host_zenoh_set_failures(0)
+        check(metric(framesDropped) == 1, "one drop")
+        check(metric(pollErrors) == 0, "a drop is not a poll error")
+        check(metric(framesReceived) == 1, "a drop is not a received frame")
+
+        // An over-bound frame is counted separately from a drop: they are
+        // different faults and a reader must be able to tell them apart.
+        host_zenoh_set_failures(UInt32(HOST_ZENOH_REPORT_FRAME_TOO_LARGE))
+        check(poll(&carrier) == -1, "an oversize frame surfaces as an error to the caller")
+        host_zenoh_set_failures(0)
+        check(metric(framesOversized) == 1, "one oversized frame")
+        check(metric(framesDropped) == 1, "an oversize frame is not a drop")
+        check(metric(pollErrors) == 0, "an oversize frame is not a poll error")
+
+        // A genuine transport failure during receive is its own counter.
+        let errorsBefore = metric(pollErrors)
+        host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_POLL))
+        queueSample()
+        check(poll(&carrier) == -1, "carrier poll failure")
+        host_zenoh_set_failures(0)
+        check(metric(pollErrors) == errorsBefore + 1, "one poll error")
+        check(metric(framesReceived) == 1, "a failed poll is not a received frame")
+
+        // Reconnect is counted only for a loss this carrier actually observed.
+        // An already-usable session satisfies the connectivity wait and must not
+        // manufacture a reconnect.
+        check(metric(reconnectsObserved) == 0, "an already-usable router is no reconnect")
+        host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_ROUTERS))
+        check(!carrier.waitForReconnect(deadlineMS: 20), "an absent router times out")
+        host_zenoh_set_failures(0)
+        check(metric(reconnectsObserved) == 0, "an absent router is no reconnect")
+        host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_ROUTER_DROP_THEN_RESTORE))
+        check(carrier.waitForReconnect(deadlineMS: 500), "an observed loss and restoration succeeds")
+        check(metric(reconnectsObserved) == 1, "one observed reconnect")
+        // Restoration that finished before the wait began never showed this
+        // carrier a loss, so it is connectivity, not a reconnect.
+        host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_ROUTER_DROP_RESTORE_BEFORE_ENTRY))
+        check(carrier.waitForReconnect(deadlineMS: 500), "a restored router before entry succeeds")
+        check(metric(reconnectsObserved) == 1, "a restoration before entry is not a reconnect")
+        host_zenoh_set_failures(0)
+
+        // Teardown releases every declaration, so the gauge must return to zero.
+        check(carrier.disconnect(), "teardown")
+        check(metric(sessionCloses) == 1, "one successful close")
+        check(ZenohCarrier.activeSubscriptions == 0, "no subscription survives teardown")
+        check(ZenohCarrier.activeSubscriptionsPeak == 2,
+              "the high-water mark survives teardown, which is what makes a leak visible")
+
+        // A closed carrier reports the closed state without inventing a frame.
+        check(poll(&carrier) == -2, "poll after close reports closed")
+
+        // The device gate reads these numbers as JSON. The report must be one
+        // bounded object that names every counter the C gate relies on.
+        let capacity = Int(ZenohCarrier.diagnosticsJSONCapacity)
+        check(capacity > 0, "the report capacity is finite")
+        var json = [CChar](repeating: 0, count: capacity)
+        let written = json.withUnsafeMutableBufferPointer { buffer -> Int in
+            ZenohCarrier.writeDiagnosticsJSON(into: buffer.baseAddress!, capacity: capacity)
+        }
+        check(written > 0, "the counter report fits its stated capacity")
+        let text = String(cString: json)
+        for name in ["publishAttempts", "publishFailures", "framesReceived", "framesDropped",
+                     "framesOversized", "pollErrors", "sessionOpens", "sessionCloses",
+                     "sessionFailures", "reconnectsObserved", "activeSubscriptions",
+                     "activeSubscriptionsPeak"] {
+            check(text.contains("\"\(name)\":"), "the report names \(name)")
+        }
+        check(text.hasPrefix("{") && text.hasSuffix("}"), "the report is one JSON object")
+        check(!text.contains("\n"), "the report carries no newline")
+        check(text.contains("\"framesReceived\":1"), "the report carries the counted frames")
+        check(text.contains("\"framesDropped\":1"), "the report carries the counted drops")
+        check(text.contains("\"sessionOpens\":1"), "the report carries the counted opens")
+
+        // A buffer too small must say so. A truncated metric read as a zero is
+        // worse than no report at all, so the gate has to be able to detect it.
+        var tiny = [CChar](repeating: 0, count: 8)
+        check(tiny.withUnsafeMutableBufferPointer { buffer in
+            ZenohCarrier.writeDiagnosticsJSON(into: buffer.baseAddress!, capacity: 8)
+        } == 0, "an undersized report buffer reports that it did not fit")
+        check(tiny.withUnsafeMutableBufferPointer { buffer in
+            ZenohCarrier.writeDiagnosticsJSON(into: buffer.baseAddress!, capacity: 0)
+        } == 0, "a zero-capacity report buffer reports that it did not fit")
+
+        ZenohCarrier.resetDiagnostics()
         host_zenoh_reset()
     }
 

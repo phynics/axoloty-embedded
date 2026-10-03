@@ -274,9 +274,22 @@ swiftc -swift-version 6 -enable-experimental-feature Lifetimes -parse-as-library
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
     -I "$transport_main" -I "$facade_include" \
     -c "$script_dir/zenoh-queue-test.c" -o "$tmp/queue-test.o"
+# The carrier-diagnostics conformance vectors. Compiled against the production
+# counters, so the properties the device gate relies on are checked in C where
+# they can be observed exactly, and not approximated from Swift.
+"$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
+    -I "$transport_main" \
+    -c "$script_dir/carrier-diagnostics-test.c" -o "$tmp/diagnostics-test.o"
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
     -I "$transport_main" \
     -c "$transport_main/zenoh_sample_validation.c" -o "$tmp/validation.o"
+# The transport-neutral carrier counters the production image links. Compiled
+# from the transport's own source with no Zenoh and no SDK header, exactly as
+# the image compiles it, so the host seam checks the production counters rather
+# than a stand-in.
+"$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
+    -I "$transport_main" \
+    -c "$transport_main/carrier_diagnostics.c" -o "$tmp/diagnostics.o"
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
     -I "$transport_main" -I "$facade_include" \
     -c "$transport_main/zenoh_pico_queue.c" -o "$tmp/queue.o"
@@ -300,6 +313,7 @@ swiftc -D EMBEDDED_ZENOH_HOST_TEST \
     "$repo_root/Applications/device-smoke-agent/main/ProfileInterest.swift" \
     "$script_dir/zenoh-host-test.swift" \
     "$tmp/hal.o" "$tmp/queue.o" "$tmp/queue-test.o" "$tmp/validation.o" "$tmp/endpoint.o" \
+    "$tmp/diagnostics.o" "$tmp/diagnostics-test.o" \
     "$tmp/_JSONCore.o" "$tmp/AxolotyWire.o" "$tmp/AxolotyZenohCore.o" \
     -o "$tmp/embedded-zenoh-host-test"
 

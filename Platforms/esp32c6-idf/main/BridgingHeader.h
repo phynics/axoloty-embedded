@@ -38,6 +38,14 @@ static inline unsigned int axoloty_scheduler_hz(void) {
 #if __has_include("zenoh_endpoint.h")
 #include "zenoh_endpoint.h"
 #endif
+// The transport-neutral carrier diagnostics the selected transport populates
+// from its own carrier results. Present only when that transport is selected;
+// other profiles are unaffected. The header is transport-neutral on purpose:
+// it declares counters and the Core-owned result codes it is fed, and no
+// carrier type of its own.
+#if __has_include("carrier_diagnostics.h")
+#include "carrier_diagnostics.h"
+#endif
 
 // The selected application owns its C-callable device-agent seam.
 #if __has_include("static_device_agent.h")
