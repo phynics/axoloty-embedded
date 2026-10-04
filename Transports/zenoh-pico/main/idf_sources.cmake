@@ -19,11 +19,13 @@ set(AXOLOTY_TRANSPORT_SWIFT_SOURCES
 # board. zenoh_pico_facade.c is the `axoloty_zenoh_*` entry points over the
 # pinned zenoh-pico. zenoh_endpoint.c derives the operator-configured router
 # endpoint from the private network configuration header.
+# carrier_diagnostics.c holds the carrier counters without SDK or facade headers.
 set(AXOLOTY_TRANSPORT_C_SOURCES
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_sample_validation.c"
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_pico_queue.c"
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_pico_facade.c"
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_endpoint.c"
+    "${AXOLOTY_TRANSPORT_MAIN_DIR}/carrier_diagnostics.c"
 )
 
 # The pinned zenoh-pico wrapper component supplies the carrier seam backend,

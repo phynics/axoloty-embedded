@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "profile": "esp32c6-mqtt",
+  "check": "carrier-diagnostics-regression",
+  "tier": "build",
+  "status": "passed",
+  "recordedAt": "2026-10-03",
+  "firmwareRevision": "e63e7bd26c2469434cc2b0100fc10520dbe13a8a",
+  "firmwareSHA256": "01a9145ac0fb9dac5b7fdfbdbf4df6c3d5c5e6851ffe07cba8cfc53766cf570b",
+  "firmwareSizeBytes": 661936,
+  "coreRevision": "68e46c764a555a027f2779c74e8dd04a6bc4bb06",
+  "toolchain": {
+    "swift": "Swift 6.4 (swift-6.4-RELEASE)",
+    "espIdf": "ESP-IDF v5.4",
+    "target": "esp32c6",
+    "containerImageId": "sha256:300977549cef51e03728784ab59d3a351c5eb4d60e9b5f3a47fb6d16462b2994"
+  },
+  "result": "Clean locked-Core MQTT image built and reproduced byte-for-byte; Swift Unicode linker check and host MQTT seam passed. CMake selection names mqtt-espidf and compile_commands.json contains no carrier_diagnostics.c. The host agent broker exchange passed 10 checks and observed LWT. This is hardware-free regression evidence, not device qualification.",
+  "verification": {
+    "proofRunId": "kbz-phase1-431d",
+    "logsRoot": "/data/tmp/opencode/kbz-phase1-431d",
+    "fullVerifierExit": 124,
+    "fullVerifierResult": "1800-second timeout later in the Zenoh linker check; MQTT image, reproducibility, and linker checks had completed",
+    "targetedContinuationExit": 0
+  }
+}

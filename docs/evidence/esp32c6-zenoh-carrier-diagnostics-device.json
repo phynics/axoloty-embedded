@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "profile": "esp32c6-zenoh",
+  "check": "carrier-diagnostics-device",
+  "tier": "device",
+  "status": "unexecuted",
+  "recordedAt": "2026-10-03",
+  "reason": "No ESP32-C6 is attached to this run: AXOLOTY_DEVICE_PORT is unset. Carrier counters have host conformance coverage; device traffic, loss totals, heap, stack, allocation measurements, and resource thresholds remain unqualified."
+}

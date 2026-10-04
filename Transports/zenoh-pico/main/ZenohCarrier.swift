@@ -67,16 +67,126 @@ private struct ZenohCarrierSlot {
     var subscription: ZenohSubscription?
 }
 
+/// Records one publish outcome in the transport-neutral carrier counters.
+///
+/// `Core` owns what each `ZenohResult` means; this maps that already-decided
+/// verdict onto the counter whose name describes it, and does nothing else.
+/// The transport's counters module stays free of result codes for exactly this
+/// reason, so a new facade code needs a case here and nowhere else.
+@inline(__always)
+private func notePublishOutcome(_ result: ZenohResult) {
+    _ = carrier_diagnostics_add(CARRIER_METRIC_PUBLISH_ATTEMPTS, 1)
+    if result != .success {
+        _ = carrier_diagnostics_add(CARRIER_METRIC_PUBLISH_FAILURES, 1)
+        _ = carrier_diagnostics_add(CARRIER_METRIC_SESSION_FAILURES, 1)
+    }
+}
+
+/// Records one publish the carrier refused before it reached the transport.
+///
+/// This is deliberately not a fabricated `ZenohResult`. The carrier rejected
+/// the call on its own lifecycle or bounds, so no facade result exists to
+/// report, and inventing one would put a value into the counters that Core
+/// never produced. It counts as a publish attempt and a publish failure, which
+/// is what a caller watching these numbers actually needs to know.
+@inline(__always)
+private func notePublishRefusedLocally() {
+    _ = carrier_diagnostics_add(CARRIER_METRIC_PUBLISH_ATTEMPTS, 1)
+    _ = carrier_diagnostics_add(CARRIER_METRIC_PUBLISH_FAILURES, 1)
+}
+
+/// Counts facade notifications. Drop and oversize reports can each coalesce
+/// several rejected frames; they are observations, not exact frame-loss totals.
+@inline(__always)
+private func notePollOutcome(_ result: ZenohResult) {
+    switch result {
+    case .queueFull:
+        _ = carrier_diagnostics_add(CARRIER_METRIC_FRAMES_DROPPED, 1)
+    case .frameTooLarge:
+        _ = carrier_diagnostics_add(CARRIER_METRIC_FRAMES_OVERSIZED, 1)
+    case .success, .queueEmpty:
+        break
+    case .notOpen:
+        _ = carrier_diagnostics_add(CARRIER_METRIC_SESSION_FAILURES, 1)
+    default:
+        _ = carrier_diagnostics_add(CARRIER_METRIC_POLL_ERRORS, 1)
+        _ = carrier_diagnostics_add(CARRIER_METRIC_SESSION_FAILURES, 1)
+    }
+}
+
+/// Records a session lifecycle outcome.
+@inline(__always)
+private func noteSessionOpen(_ result: ZenohResult) {
+    if result == .success {
+        _ = carrier_diagnostics_add(CARRIER_METRIC_SESSION_OPENS, 1)
+    } else {
+        _ = carrier_diagnostics_add(CARRIER_METRIC_SESSION_FAILURES, 1)
+    }
+}
+
+@inline(__always)
+private func noteSessionClose(_ result: ZenohResult) {
+    if result == .success {
+        _ = carrier_diagnostics_add(CARRIER_METRIC_SESSION_CLOSES, 1)
+    } else {
+        _ = carrier_diagnostics_add(CARRIER_METRIC_SESSION_FAILURES, 1)
+    }
+}
+
+/// Records one failure of a subscription operation.
+@inline(__always)
+private func noteSubscriptionFailure() {
+    _ = carrier_diagnostics_add(CARRIER_METRIC_SESSION_FAILURES, 1)
+}
+
 /// Bounded, synchronous Zenoh carrier for the single-session device gate.
 ///
 /// Every byte buffer passed here is consumed synchronously and is never
 /// retained. Lifecycle calls must be serialized; the facade registry carries
 /// no locks and this value keeps none.
+///
+/// Carrier outcomes update the fixed C counter set. Readers can take atomic
+/// per-field snapshots without changing this value's lifecycle ownership.
 struct ZenohCarrier: ~Copyable {
     /// The facade's fixed per-session subscription capacity.
     static let maximumSubscriptions = 8
     /// Milliseconds between router observations while waiting.
     static let reconnectPollIntervalMS: UInt32 = 20
+
+    /// Clears every carrier counter. Call before starting traffic.
+    static func resetDiagnostics() {
+        carrier_diagnostics_reset()
+    }
+
+    /// The live transport-neutral counters.
+    static var diagnostics: CarrierDiagnostics {
+        carrier_diagnostics_get()
+    }
+
+    /// The subscription gauge: how many declarations the carrier holds now.
+    static var activeSubscriptions: UInt32 {
+        carrier_diagnostics_get().active_subscriptions
+    }
+
+    /// Most declarations held at once since reset. Survives teardown.
+    static var activeSubscriptionsPeak: UInt32 {
+        carrier_diagnostics_get().active_subscriptions_peak
+    }
+
+    /// Serializes the live counters as one bounded JSON object into caller
+    /// storage. Returns the byte count, or 0 when the buffer is too small.
+    /// A 0 result means "the report did not fit", never "zero counts".
+    static func writeDiagnosticsJSON(
+        into buffer: UnsafeMutablePointer<CChar>, capacity: Int
+    ) -> Int {
+        guard capacity > 0 else { return 0 }
+        return carrier_diagnostics_write_json(buffer, capacity)
+    }
+
+    /// The buffer size `writeDiagnosticsJSON` always needs.
+    static var diagnosticsJSONCapacity: Int {
+        carrier_diagnostics_json_capacity()
+    }
 
     private enum Phase {
         case idle
@@ -161,6 +271,11 @@ struct ZenohCarrier: ~Copyable {
         return count
     }
 
+    /// Updates the live slot count and its high-water mark.
+    private func publishSubscriptionGauge() {
+        carrier_diagnostics_set_active_subscriptions(UInt32(activeSlotCount()))
+    }
+
     /// The v1 client profile has no broker last-will, and the host binding
     /// ignores the value for the same reason. Never report success for an
     /// operation the carrier cannot perform.
@@ -191,9 +306,16 @@ struct ZenohCarrier: ~Copyable {
                 connectEndpoint: endpoint,
                 multicastScoutingEnabled: false
             )
-            opened = session.open(configuration: configuration) == .success
+            let result = session.open(configuration: configuration)
+            opened = result == .success
+            noteSessionOpen(result)
         }
-        guard opened else { return false }
+        guard opened else {
+            // A refused open is a session failure the caller can see and act
+            // on, not a silent retry: the carrier stays idle so a retry is
+            // safe, and the counter shows it did not succeed the first time.
+            return false
+        }
         switch session.connectedRouterCount() {
         case .count(let count):
             connectedRouterObserved = count > 0
@@ -201,6 +323,7 @@ struct ZenohCarrier: ~Copyable {
             connectedRouterObserved = false
         }
         phase = .connected
+        publishSubscriptionGauge()
         return true
     }
 
@@ -212,11 +335,17 @@ struct ZenohCarrier: ~Copyable {
     mutating func subscribe(topic: Span<UInt8>, deadlineMS: UInt32) -> Bool {
         _ = deadlineMS
         guard phase == .connected || phase == .subscribed,
-              !topic.isEmpty, topic.count <= ZenohFrameStorage.keyCapacity else { return false }
-        return topic.withUnsafeBytes { raw in
+              !topic.isEmpty, topic.count <= ZenohFrameStorage.keyCapacity else {
+            noteSubscriptionFailure()
+            return false
+        }
+        let subscribed = topic.withUnsafeBytes { raw -> Bool in
             guard let base = raw.baseAddress else { return false }
             if findSlot(keyBytes: base, keyLength: topic.count) != nil { return true }
-            guard let free = findFreeSlot() else { return false }
+            guard let free = findFreeSlot() else {
+                noteSubscriptionFailure()
+                return false
+            }
             let key = ByteSlice(bytes: base.assumingMemoryBound(to: UInt8.self), length: topic.count)
             switch session.subscribe(key: key) {
             case .subscribed(let handle):
@@ -229,11 +358,14 @@ struct ZenohCarrier: ~Copyable {
                 slot.subscription = handle
                 setSlotAt(free, slot)
                 phase = .subscribed
+                publishSubscriptionGauge()
                 return true
             case .result:
+                noteSubscriptionFailure()
                 return false
             }
         }
+        return subscribed
     }
 
     /// Removes exactly one topic subscription.
@@ -244,17 +376,28 @@ struct ZenohCarrier: ~Copyable {
     mutating func unsubscribe(topic: Span<UInt8>, deadlineMS: UInt32) -> Bool {
         _ = deadlineMS
         guard phase == .subscribed,
-              !topic.isEmpty, topic.count <= ZenohFrameStorage.keyCapacity else { return false }
-        return topic.withUnsafeBytes { raw in
+              !topic.isEmpty, topic.count <= ZenohFrameStorage.keyCapacity else {
+            noteSubscriptionFailure()
+            return false
+        }
+        let removed = topic.withUnsafeBytes { raw -> Bool in
             guard let base = raw.baseAddress,
-                  let index = findSlot(keyBytes: base, keyLength: topic.count) else { return false }
+                  let index = findSlot(keyBytes: base, keyLength: topic.count) else {
+                noteSubscriptionFailure()
+                return false
+            }
             var slot = slotAt(index)
             guard let handle = slot.subscription,
-                  session.unsubscribe(handle) == .success else { return false }
+                  session.unsubscribe(handle) == .success else {
+                noteSubscriptionFailure()
+                return false
+            }
             slot = ZenohCarrierSlot()
             setSlotAt(index, slot)
+            publishSubscriptionGauge()
             return true
         }
+        return removed
     }
 
     /// Publishes one bounded key and payload.
@@ -266,17 +409,30 @@ struct ZenohCarrier: ~Copyable {
     func publish(topic: Span<UInt8>, payload: Span<UInt8>) -> Bool {
         guard phase == .subscribed,
               !topic.isEmpty, topic.count <= ZenohFrameStorage.keyCapacity,
-              payload.count <= ZenohFrameStorage.payloadCapacity else { return false }
+              payload.count <= ZenohFrameStorage.payloadCapacity else {
+            notePublishRefusedLocally()
+            return false
+        }
         return topic.withUnsafeBytes { topicRaw in
-            guard let topicBase = topicRaw.baseAddress else { return false }
+            guard let topicBase = topicRaw.baseAddress else {
+                notePublishRefusedLocally()
+                return false
+            }
             let key = ByteSlice(bytes: topicBase.assumingMemoryBound(to: UInt8.self), length: topic.count)
             if payload.isEmpty {
-                return session.publish(key: key, payload: .empty) == .success
+                let result = session.publish(key: key, payload: .empty)
+                notePublishOutcome(result)
+                return result == .success
             }
             return payload.withUnsafeBytes { payloadRaw in
-                guard let payloadBase = payloadRaw.baseAddress else { return false }
+                guard let payloadBase = payloadRaw.baseAddress else {
+                    notePublishRefusedLocally()
+                    return false
+                }
                 let value = ByteSlice(bytes: payloadBase.assumingMemoryBound(to: UInt8.self), length: payload.count)
-                return session.publish(key: key, payload: value) == .success
+                let result = session.publish(key: key, payload: value)
+                notePublishOutcome(result)
+                return result == .success
             }
         }
     }
@@ -313,12 +469,19 @@ struct ZenohCarrier: ~Copyable {
             guard slot.active, let handle = slot.subscription else { continue }
             switch session.poll(from: handle, into: &frames) {
             case .frame:
+                // A frame is not counted as received here: it is counted when
+                // it is actually copied out into caller storage, because a
+                // frame that does not fit is retained and served on the next
+                // call. Counting it on arrival would report a frame the caller
+                // has not received.
                 hasPendingFrame = true
                 return copyPendingFrame(
                     topic: topic, topicCapacity: topicCapacity, topicLength: topicLength,
                     payload: payload, payloadCapacity: payloadCapacity, payloadLength: payloadLength
                 )
             case .result(let result):
+                // Count the facade notification before folding it into the seam code.
+                notePollOutcome(result)
                 switch result {
                 case .queueEmpty:
                     continue
@@ -362,6 +525,9 @@ struct ZenohCarrier: ~Copyable {
             }
         }
         guard keyOK && payloadOK else { return -1 }
+        // The frame has now crossed into caller storage, which is the only
+        // point at which "received" is true rather than merely pending.
+        _ = carrier_diagnostics_add(CARRIER_METRIC_FRAMES_RECEIVED, 1)
         hasPendingFrame = false
         return 1
     }
@@ -382,8 +548,17 @@ struct ZenohCarrier: ~Copyable {
         let endMS = durationMS > UInt64.max - startMS ? UInt64.max : startMS + durationMS
         switch session.connectedRouterCount() {
         case .count(let routers):
-            connectedRouterObserved = routers > 0
-            if routers > 0 { return true }
+            if routers == 0 {
+                if connectedRouterObserved { routerLossObserved = true }
+                connectedRouterObserved = false
+            } else {
+                if routerLossObserved {
+                    routerLossObserved = false
+                    _ = carrier_diagnostics_add(CARRIER_METRIC_RECONNECTS_OBSERVED, 1)
+                }
+                connectedRouterObserved = true
+                return true
+            }
         case .failure(let result):
             if result == .notOpen { return false }
         }
@@ -399,6 +574,10 @@ struct ZenohCarrier: ~Copyable {
                     if connectedRouterObserved { routerLossObserved = true }
                     connectedRouterObserved = false
                 } else {
+                    if routerLossObserved {
+                        routerLossObserved = false
+                        _ = carrier_diagnostics_add(CARRIER_METRIC_RECONNECTS_OBSERVED, 1)
+                    }
                     connectedRouterObserved = true
                     return true
                 }
@@ -423,13 +602,18 @@ struct ZenohCarrier: ~Copyable {
                 if session.unsubscribe(handle) == .success {
                     slot = ZenohCarrierSlot()
                     setSlotAt(index, slot)
+                } else {
+                    noteSubscriptionFailure()
                 }
             }
         }
         let result = session.close()
+        noteSessionClose(result)
         for index in 0..<Self.maximumSubscriptions {
             setSlotAt(index, ZenohCarrierSlot())
         }
+        // Close releases every declaration regardless of its result.
+        publishSubscriptionGauge()
         hasPendingFrame = false
         connectedRouterObserved = false
         routerLossObserved = false

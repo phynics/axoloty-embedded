@@ -161,6 +161,7 @@ if (fs.existsSync(evidenceDir)) {
     const entry = {
       path: `docs/evidence/${name}`,
       check: record.check ?? null,
+      tier: record.tier ?? null,
       status: record.status ?? null,
     };
     if (record.status === "passed" || record.status === "failed") {
@@ -172,7 +173,11 @@ if (fs.existsSync(evidenceDir)) {
     evidence.push(entry);
   }
 }
+// docs/evidence.md: a build or component record proves the artifact compiles,
+// not that the profile works. Only a device record, whose tier defaults to
+// "device" when absent, may carry the compatibility claim.
 const qualified = evidence.some(entry =>
+  (entry.tier === "device" || entry.tier === null) &&
   entry.status === "passed" &&
   entry.coreRevision === preparation.core.sha &&
   entry.firmwareSHA256 === provenance.artifact.sha256);

@@ -117,6 +117,21 @@ with tempfile.TemporaryDirectory() as temporary:
         check=False,
     )
     require(relative, 0, "relative repository root was rejected")
+    # docs/evidence.md: a build record proves the artifact compiles, not that
+    # the profile works. It must not satisfy a qualified manifest's device
+    # evidence, even when its checksum and Core revision match exactly.
+    evidence_record = repo / "docs" / "evidence" / "esp32c6-mqtt-smoke.json"
+    build_record = json.loads(evidence_record.read_text(encoding="utf-8"))
+    build_record["tier"] = "build"
+    build_record["toolchain"] = "fixture toolchain"
+    write_json(evidence_record, build_record)
+    require(run(repo, manifest, "--require-qualified"), 1,
+            "a build record was accepted as device qualification")
+    build_record["tier"] = "device"
+    build_record.pop("toolchain", None)
+    write_json(evidence_record, build_record)
+    require(run(repo, manifest, "--require-qualified"), 0,
+            "restoring the device record did not re-qualify the manifest")
     document = json.loads(manifest.read_text(encoding="utf-8"))
     document["embedded"]["dirty"] = True
     write_json(manifest, document)
