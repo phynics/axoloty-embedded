@@ -371,15 +371,22 @@ int zenoh_carrier_scenario_run(const ZenohScenarioConfig *config,
             }
             errored = true;
         }
-        (void)received;
+        // Offering more than the queue holds must fill it: either the depth
+        // read saw a full queue, or the drain observed the coalesced drop
+        // notification. A run that neither filled nor dropped did not
+        // exercise saturation, so it is not a pass.
+        bool filled = depth >= AXOLOTY_ZENOH_RECEIVE_QUEUE_CAPACITY;
         if (errored) {
             record(&state, environment, "queue_saturation", STEP_FAIL, "the drain did not complete");
-        } else if (drops > 0u) {
+        } else if (filled && drops > 0u && received > 0u) {
+            record(&state, environment, "queue_saturation", STEP_PASS,
+                   "the queue filled, drained, and reported a drop");
+        } else if (drops > 0u && received > 0u) {
             record(&state, environment, "queue_saturation", STEP_PASS,
                    "the drain observed a full-queue notification");
         } else {
-            record(&state, environment, "queue_saturation", STEP_PASS,
-                   "the queue drained without a drop notification");
+            record(&state, environment, "queue_saturation", STEP_FAIL,
+                   "the offered burst neither filled the queue nor reported a drop");
         }
     }
 
@@ -530,7 +537,8 @@ summary:;
     if (build_resources_json(environment)) {
         (void)zenoh_carrier_report_key_raw(&sink, "resources", scenario_resources_json);
     } else {
-        (void)zenoh_carrier_report_key_raw(&sink, "resources", "{\"status\":\"unavailable\"}");
+        (void)zenoh_carrier_report_key_raw(&sink, "resources",
+                                           "{\"status\":\"unexecuted\",\"reason\":\"the resource object did not fit the report buffer\"}");
     }
 
     size_t length = zenoh_carrier_report_end(&sink);
