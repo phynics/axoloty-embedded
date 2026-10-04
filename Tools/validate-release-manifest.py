@@ -291,8 +291,12 @@ def validate(repo_root, manifest_path, require_qualified, allow_revoked):
         record = load(candidate)
         for problem in validate_evidence(record, relative):
             problems.append(problem)
+        # docs/evidence.md: only a device record carries the compatibility
+        # claim. A build or component record proves the artifact compiles, so a
+        # qualified manifest must not be able to cite one as device evidence.
         if (entry.get("status") == "passed" and entry.get("coreRevision") == axoloty_sha
-                and entry.get("firmwareSHA256") == image_sha):
+                and entry.get("firmwareSHA256") == image_sha
+                and record.get("tier") in {"device", None}):
             matching += 1
     if status == "qualified" and matching == 0:
         problems.append("a qualified manifest needs a passed evidence record for this Core revision and image checksum")
