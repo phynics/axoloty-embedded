@@ -28,6 +28,14 @@ HEX64 = re.compile(r"[0-9a-f]{64}")
 VERSION = re.compile(r"^(\d+\.\d+\.\d+)-embedded\.([1-9]\d*)$")
 STATUSES = {"passed", "failed", "unexecuted"}
 
+# An ESP-IDF dependency manifest supplies SDK components, not independently
+# pinned libraries. The one transport whose backend comes from it is the
+# SDK-supplied MQTT client, so an ESP-IDF-sourced backend identity is pinned
+# here. A manifest cannot cite the correct SDK version while naming a library
+# the image does not use; a new ESP-IDF-sourced transport must extend this map
+# and the generator together.
+ESPIDF_BACKENDS = {"mqtt-espidf": "esp-idf/mqtt"}
+
 
 def load(path):
     try:
@@ -96,6 +104,12 @@ def validate_transport_source(transport, source_path, relative):
         if not is_nonempty_string(transport.get("component")):
             problems.append("transport.component is required when the backend version comes from an ESP-IDF dependency manifest")
             return problems
+        expected_backend = ESPIDF_BACKENDS.get(transport.get("name"))
+        if expected_backend is None:
+            problems.append("transport.name %r has no ESP-IDF backend identity" % transport.get("name"))
+        elif transport.get("backend") != expected_backend:
+            problems.append("transport.backend %r does not match the ESP-IDF backend %r for transport %r"
+                            % (transport.get("backend"), expected_backend, transport.get("name")))
         try:
             with open(source_path, encoding="utf-8") as handle:
                 text = handle.read()
@@ -195,6 +209,10 @@ def validate(repo_root, manifest_path, require_qualified, allow_revoked):
     revocation, revocation_problems = load_revocation(repo_root, manifest_path)
     if allow_revoked and revocation is not None:
         return revocation_problems, revocation
+    # A JSON document that is not an object cannot be a certificate. Report it
+    # as a violation instead of failing later on an unrelated attribute access.
+    if not isinstance(manifest, dict):
+        return ["manifest must be a JSON object, found %s" % type(manifest).__name__], revocation
 
     problems = []
     problems.extend(revocation_problems)

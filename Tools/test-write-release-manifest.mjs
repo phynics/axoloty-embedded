@@ -102,7 +102,7 @@ try {
     const output = path.join(workspace, "out", `${config.name}.json`);
     generate(workspace, profilePath, output);
     const manifest = JSON.parse(fs.readFileSync(output, "utf8"));
-    assert.deepEqual(manifest.transport, config.expected,
+    assert.deepStrictEqual(manifest.transport, config.expected,
       `${config.name} records the wrong transport backend identity`);
   }
 

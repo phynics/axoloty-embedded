@@ -139,7 +139,9 @@ def require(result, expected, message):
 
 def check_transport_mutations(repo, manifest, document, mutations, label):
     for mutate, message in mutations:
-        write_json(manifest, mutate(copy.deepcopy(document)))
+        mutated = copy.deepcopy(document)
+        mutate(mutated)
+        write_json(manifest, mutated)
         require(run(repo, manifest, "--require-qualified"), 1, message)
     write_json(manifest, document)
     require(run(repo, manifest, "--require-qualified"), 0,
@@ -189,6 +191,8 @@ with tempfile.TemporaryDirectory() as temporary:
          "MQTT manifest accepted a Zenoh backend version"),
         (lambda d: d["transport"].__setitem__("backend", "eclipse-zenoh/zenoh-pico"),
          "MQTT manifest accepted a foreign backend identity"),
+        (lambda d: d["transport"].__setitem__("backend", "esp-idf/not-mqtt"),
+         "MQTT manifest accepted a non-canonical ESP-IDF backend identity"),
         (lambda d: d["transport"].__setitem__("revision", ZENOH_REVISION),
          "MQTT manifest accepted a backend revision the idf lock does not pin"),
         (lambda d: d["transport"].__setitem__("component", "zenoh-pico"),
