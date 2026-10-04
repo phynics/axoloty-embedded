@@ -3,6 +3,7 @@
 
 """Exercise release-manifest validation without requiring a firmware toolchain."""
 
+import copy
 import json
 import subprocess
 import sys
@@ -12,8 +13,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 VALIDATOR = ROOT / "Tools" / "validate-release-manifest.py"
+LOCK = json.loads((ROOT / "axoloty-core.lock.json").read_text(encoding="utf-8"))["core"]
+VERSION = "%s-embedded.9" % LOCK["version"]
 IMAGE_SHA = "a" * 64
 FIRMWARE_SHA = "b" * 40
+ZENOH_REVISION = "96006957fddef401c20c8c2d813c2a630b666974"
 
 
 def write_json(path, value):
@@ -30,22 +34,86 @@ def run(repo, manifest, *options):
     )
 
 
-def fixture(repo):
-    lock = json.loads((ROOT / "axoloty-core.lock.json").read_text(encoding="utf-8"))["core"]
-    profile = "esp32c6-mqtt"
-    for axis, name in (("Applications", "device-smoke-agent"), ("Platforms", "esp32c6-idf"), ("Transports", "mqtt-espidf")):
-        (repo / axis / name).mkdir(parents=True)
+def transport_block(transport):
+    if transport == "zenoh-pico":
+        return {
+            "name": "zenoh-pico",
+            "backend": "eclipse-zenoh/zenoh-pico",
+            "component": "eclipse-zenoh/zenoh-pico",
+            "version": "1.10.0",
+            "revision": ZENOH_REVISION,
+            "versionSource": "Platforms/esp32c6-idf/dependencies/zenoh-pico.lock.json",
+        }
+    return {
+        "name": "mqtt-espidf",
+        "backend": "esp-idf/mqtt",
+        "component": "idf",
+        "version": "5.4.0",
+        "revision": None,
+        "versionSource": "Platforms/esp32c6-idf/dependencies.lock",
+    }
+
+
+def manifest_document(lock, profile, transport):
+    return {
+        "schemaVersion": 1,
+        "mode": "release",
+        "profile": profile,
+        "application": "device-smoke-agent",
+        "platform": "esp32c6-idf",
+        "board": "ESP32-C6-DevKitC-1",
+        "transport": transport_block(transport),
+        "compatibility": {"scope": "profile", "status": "qualified", "description": "fixture"},
+        "axoloty": {
+            "version": lock["version"],
+            "tag": lock["tag"],
+            "sha": lock["revision"],
+            "dirty": False,
+            "contractSha256": "c" * 64,
+        },
+        "embedded": {"version": VERSION, "sha": FIRMWARE_SHA, "dirty": False},
+        "toolchain": {"swift": "Swift fixture", "sdk": "ESP-IDF fixture", "target": "esp32c6"},
+        "configurationFingerprint": "d" * 64,
+        "image": {"path": "axoloty-swift.bin", "sha256": IMAGE_SHA, "byteCount": 1},
+        "resources": None,
+        "qualification": {
+            "status": "qualified",
+            "evidence": [{
+                "path": "docs/evidence/%s-smoke.json" % profile,
+                "check": "smoke",
+                "status": "passed",
+                "coreRevision": lock["revision"],
+                "firmwareSHA256": IMAGE_SHA,
+            }],
+        },
+    }
+
+
+def fixture(repo, profile, transport):
+    lock = LOCK
+    for axis, name in (("Applications", "device-smoke-agent"),
+                       ("Platforms", "esp32c6-idf"),
+                       ("Transports", transport)):
+        (repo / axis / name).mkdir(parents=True, exist_ok=True)
     write_json(repo / "axoloty-core.lock.json", {"schemaVersion": 1, "core": lock})
-    (repo / "VERSION").write_text("0.8.2-embedded.9\n", encoding="utf-8")
+    (repo / "VERSION").write_text(VERSION + "\n", encoding="utf-8")
     write_json(repo / "Profiles" / profile / "profile.json", {
         "name": profile,
         "application": "device-smoke-agent",
         "platform": "esp32c6-idf",
-        "transport": "mqtt-espidf",
+        "transport": transport,
         "board": "ESP32-C6-DevKitC-1",
     })
-    (repo / "Platforms" / "esp32c6-idf" / "dependencies.lock").write_text("  idf:\n    version: 5.4.0\n", encoding="utf-8")
-    evidence_path = repo / "docs" / "evidence" / "esp32c6-mqtt-smoke.json"
+    (repo / "Platforms" / "esp32c6-idf" / "dependencies.lock").write_text(
+        "  idf:\n    version: 5.4.0\n", encoding="utf-8")
+    write_json(repo / "Platforms" / "esp32c6-idf" / "dependencies" / "zenoh-pico.lock.json", {
+        "schemaVersion": 1,
+        "component": "eclipse-zenoh/zenoh-pico",
+        "version": "1.10.0",
+        "tag": "1.10.0",
+        "revision": ZENOH_REVISION,
+    })
+    evidence_path = repo / "docs" / "evidence" / ("%s-smoke.json" % profile)
     write_json(evidence_path, {
         "schemaVersion": 1,
         "profile": profile,
@@ -59,44 +127,8 @@ def fixture(repo):
         "protocol": "fixture",
         "result": "passed",
     })
-    manifest_path = repo / "releases" / profile / "0.8.2-embedded.9.json"
-    write_json(manifest_path, {
-        "schemaVersion": 1,
-        "mode": "release",
-        "profile": profile,
-        "application": "device-smoke-agent",
-        "platform": "esp32c6-idf",
-        "board": "ESP32-C6-DevKitC-1",
-        "transport": {
-            "name": "mqtt-espidf",
-            "backend": "esp-idf/mqtt",
-            "version": "5.4.0",
-            "versionSource": "Platforms/esp32c6-idf/dependencies.lock",
-        },
-        "compatibility": {"scope": "profile", "status": "qualified", "description": "fixture"},
-        "axoloty": {
-            "version": lock["version"],
-            "tag": lock["tag"],
-            "sha": lock["revision"],
-            "dirty": False,
-            "contractSha256": "c" * 64,
-        },
-        "embedded": {"version": "0.8.2-embedded.9", "sha": FIRMWARE_SHA, "dirty": False},
-        "toolchain": {"swift": "Swift fixture", "sdk": "ESP-IDF fixture", "target": "esp32c6"},
-        "configurationFingerprint": "d" * 64,
-        "image": {"path": "axoloty-swift.bin", "sha256": IMAGE_SHA, "byteCount": 1},
-        "resources": None,
-        "qualification": {
-            "status": "qualified",
-            "evidence": [{
-                "path": "docs/evidence/esp32c6-mqtt-smoke.json",
-                "check": "smoke",
-                "status": "passed",
-                "coreRevision": lock["revision"],
-                "firmwareSHA256": IMAGE_SHA,
-            }],
-        },
-    })
+    manifest_path = repo / "releases" / profile / (VERSION + ".json")
+    write_json(manifest_path, manifest_document(lock, profile, transport))
     return manifest_path
 
 
@@ -105,9 +137,21 @@ def require(result, expected, message):
         raise SystemExit("%s\nstdout:\n%s\nstderr:\n%s" % (message, result.stdout, result.stderr))
 
 
+def check_transport_mutations(repo, manifest, document, mutations, label):
+    for mutate, message in mutations:
+        write_json(manifest, mutate(copy.deepcopy(document)))
+        require(run(repo, manifest, "--require-qualified"), 1, message)
+    write_json(manifest, document)
+    require(run(repo, manifest, "--require-qualified"), 0,
+            "%s: restoring the manifest did not revalidate" % label)
+
+
 with tempfile.TemporaryDirectory() as temporary:
-    repo = Path(temporary) / "repository"
-    manifest = fixture(repo)
+    base = Path(temporary)
+
+    # --- MQTT: the existing device-evidence, revocation, and schema checks. ---
+    repo = base / "mqtt-repository"
+    manifest = fixture(repo, "esp32c6-mqtt", "mqtt-espidf")
     require(run(repo, manifest, "--require-qualified"), 0, "clean qualified manifest was rejected")
     relative = subprocess.run(
         [sys.executable, str(VALIDATOR), ".", str(manifest.relative_to(repo)), "--require-qualified"],
@@ -136,11 +180,35 @@ with tempfile.TemporaryDirectory() as temporary:
     document["embedded"]["dirty"] = True
     write_json(manifest, document)
     require(run(repo, manifest, "--require-qualified"), 1, "dirty firmware manifest was accepted")
-    revocation = repo / "releases" / "revocations" / "esp32c6-mqtt" / "0.8.2-embedded.9.json"
+    # The MQTT backend version is the pinned ESP-IDF component, so the manifest
+    # must not record a foreign library version or a commit the idf component
+    # does not pin.
+    document["embedded"]["dirty"] = False
+    check_transport_mutations(repo, manifest, document, [
+        (lambda d: d["transport"].__setitem__("version", "1.10.0"),
+         "MQTT manifest accepted a Zenoh backend version"),
+        (lambda d: d["transport"].__setitem__("backend", "eclipse-zenoh/zenoh-pico"),
+         "MQTT manifest accepted a foreign backend identity"),
+        (lambda d: d["transport"].__setitem__("revision", ZENOH_REVISION),
+         "MQTT manifest accepted a backend revision the idf lock does not pin"),
+        (lambda d: d["transport"].__setitem__("component", "zenoh-pico"),
+         "MQTT manifest accepted a component the idf lock does not declare"),
+        (lambda d: d["transport"].__setitem__(
+            "versionSource", "Platforms/esp32c6-idf/dependencies/zenoh-pico.lock.json"),
+         "MQTT manifest accepted a foreign version source"),
+        (lambda d: d["transport"].__setitem__("versionSource", "../VERSION"),
+         "MQTT manifest accepted a version source outside the platform"),
+        (lambda d: d["transport"].pop("component"),
+         "MQTT manifest omitted the pinned component"),
+        (lambda d: d["transport"].pop("revision"),
+         "MQTT manifest omitted the backend revision field"),
+    ], "MQTT")
+    document = json.loads(manifest.read_text(encoding="utf-8"))
+    revocation = repo / "releases" / "revocations" / "esp32c6-mqtt" / (VERSION + ".json")
     write_json(revocation, {
         "schemaVersion": 1,
         "status": "revoked",
-        "manifestPath": "releases/esp32c6-mqtt/0.8.2-embedded.9.json",
+        "manifestPath": "releases/esp32c6-mqtt/%s.json" % VERSION,
         "reason": "fixture revocation",
     })
     require(run(repo, manifest, "--require-qualified"), 1, "revoked certificate was accepted")
@@ -155,5 +223,28 @@ with tempfile.TemporaryDirectory() as temporary:
     revocation_record["manifestPath"] = "releases/another-profile/other.json"
     write_json(revocation, revocation_record)
     require(run(repo, manifest, "--require-qualified", "--allow-revoked"), 1, "invalid revocation record was accepted")
+
+    # --- Zenoh: its own lock decides identity, version, and revision. --------
+    # The failure this guards against is the generator reading the idf entry
+    # and certifying the Zenoh profile with the SDK version as its backend.
+    zenoh_repo = base / "zenoh-repository"
+    zenoh_manifest = fixture(zenoh_repo, "esp32c6-zenoh", "zenoh-pico")
+    require(run(zenoh_repo, zenoh_manifest, "--require-qualified"), 0,
+            "clean Zenoh manifest was rejected")
+    zenoh_document = json.loads(zenoh_manifest.read_text(encoding="utf-8"))
+    check_transport_mutations(zenoh_repo, zenoh_manifest, zenoh_document, [
+        (lambda d: d["transport"].__setitem__("version", "5.4.0"),
+         "Zenoh manifest accepted the SDK version as its backend version"),
+        (lambda d: d["transport"].__setitem__("backend", "zenoh-pico"),
+         "Zenoh manifest accepted a non-canonical backend identity"),
+        (lambda d: d["transport"].__setitem__("revision", "f" * 40),
+         "Zenoh manifest accepted a backend revision the lock does not pin"),
+        (lambda d: d["transport"].__setitem__("revision", None),
+         "Zenoh manifest dropped the pinned backend revision"),
+        (lambda d: d["transport"].pop("component"),
+         "Zenoh manifest omitted the pinned component"),
+        (lambda d: d["transport"].__setitem__("versionSource", "Platforms/esp32c6-idf/dependencies.lock"),
+         "Zenoh manifest cited the SDK dependency manifest"),
+    ], "Zenoh")
 
 print("release-manifest validator checks passed")

@@ -94,8 +94,10 @@ in [docs/evidence.md](./evidence.md).
 | `platform` | Platform axis | profile |
 | `board` | Declared target board | profile |
 | `transport.name` | Transport axis | profile |
-| `transport.backend` | Transport library | platform mapping (`mqtt-espidf` → `esp-idf/mqtt`) |
-| `transport.version` | Transport backend version | `Platforms/<platform>/dependencies.lock` |
+| `transport.backend` | Transport backend identity | the transport's pinned source: `esp-idf/mqtt` for the SDK-supplied MQTT backend, or the lock `component` for a pinned library such as `eclipse-zenoh/zenoh-pico` |
+| `transport.component` | Pinned entry that supplies the backend | the named component of `Platforms/<platform>/dependencies.lock`, or the `component` field of a JSON component lock |
+| `transport.version` | Transport backend version | that component's or lock's `version` |
+| `transport.revision` | Pinned backend commit, or `null` when its source pins none | the component lock's `revision` |
 | `transport.versionSource` | Where that version came from | repository-relative path |
 | `compatibility.scope` | `profile` | format |
 | `compatibility.status` | `qualified`, `unqualified`, or `preview` | computed from evidence and mode |
@@ -142,9 +144,11 @@ them is a real observation. A real record is never committed under
   "board": "<board>",
   "transport": {
     "name": "<transport>",
-    "backend": "<backend library>",
+    "backend": "<backend identity>",
+    "component": "<pinned entry or null>",
     "version": "<backend version>",
-    "versionSource": "Platforms/<platform>/dependencies.lock"
+    "revision": "<pinned backend commit or null>",
+    "versionSource": "Platforms/<platform>/<source>"
   },
   "compatibility": {
     "scope": "profile",
@@ -201,8 +205,10 @@ The build produces it, from what the build observed:
 3. The same build calls `Platforms/esp32c6-idf/tools/write-release-manifest.sh`,
    which runs `write-release-manifest.mjs`. The generator reads the Core
    preparation report, the build provenance, `profile.json`, the lock, `VERSION`,
-   the platform dependency lock, the evidence records, and an optional size
-   report. It refuses to run from an unprepared or dirty Core or a failed build.
+   the transport's pinned backend source (the platform dependency lock or a
+   component lock such as `dependencies/zenoh-pico.lock.json`), the evidence
+   records, and an optional size report. It refuses to run from an unprepared or
+   dirty Core or a failed build.
 4. The result is `release-manifest.json` in the build evidence directory.
 
 `write-provenance.mjs` is the existing provenance path; the manifest generator
@@ -224,6 +230,9 @@ against authoritative sources instead of trusting it:
 - `VERSION` decides `embedded.version`, and its base must equal the lock version;
 - `Profiles/<profile>/profile.json` decides the application, platform,
   transport, and board;
+- the backend source the manifest cites decides `transport.backend`,
+  `transport.component`, `transport.version`, and `transport.revision`, so a
+  profile cannot record the SDK version as its transport backend version;
 - `docs/evidence/` decides qualification, and a `qualified` manifest must cite a
   `passed` record whose `coreRevision` and `firmwareSHA256` match this exact
   Core revision and artifact;

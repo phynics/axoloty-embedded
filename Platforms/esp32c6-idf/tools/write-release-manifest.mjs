@@ -104,7 +104,14 @@ if (!preview && versionMatch[1] !== lock.core?.version) {
 }
 const axolotyVersion = preview ? null : lock.core.version;
 
-// --- Transport backend version, declared by the platform dependency lock.
+// --- Transport backend identity and version, from a tracked source.
+//
+// A backend is a property of the transport, not of the SDK. MQTT has no client
+// library of its own in this image, so its version is the pinned ESP-IDF
+// component that supplies it. Zenoh pins `eclipse-zenoh/zenoh-pico` in its own
+// lock. Reading the SDK version as the Zenoh backend version would certify a
+// library the image does not use, so each transport declares its source and the
+// identity is read from that source, never guessed from the transport name.
 const platformDir = path.join(repoRoot, "Platforms", profile.platform);
 const dependencyLockPath = path.join(platformDir, "dependencies.lock");
 const versionFromLock = (lockText, component) => {
@@ -119,11 +126,47 @@ const versionFromLock = (lockText, component) => {
   }
   return null;
 };
-const transportBackends = { "mqtt-espidf": "esp-idf/mqtt" };
-const transportBackend = transportBackends[profile.transport] ?? profile.transport;
-const transportBackendVersion = fs.existsSync(dependencyLockPath)
-  ? versionFromLock(fs.readFileSync(dependencyLockPath, "utf8"), "idf")
-  : null;
+// Each entry names the tracked file that pins the backend. `format: component`
+// means a JSON component lock whose `component`, `version`, and `revision`
+// fields are authoritative; `format: espidf` means the ESP-IDF dependency
+// manifest and the named component supplies the version.
+const transportBackendSources = {
+  "mqtt-espidf": { backend: "esp-idf/mqtt", source: "dependencies.lock", component: "idf", format: "espidf" },
+  "zenoh-pico": { source: "dependencies/zenoh-pico.lock.json", format: "component" },
+};
+const transportBackendSource = transportBackendSources[profile.transport];
+if (!transportBackendSource) {
+  throw new Error(`transport ${profile.transport} declares no release backend; refusing to guess one`);
+}
+const transportSourcePath = path.join(platformDir, transportBackendSource.source);
+if (!fs.existsSync(transportSourcePath)) {
+  throw new Error(`transport backend source ${transportBackendSource.source} is missing for profile ${profile.name}`);
+}
+let transportBackend;
+let transportComponent;
+let transportBackendVersion;
+let transportBackendRevision;
+if (transportBackendSource.format === "component") {
+  const backendLock = read(transportSourcePath);
+  transportBackend = backendLock.component;
+  transportComponent = backendLock.component ?? null;
+  transportBackendVersion = backendLock.version;
+  transportBackendRevision = backendLock.revision ?? null;
+  if (typeof transportBackend !== "string" || transportBackend.length === 0) {
+    throw new Error(`${transportBackendSource.source} does not name a component; the transport backend has no identity`);
+  }
+  if (typeof transportBackendVersion !== "string" || transportBackendVersion.length === 0) {
+    throw new Error(`${transportBackendSource.source} does not name a version`);
+  }
+} else {
+  transportBackend = transportBackendSource.backend;
+  transportComponent = transportBackendSource.component;
+  transportBackendVersion = versionFromLock(fs.readFileSync(transportSourcePath, "utf8"), transportBackendSource.component);
+  transportBackendRevision = null;
+  if (transportBackendVersion === null) {
+    throw new Error(`${transportBackendSource.source} does not pin component ${transportBackendSource.component}`);
+  }
+}
 
 // --- Configuration fingerprint: the tracked selection and config inputs.
 const stableStringify = value => JSON.stringify(value, (key, nested) => {
@@ -207,8 +250,10 @@ const manifest = {
   transport: {
     name: profile.transport,
     backend: transportBackend,
+    component: transportComponent,
     version: transportBackendVersion,
-    versionSource: transportBackendVersion ? path.relative(repoRoot, dependencyLockPath) : null,
+    revision: transportBackendRevision,
+    versionSource: path.relative(repoRoot, transportSourcePath),
   },
   compatibility: {
     scope: "profile",
