@@ -43,6 +43,22 @@ set(AXOLOTY_TRANSPORT_C_SOURCES
 # the carrier is written against.
 set(AXOLOTY_TRANSPORT_IDF_REQUIRES "zenoh_pico" "axoloty_zenoh_core")
 
+# The qualification build drives the scenario from its own `app_main` and
+# reads the running image length. The normal smoke image compiles neither, so
+# the entry point and the partition and image-metadata components are selected
+# only for that build. The platform reads the same flag before including this
+# file.
+if(AXOLOTY_QUALIFICATION_CARRIER_SCENARIO)
+    list(APPEND AXOLOTY_TRANSPORT_C_SOURCES
+        "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_carrier_scenario_device.c"
+    )
+    list(APPEND AXOLOTY_TRANSPORT_IDF_REQUIRES
+        app_update
+        bootloader_support
+        esp_partition
+    )
+endif()
+
 # The C seam this transport declares is the Core-owned Axoloty Zenoh facade
 # header, resolved by the platform from the `zenohCore` entry of the Core
 # preparation report (phynics/axoloty#974). This transport never names a

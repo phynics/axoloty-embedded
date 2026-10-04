@@ -15,6 +15,25 @@ option(AXOLOTY_SWIFT_UNICODE_LINKER_PROBE
     OFF
 )
 
+# The qualification build selects a carrier-scenario entry point instead of
+# the shared smoke application entry point. It is off by default, so the shared
+# smoke image keeps its own entry point. ESP-IDF re-expands component
+# requirements in a sub-invocation that does not inherit -D cache variables,
+# so read the environment as axoloty-source.cmake does, then normalize to a
+# CMake boolean.
+if(NOT DEFINED AXOLOTY_QUALIFICATION_CARRIER_SCENARIO OR
+   "${AXOLOTY_QUALIFICATION_CARRIER_SCENARIO}" STREQUAL "")
+    if(DEFINED ENV{AXOLOTY_QUALIFICATION_CARRIER_SCENARIO})
+        set(AXOLOTY_QUALIFICATION_CARRIER_SCENARIO
+            "$ENV{AXOLOTY_QUALIFICATION_CARRIER_SCENARIO}")
+    endif()
+endif()
+if(AXOLOTY_QUALIFICATION_CARRIER_SCENARIO)
+    set(AXOLOTY_QUALIFICATION_CARRIER_SCENARIO ON)
+else()
+    set(AXOLOTY_QUALIFICATION_CARRIER_SCENARIO OFF)
+endif()
+
 # ESP-IDF expands component requirements in a separate CMake sub-invocation
 # that does not inherit -D cache variables, and this file is included during
 # that pass. Fall back to the environment, exactly as axoloty-source.cmake
@@ -39,6 +58,17 @@ endforeach()
 
 set(AXOLOTY_APPLICATION_MAIN_DIR "${AXOLOTY_APPLICATION_DIR}/main")
 set(AXOLOTY_TRANSPORT_MAIN_DIR "${AXOLOTY_TRANSPORT_DIR}/main")
+get_filename_component(AXOLOTY_SELECTED_TRANSPORT_NAME "${AXOLOTY_TRANSPORT_DIR}" NAME)
+
+# Only the Zenoh transport supplies a carrier-scenario device entry point. Fail
+# closed when a profile asks for the qualification build and selects another
+# transport, instead of building an image with no `app_main`.
+if(AXOLOTY_QUALIFICATION_CARRIER_SCENARIO AND NOT AXOLOTY_SELECTED_TRANSPORT_NAME STREQUAL "zenoh-pico")
+    message(FATAL_ERROR
+        "AXOLOTY_QUALIFICATION_CARRIER_SCENARIO is set, but the selected transport is "
+        "'${AXOLOTY_SELECTED_TRANSPORT_NAME}'; the carrier scenario is a zenoh-pico qualification build"
+    )
+endif()
 
 # The transport axis supplies its carrier sources declaratively. The platform
 # compiles exactly what the selected transport lists, so the profile's
@@ -72,6 +102,15 @@ set(AXOLOTY_SWIFT_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/Esp32c6SmokeSeam.swift
     ${CMAKE_CURRENT_LIST_DIR}/Esp32c6AppMain.swift
 )
+
+# The qualification build supplies its own C entry point and must not also
+# link the shared smoke entry point. The flag is read above and defaults off,
+# so the shared smoke image keeps `Esp32c6AppMain.swift`.
+if(AXOLOTY_QUALIFICATION_CARRIER_SCENARIO)
+    list(REMOVE_ITEM AXOLOTY_SWIFT_SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/Esp32c6AppMain.swift"
+    )
+endif()
 
 set(AXOLOTY_CORPUS_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/GeneratedCorpus.swift")
 set(AXOLOTY_CORPUS_FIXTURE_DIR "${AXOLOTY_APPLICATION_DIR}/fixtures")
@@ -135,7 +174,8 @@ idf_component_register(
 # AxolotyZenohCore module. Order its publication and the Core-generated
 # facade module map before the main Swift compile, but only for the profile
 # that selected it: the component registers empty for every other profile.
-get_filename_component(AXOLOTY_SELECTED_TRANSPORT_NAME "${AXOLOTY_TRANSPORT_DIR}" NAME)
+# AXOLOTY_SELECTED_TRANSPORT_NAME is computed above, before the transport
+# manifest is included.
 set(AXOLOTY_MAIN_BRIDGING_HEADER "${CMAKE_CURRENT_LIST_DIR}/BridgingHeader.h")
 if(AXOLOTY_SELECTED_TRANSPORT_NAME STREQUAL "zenoh-pico")
     add_dependencies(${COMPONENT_LIB} axoloty_zenoh_core_module_alias)
@@ -155,6 +195,19 @@ idf_component_register_swift(
     BRIDGING_HEADER ${AXOLOTY_MAIN_BRIDGING_HEADER}
     SRCS ${AXOLOTY_SWIFT_SOURCES}
 )
+
+# The carrier-scenario device source is guarded by this macro. It is defined
+# for every build so the source compiles to nothing when the qualification
+# entry point is not selected.
+if(AXOLOTY_QUALIFICATION_CARRIER_SCENARIO)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE
+        AXOLOTY_QUALIFICATION_CARRIER_SCENARIO=1
+    )
+else()
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE
+        AXOLOTY_QUALIFICATION_CARRIER_SCENARIO=0
+    )
+endif()
 
 # `idf_component_register_swift` resets COMPILE_OPTIONS to its Embedded
 # target defaults. Add the report-generated facade map afterwards so both the
