@@ -28,6 +28,14 @@ HEX64 = re.compile(r"[0-9a-f]{64}")
 VERSION = re.compile(r"^(\d+\.\d+\.\d+)-embedded\.([1-9]\d*)$")
 STATUSES = {"passed", "failed", "unexecuted"}
 
+# An ESP-IDF dependency manifest supplies SDK components, not independently
+# pinned libraries. The one transport whose backend comes from it is the
+# SDK-supplied MQTT client, so an ESP-IDF-sourced backend identity is pinned
+# here. A manifest cannot cite the correct SDK version while naming a library
+# the image does not use; a new ESP-IDF-sourced transport must extend this map
+# and the generator together.
+ESPIDF_BACKENDS = {"mqtt-espidf": "esp-idf/mqtt"}
+
 
 def load(path):
     try:
@@ -43,6 +51,79 @@ def is_nonempty_string(value):
 
 def is_within(candidate, directory):
     return os.path.commonpath([candidate, directory]) == directory and candidate != directory
+
+
+def espidf_component_version(text, component):
+    """Return the version pinned for a component in an ESP-IDF dependencies.lock."""
+    lines = text.splitlines()
+    start = None
+    for index, line in enumerate(lines):
+        if re.match(r"^ {2}[^\s].*:\s*$", line) and line.strip() == "%s:" % component:
+            start = index
+            break
+    if start is None:
+        return None
+    for line in lines[start + 1:]:
+        if re.match(r"^ {2}[^\s]", line):
+            break
+        match = re.match(r"^ {4}version:\s*'?([^'\s]+)'?\s*$", line)
+        if match:
+            return match.group(1)
+    return None
+
+
+def validate_transport_source(transport, source_path, relative):
+    """Cross-check the manifest transport identity against the file it cites."""
+    problems = []
+    if source_path.endswith(".json"):
+        try:
+            source = load(source_path)
+        except ValueError as error:
+            return ["%s is not readable JSON: %s" % (relative, error)]
+        if not isinstance(source, dict):
+            return ["%s must be a JSON object" % relative]
+        component = source.get("component")
+        if is_nonempty_string(component) and transport.get("backend") != component:
+            problems.append("transport.backend %r does not match %s component %r"
+                            % (transport.get("backend"), relative, component))
+        version = source.get("version")
+        if not is_nonempty_string(version):
+            problems.append("%s does not declare a version" % relative)
+        elif transport.get("version") != version:
+            problems.append("transport.version %r does not match %s version %r"
+                            % (transport.get("version"), relative, version))
+        revision = source.get("revision")
+        if revision is None:
+            if transport.get("revision") is not None:
+                problems.append("transport.revision is %r but %s pins no revision"
+                                % (transport.get("revision"), relative))
+        elif transport.get("revision") != revision:
+            problems.append("transport.revision %r does not match %s revision %r"
+                            % (transport.get("revision"), relative, revision))
+    else:
+        if not is_nonempty_string(transport.get("component")):
+            problems.append("transport.component is required when the backend version comes from an ESP-IDF dependency manifest")
+            return problems
+        expected_backend = ESPIDF_BACKENDS.get(transport.get("name"))
+        if expected_backend is None:
+            problems.append("transport.name %r has no ESP-IDF backend identity" % transport.get("name"))
+        elif transport.get("backend") != expected_backend:
+            problems.append("transport.backend %r does not match the ESP-IDF backend %r for transport %r"
+                            % (transport.get("backend"), expected_backend, transport.get("name")))
+        try:
+            with open(source_path, encoding="utf-8") as handle:
+                text = handle.read()
+        except OSError as error:
+            return ["%s is not readable: %s" % (relative, error)]
+        version = espidf_component_version(text, transport["component"])
+        if version is None:
+            problems.append("transport.component %r is not a component of %s" % (transport["component"], relative))
+        elif transport.get("version") != version:
+            problems.append("transport.version %r does not match %s component %r version %r"
+                            % (transport.get("version"), relative, transport["component"], version))
+        if transport.get("revision") is not None:
+            problems.append("transport.revision must be null for an ESP-IDF dependency manifest")
+    return problems
 
 
 def load_revocation(repo_root, manifest_path):
@@ -128,6 +209,10 @@ def validate(repo_root, manifest_path, require_qualified, allow_revoked):
     revocation, revocation_problems = load_revocation(repo_root, manifest_path)
     if allow_revoked and revocation is not None:
         return revocation_problems, revocation
+    # A JSON document that is not an object cannot be a certificate. Report it
+    # as a violation instead of failing later on an unrelated attribute access.
+    if not isinstance(manifest, dict):
+        return ["manifest must be a JSON object, found %s" % type(manifest).__name__], revocation
 
     problems = []
     problems.extend(revocation_problems)
@@ -171,7 +256,7 @@ def validate(repo_root, manifest_path, require_qualified, allow_revoked):
     if not is_nonempty_string(manifest.get("board")):
         problems.append("board is required; a release names the qualified board")
 
-    # --- Transport backend. --------------------------------------------------
+    # --- Transport backend: identity and version from the pinned source. -----
     transport = manifest.get("transport")
     if not isinstance(transport, dict):
         problems.append("transport must be an object")
@@ -179,6 +264,34 @@ def validate(repo_root, manifest_path, require_qualified, allow_revoked):
     for field in ("name", "backend", "version", "versionSource"):
         if not is_nonempty_string(transport.get(field)):
             problems.append("transport.%s is required" % field)
+    # `component` names the pinned entry that supplies the backend, and
+    # `revision` is the backend commit when its source pins one. Both are
+    # required because a backend with no identity is not a certificate.
+    if "component" not in transport:
+        problems.append("transport.component is required; it names the pinned entry that supplies the backend")
+    elif transport.get("component") is not None and not is_nonempty_string(transport.get("component")):
+        problems.append("transport.component must be a non-empty string or null")
+    if "revision" not in transport:
+        problems.append("transport.revision is required; it is the pinned backend commit or null")
+    elif transport.get("revision") is not None and not HEX40.fullmatch(str(transport.get("revision"))):
+        problems.append("transport.revision must be null or a full commit SHA")
+
+    version_source = transport.get("versionSource")
+    if is_nonempty_string(version_source):
+        platform_name = manifest.get("platform")
+        platform_dir = (os.path.abspath(os.path.join(repo_root, "Platforms", platform_name))
+                        if is_nonempty_string(platform_name) else None)
+        if os.path.isabs(version_source) or ".." in version_source.split("/"):
+            problems.append("transport.versionSource must be a repository-relative path")
+        else:
+            source_path = os.path.abspath(os.path.join(repo_root, version_source))
+            if platform_dir is None or not is_within(source_path, platform_dir):
+                problems.append("transport.versionSource %r is outside Platforms/%s"
+                                % (version_source, platform_name))
+            elif not os.path.isfile(source_path):
+                problems.append("transport.versionSource %r does not exist" % version_source)
+            else:
+                problems.extend(validate_transport_source(transport, source_path, version_source))
 
     # --- Axoloty identity: the lock decides a release. -----------------------
     axoloty = manifest.get("axoloty")

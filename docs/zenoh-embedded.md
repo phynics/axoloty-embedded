@@ -241,23 +241,18 @@ backend; each is visible in the code or in a returned result code.
 - **No device or resource evidence.** None was produced and none was invented.
   See `docs/evidence/esp32c6-zenoh-*.json`.
 
+The release manifest now knows this backend. `write-release-manifest.mjs` reads
+the `eclipse-zenoh/zenoh-pico` identity, version, and revision from
+`Platforms/esp32c6-idf/dependencies/zenoh-pico.lock.json` and records them in
+`transport.backend`, `transport.component`, `transport.version`, and
+`transport.revision`. The MQTT backend keeps its SDK-supplied identity from
+`dependencies.lock`. `Tools/validate-release-manifest.py` cross-checks both
+against the source the manifest cites, so a Zenoh certificate cannot carry the
+SDK version. This correction changes no device result and claims no Zenoh
+release.
+
 ## Ambiguities and honest gaps
 
-- **The release manifest generator still lacks a Zenoh backend identity.**
-  `Platforms/esp32c6-idf/tools/write-release-manifest.mjs` maps
-  `transport.backend` only for `mqtt-espidf` and reads the backend version from
-  the `idf` entry of `dependencies.lock`. That generator is release provenance
-  work (`axoloty-embedded#3`) and is left untouched here. The Zenoh image was
-  built and its image artifact observed; a release manifest for it is not
-  claimed by this change.
-- **The release manifest does not know the Zenoh backend.**
-  `Platforms/esp32c6-idf/tools/write-release-manifest.mjs` maps
-  `transport.backend` only for `mqtt-espidf` and reads the backend version from
-  the `idf` entry of `dependencies.lock`. A built Zenoh profile would therefore
-  record the SDK version as its backend version. That generator is release
-  provenance work (`axoloty-embedded#3`) and is left untouched here; the
-  concrete gap is recorded so the profile can never be certified on a field no
-  producer computes.
 - **A profile claims its Core revision only with device evidence.** The lock is
   now above the facade, so both profiles declare `68e46c76` and no longer need
   `AXOLOTY_PREVIEW_CORE_REVISION`. Nothing in this repository has run the Zenoh

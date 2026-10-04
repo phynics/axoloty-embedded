@@ -108,6 +108,7 @@ jobs:
           --require build:mqtt-host-seam
           --require build:profile-isolation
           --require build:unsupported-validator
+          --require build:manifest-generator
           --require build:zenoh-host-seam
           --require build:zenoh-report-contract
           --require build:cmake-escape

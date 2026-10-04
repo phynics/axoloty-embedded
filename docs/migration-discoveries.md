@@ -198,6 +198,10 @@ outside the manifest format; none is fixed here.
 - **Why out of scope:** giving each transport an independently pinned backend
   version is a dependency-management change, not a manifest-format change. The
   manifest records what exists today and names its source.
+- **Resolved for Zenoh:** `Platforms/esp32c6-idf/dependencies/zenoh-pico.lock.json`
+  is that independent pin, and `write-release-manifest.mjs` now reads its
+  `component`, `version`, and `revision` into the manifest's `transport` block.
+  The MQTT backend keeps the SDK version because it has no library of its own.
 
 ## 14. The Core preparation report does not carry the Axoloty version
 

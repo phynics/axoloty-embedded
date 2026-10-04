@@ -165,6 +165,12 @@ if wanted build; then
     check_script unsupported-validator \
         'node is not available for the unsupported-status validator check' \
         node Tests/embedded/test-unsupported-validator.mjs
+    # The release manifest is the compatibility certificate. This runs the real
+    # generator against tracked-shape fixtures, so a backend that silently takes
+    # the SDK version for the wrong transport is observed rather than assumed.
+    check_script manifest-generator \
+        'node is not available for the release-manifest generator check' \
+        node Tools/test-write-release-manifest.mjs
     check_script zenoh-host-seam \
         'swiftc or a host C compiler is not available for the Zenoh seam check' \
         Tests/embedded/run-zenoh-host-test.sh
