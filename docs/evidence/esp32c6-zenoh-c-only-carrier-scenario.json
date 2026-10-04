@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "profile": "esp32c6-zenoh",
+  "check": "c-only-carrier-scenario",
+  "tier": "device",
+  "status": "unexecuted",
+  "recordedAt": "2026-10-04",
+  "coreRevision": "68e46c764a555a027f2779c74e8dd04a6bc4bb06",
+  "reason": "no device port was named (AXOLOTY_DEVICE_PORT is unset), so no ESP32-C6 board ran the C-only carrier scenario"
+}

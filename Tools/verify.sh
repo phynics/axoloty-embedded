@@ -168,6 +168,14 @@ if wanted build; then
     check_script zenoh-host-seam \
         'swiftc or a host C compiler is not available for the Zenoh seam check' \
         Tests/embedded/run-zenoh-host-test.sh
+    # The C-only carrier scenario is the hardware-free half of the Zenoh
+    # qualification runner. It builds the real scenario core, the bounded
+    # report shim, and the transport-neutral counters against the host fake
+    # carrier, runs all thirteen steps, and validates the JSON Lines stream.
+    # It is not a device result; the profile gate records that separately.
+    check_script zenoh-c-only-scenario \
+        'a host C compiler or node is not available for the C-only carrier scenario check' \
+        Tests/embedded/run-zenoh-c-only-check.sh
     # The seam above trusts the preparation report. This proves it refuses a
     # report that breaks the contract, so the refusals are observed rather than
     # assumed; a seam that rejected every report would otherwise look identical.
@@ -277,6 +285,26 @@ if wanted device; then
                 record FAIL "device:$profile" 'the profile declares no executable qualify.sh'
                 failed=1
             fi
+            # A profile may own additional device gates, one per check, named
+            # qualify-<check>.sh. Each writes its own evidence record and
+            # records `unexecuted` when the board cannot drive it, so a gate
+            # that could not run does not block the ones that could.
+            for extra in Profiles/"$profile"/qualify-*.sh; do
+                [ -f "$extra" ] || continue
+                [ -x "$extra" ] || continue
+                label=$(basename "$extra" .sh)
+                printf '\n== device: %s %s on %s\n' "$profile" "$label" "$AXOLOTY_DEVICE_PORT"
+                status=0
+                "$extra" || status=$?
+                case "$status" in
+                    0) record PASS "device:$profile:$label" 'gate completed' ;;
+                    # 69 means the gate ran but this run could not drive the
+                    # check: it wrote its own `unexecuted` evidence record. That
+                    # is a SKIP for the tier, never a pass.
+                    69) unavailable "device:$profile:$label" 'the gate could not run its check on this host' ;;
+                    *) record FAIL "device:$profile:$label" 'gate failed'; failed=1 ;;
+                esac
+            done
         done
     fi
 fi

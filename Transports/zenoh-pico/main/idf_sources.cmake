@@ -20,12 +20,22 @@ set(AXOLOTY_TRANSPORT_SWIFT_SOURCES
 # pinned zenoh-pico. zenoh_endpoint.c derives the operator-configured router
 # endpoint from the private network configuration header.
 # carrier_diagnostics.c holds the carrier counters without SDK or facade headers.
+#
+# zenoh_carrier_report.c and zenoh_carrier_scenario.c are the C-only
+# qualification scenario: the bounded JSON Lines reporting shim and the
+# carrier-mechanics steps the device gate drives. They are composed into the
+# image so the Embedded C toolchain compiles the exact sources the
+# qualification run executes, and the host check compiles the same files. They
+# hold no protocol rule and no Zenoh type; the scenario drives only the
+# Core-owned facade ABI and the transport's own counters.
 set(AXOLOTY_TRANSPORT_C_SOURCES
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_sample_validation.c"
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_pico_queue.c"
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_pico_facade.c"
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_endpoint.c"
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/carrier_diagnostics.c"
+    "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_carrier_report.c"
+    "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_carrier_scenario.c"
 )
 
 # The pinned zenoh-pico wrapper component supplies the carrier seam backend,
