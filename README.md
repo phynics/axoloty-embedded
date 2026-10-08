@@ -7,10 +7,18 @@ Axoloty owns the portable protocol and runtime implementation and proves it
 stays Embedded-Swift compatible. The split is tracked by
 [epic #845](https://github.com/phynics/axoloty/issues/845).
 
-> **Bootstrap state.** The repository layout and the Core dependency contract
-> exist. Firmware migration is
-> [#848](https://github.com/phynics/axoloty/issues/848) and has not started,
-> so no buildable profile lives here yet.
+## Current state
+
+| Profile | Application × platform × transport | Builds | Device qualification |
+|---|---|---|---|
+| [`esp32c6-mqtt`](./Profiles/esp32c6-mqtt) | device-smoke-agent × ESP32-C6 (ESP-IDF) × ESP-IDF MQTT | yes, reproducibly | **none current**: `0.8.2-embedded.2` is [revoked](./releases/revocations/esp32c6-mqtt) |
+| [`esp32c6-zenoh`](./Profiles/esp32c6-zenoh) | device-smoke-agent × ESP32-C6 (ESP-IDF) × zenoh-pico 1.10.0 | yes, reproducibly | not yet run ([#8](https://github.com/phynics/axoloty-embedded/issues/8)) |
+
+Both profiles requalify on hardware against a tagged Core release under the
+[finalization plan](https://github.com/phynics/axoloty/issues/796#issuecomment-6047498382).
+A profile counts as qualified only through an unrevoked certificate in
+[`releases/`](./releases) backed by device-tier evidence in
+[`docs/evidence/`](./docs/evidence).
 
 ## Ownership boundary
 
@@ -40,14 +48,15 @@ Tools/          repository tooling
 docs/           this repository's contracts
 ```
 
-The first profile will be ESP32-C6 + MQTT. ESP-IDF is the platform integration
-that exists first, not a permanent architectural assumption.
+ESP-IDF is the platform integration that exists first, not a permanent
+architectural assumption.
 
 ## Exact Core dependency
 
 [`axoloty-core.lock.json`](./axoloty-core.lock.json) names the exact Axoloty
-revision this repository builds against. The commit SHA is authoritative; the
-version and tag are descriptive. See
+revision this repository builds against. The commit SHA is authoritative. The
+tag is set only when that commit is a Core release, and a release certificate
+requires one. See
 [docs/core-dependency.md](./docs/core-dependency.md).
 
 Prepare Core for a build:
