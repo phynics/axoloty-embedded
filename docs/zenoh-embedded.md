@@ -128,6 +128,9 @@ Carried from `#797`'s qualification, not re-measured here:
   zenoh-pico silently drops a reassembled message longer than it: the first
   on-device carrier scenario lost its maximum payload until it was restored;
 - `Z_RUNTIME_MAX_TASKS` reduced from `64` to `8`;
+- `Z_RUNTIME_IDLE_READ_TASK_SLEEP` raised from `0` to `10` ms. At `0` the
+  unicast read task spins on an idle socket, which starved the IDLE task on
+  the single-core ESP32-C6 until the task watchdog fired;
 - `esp_driver_uart` required even with serial links disabled.
 
 These are a starting point, not a measured optimum. The qualification issue
