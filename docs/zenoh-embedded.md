@@ -189,6 +189,16 @@ backend; each is visible in the code or in a returned result code.
   client transport by walking the single unicast link, so the count is 1 while
   that link is up and 0 otherwise. The backend counts the callback invocations
   exactly as the contract describes, and a router-less peer session reports 0.
+- **A router counts only while its link accepts a keep-alive.** zenoh-pico
+  1.10 treats a receive error on a TCP stream as "nothing to read", so after a
+  short Wi-Fi outage it keeps reporting a router over a link that is already
+  gone, until its keep-alive task notices up to a third of the lease later.
+  The first publication in that window failed with `_Z_ERR_TRANSPORT_TX_FAILED`.
+  The pico backend sends a keep-alive before reporting a router and reports 0
+  when that send fails, so `waitForReconnect` returns only once zenoh-pico has
+  reconnected. The public `zp_send_keep_alive` exists only without
+  `Z_FEATURE_MULTI_THREAD`, so the backend calls the internal
+  `_zp_send_keep_alive` it wraps, pinned with the zenoh-pico revision.
 - **Multicast scouting is a no-op in this profile.** The contract carries the
   flag. The backend inserts it into the Zenoh configuration, and
   `Z_FEATURE_SCOUTING` and `Z_FEATURE_LINK_UDP_MULTICAST` are 0 in the pinned
