@@ -95,7 +95,14 @@ set(ZENOH_PICO_TWEAK 0)
 # starting points, not a measured optimum; the hardware gate sets the final
 # numbers. Every token in config.h.in is set so the generated header has no
 # leftover @...@ placeholder.
-set(FRAG_MAX_SIZE 1024)
+#
+# FRAG_MAX_SIZE is the largest message zenoh-pico reassembles from fragments
+# (src/transport/unicast/rx.c drops anything longer). It must hold the
+# facade's largest frame: a 2,048-byte payload, a 256-byte key, and message
+# headers. The 1024 starting point silently lost every frame above about
+# 1 KB on hardware (carrier scenario step maximum_payload), so it stays at
+# zenoh-pico's own default.
+set(FRAG_MAX_SIZE 4096)
 set(BATCH_UNICAST_SIZE 1024)
 set(BATCH_MULTICAST_SIZE 2048)
 set(Z_CONFIG_SOCKET_TIMEOUT 100)

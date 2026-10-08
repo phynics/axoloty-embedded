@@ -122,8 +122,11 @@ Carried from `#797`'s qualification, not re-measured here:
 - query, queryable, liveliness, matching, advanced publication/subscription,
   scouting, multicast, and peer mode disabled;
 - serial, Bluetooth, WebSocket, and TLS links disabled;
-- `FRAG_MAX_SIZE` and `BATCH_UNICAST_SIZE` reduced from `4096`/`2048` to
-  `1024` each;
+- `BATCH_UNICAST_SIZE` reduced from `2048` to `1024`;
+- `FRAG_MAX_SIZE` kept at zenoh-pico's `4096`. It was first reduced to `1024`,
+  which is below the facade's 2,048-byte payload plus 256-byte key, and
+  zenoh-pico silently drops a reassembled message longer than it: the first
+  on-device carrier scenario lost its maximum payload until it was restored;
 - `Z_RUNTIME_MAX_TASKS` reduced from `64` to `8`;
 - `esp_driver_uart` required even with serial links disabled.
 
