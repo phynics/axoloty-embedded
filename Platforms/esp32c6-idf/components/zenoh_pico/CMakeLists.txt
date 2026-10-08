@@ -109,7 +109,11 @@ set(Z_CONFIG_SOCKET_TIMEOUT 100)
 set(Z_TRANSPORT_LEASE 10000)
 set(Z_TRANSPORT_LEASE_EXPIRE_FACTOR 3)
 set(Z_RUNTIME_MAX_TASKS 8)
-set(Z_RUNTIME_IDLE_READ_TASK_SLEEP 0)
+# With 0, zenoh-pico's unicast read task returns "continue" when the socket
+# has nothing to read (src/transport/unicast/read.c) and runs again at once.
+# On the single-core ESP32-C6 that loop starved the IDLE task until the task
+# watchdog fired during an idle Zenoh session. Sleep 10 ms between empty reads.
+set(Z_RUNTIME_IDLE_READ_TASK_SLEEP 10)
 set(Z_TRANSPORT_ACCEPT_TIMEOUT 1000)
 set(Z_TRANSPORT_CONNECT_TIMEOUT 10000)
 set(Z_FEATURE_UNSTABLE_API 0)
