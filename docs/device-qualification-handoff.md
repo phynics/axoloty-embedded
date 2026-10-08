@@ -1,10 +1,11 @@
 # Handoff: qualifying esp32c6-mqtt on a real board
 
-This runbook was executed for the first time on 2026-09-19 and the profile is
-now qualified. Keep it for the next board and for the next lock raise: the
-procedure below is unchanged and still takes about twenty minutes.
+This runbook was first executed on 2026-09-19. That qualification was later
+revoked (see `releases/revocations/esp32c6-mqtt/`), so no profile is qualified
+at the current lock. Run this procedure after every lock raise. It takes
+about twenty minutes for the serial smoke run.
 
-## Result of the first run (2026-09-19)
+## Result of the first run (2026-09-19, historical)
 
 | | |
 |---|---|
@@ -44,10 +45,11 @@ You need:
 - Your user in the `dialout` group, or equivalent access to the serial device
 - An MQTT broker reachable from the board, for the network portion
 
-**A note on the lock.** This branch pins Axoloty 0.8.2 (`827e598f`). If
-`origin/main` has since raised the lock, `Tools/check-invariants.sh` will tell
-you so and refuse — that is deliberate, not a bug. Qualify what this branch
-pins, or repin and rebuild first. Do not qualify a mismatch.
+**A note on the lock.** Qualify exactly the Core revision that
+`axoloty-core.lock.json` pins on the branch you build. If the lock and your
+Core checkout disagree, `Tools/check-invariants.sh` and strict preparation
+refuse. That is deliberate, not a bug. Do not qualify a mismatch. A release
+certificate also requires the lock to name a Core release tag.
 
 ## Step 0 — a standalone clone, not a worktree
 
@@ -56,10 +58,10 @@ that path does not exist inside a container. Clone properly:
 
 ```bash
 git clone https://github.com/phynics/axoloty-embedded.git ~/axemb
-git -C ~/axemb checkout orchestrate/embedded-tickets-1-4
 
 git clone https://github.com/phynics/axoloty.git ~/axcore
-git -C ~/axcore checkout --detach 827e598f3d97c5e2e7986d7be4ba1d9a5eac7906
+core_revision=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["core"]["revision"])' ~/axemb/axoloty-core.lock.json)
+git -C ~/axcore checkout --detach "$core_revision"
 ```
 
 Both trees must be **clean**. Strict mode refuses a dirty Core, and the
