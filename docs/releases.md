@@ -103,7 +103,7 @@ in [docs/evidence.md](./evidence.md).
 | `compatibility.status` | `qualified`, `unqualified`, or `preview` | computed from evidence and mode |
 | `compatibility.description` | One-line support statement | computed from the fields above |
 | `axoloty.version` | Locked Axoloty version | lock (`null` in preview) |
-| `axoloty.tag` | Locked Axoloty tag | lock (`null` in preview) |
+| `axoloty.tag` | Locked Axoloty tag; a release requires one | lock (`null` in preview) |
 | `axoloty.sha` | Exact Core commit | Core preparation report, cross-checked against the lock |
 | `axoloty.dirty` | Core checkout clean? | Core preparation report |
 | `axoloty.contractSha256` | Consumer contract hash | Core preparation report |

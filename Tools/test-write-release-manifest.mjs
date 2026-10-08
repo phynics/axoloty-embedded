@@ -15,7 +15,10 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, "..");
 const GENERATOR = path.join(repo, "Platforms", "esp32c6-idf", "tools", "write-release-manifest.mjs");
-const lock = JSON.parse(fs.readFileSync(path.join(repo, "axoloty-core.lock.json"), "utf8")).core;
+const repositoryLock = JSON.parse(fs.readFileSync(path.join(repo, "axoloty-core.lock.json"), "utf8")).core;
+// Release certificates require a tagged lock. The fixture names a tag even when
+// the repository lock is between releases.
+const lock = { ...repositoryLock, tag: repositoryLock.tag || `v${repositoryLock.version}` };
 const CORE_SHA = lock.revision;
 const VERSION = `${lock.version}-embedded.2`;
 const FIRMWARE_SHA = "b".repeat(40);
@@ -125,6 +128,20 @@ try {
       "the refusal did not name the missing backend declaration");
   }
   assert.ok(failed, "a transport with no backend declaration was accepted");
+
+  // A certificate names a tagged Core release. An untagged lock is between
+  // releases, so the generator must refuse instead of labelling a commit.
+  writeJson(path.join(workspace, "axoloty-core.lock.json"), { schemaVersion: 1, core: { ...lock, tag: null } });
+  let untaggedFailed = false;
+  try {
+    generate(workspace, path.join(workspace, "Profiles", "esp32c6-mqtt", "profile.json"),
+      path.join(workspace, "out", "untagged.json"));
+  } catch (error) {
+    untaggedFailed = true;
+    assert.match(String(error.stderr), /names no Core tag/,
+      "the refusal did not name the missing Core tag");
+  }
+  assert.ok(untaggedFailed, "a release certificate was written against an untagged lock");
 } finally {
   fs.rmSync(workspace, { recursive: true, force: true });
 }

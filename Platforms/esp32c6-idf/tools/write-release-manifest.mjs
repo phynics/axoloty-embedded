@@ -102,6 +102,9 @@ if (!versionMatch) {
 if (!preview && versionMatch[1] !== lock.core?.version) {
   throw new Error(`VERSION base ${versionMatch[1]} does not match the lock version ${lock.core?.version}`);
 }
+if (!preview && !lock.core?.tag) {
+  throw new Error("the lock names no Core tag; a release certificate must lock a tagged Core revision");
+}
 const axolotyVersion = preview ? null : lock.core.version;
 
 // --- Transport backend identity and version, from a tracked source.
