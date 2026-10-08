@@ -25,6 +25,9 @@
 
 #include "esp_timer.h"
 #include "zenoh-pico.h"
+// Internal: the public zp_send_keep_alive exists only when
+// Z_FEATURE_MULTI_THREAD is 0. See axoloty_zenoh_connected_router_count.
+#include "zenoh-pico/net/session.h"
 
 #include "axoloty_zenoh.h"
 #include "zenoh_pico_queue.h"
@@ -235,6 +238,18 @@ axoloty_zenoh_result_t axoloty_zenoh_connected_router_count(const axoloty_zenoh_
     z_closure(&closure, count_connected_router, NULL, &count);
     if (z_info_routers_zid(session_loan(session_index), z_move(closure)) < 0) {
         return AXOLOTY_ZENOH_TRANSPORT_ERROR;
+    }
+    // zenoh-pico 1.10 treats a receive error on a TCP stream as "nothing to
+    // read" (src/transport/unicast/read.c), so a link that Wi-Fi loss already
+    // tore down keeps reporting its router until the keep-alive or lease task
+    // notices, up to a third of the lease later. A router counts as connected
+    // only if the link still accepts a keep-alive. A failed send does not mark
+    // the transport as transmitted, so zenoh-pico's own keep-alive task still
+    // detects the loss and reconnects. The public zp_send_keep_alive is
+    // compiled only without Z_FEATURE_MULTI_THREAD, so this calls the internal
+    // function it wraps, which is pinned with the zenoh-pico revision.
+    if (count > 0u && _zp_send_keep_alive(_Z_RC_IN_VAL(session_loan(session_index))) < 0) {
+        count = 0u;
     }
     *out_count = count;
     return AXOLOTY_ZENOH_OK;
