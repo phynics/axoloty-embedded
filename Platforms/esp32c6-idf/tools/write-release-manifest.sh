@@ -52,6 +52,6 @@ set -e
 
 case "$node_status" in
     0) echo "release manifest written: $output" ;;
-    3) echo "no release manifest: this is a development build against an off-lock Core" ;;
+    3) echo "no release manifest: an off-lock Core or an untagged lock cannot be certified" ;;
     *) exit "$node_status" ;;
 esac

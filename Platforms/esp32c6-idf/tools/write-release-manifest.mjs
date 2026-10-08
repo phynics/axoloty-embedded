@@ -103,7 +103,11 @@ if (!preview && versionMatch[1] !== lock.core?.version) {
   throw new Error(`VERSION base ${versionMatch[1]} does not match the lock version ${lock.core?.version}`);
 }
 if (!preview && !lock.core?.tag) {
-  throw new Error("the lock names no Core tag; a release certificate must lock a tagged Core revision");
+  // A lock between Core releases builds ordinary firmware. A certificate
+  // must name a tagged Core release, so write nothing, as for an off-lock
+  // development build, instead of failing the build.
+  console.error("write-release-manifest: the lock names no Core tag, so this build cannot be certified and no release manifest was written");
+  process.exit(3);
 }
 const axolotyVersion = preview ? null : lock.core.version;
 

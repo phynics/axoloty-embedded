@@ -132,16 +132,19 @@ try {
   // A certificate names a tagged Core release. An untagged lock is between
   // releases, so the generator must refuse instead of labelling a commit.
   writeJson(path.join(workspace, "axoloty-core.lock.json"), { schemaVersion: 1, core: { ...lock, tag: null } });
-  let untaggedFailed = false;
+  const untaggedOutput = path.join(workspace, "out", "untagged.json");
+  let untaggedStatus = 0;
   try {
-    generate(workspace, path.join(workspace, "Profiles", "esp32c6-mqtt", "profile.json"),
-      path.join(workspace, "out", "untagged.json"));
+    generate(workspace, path.join(workspace, "Profiles", "esp32c6-mqtt", "profile.json"), untaggedOutput);
   } catch (error) {
-    untaggedFailed = true;
+    untaggedStatus = error.status;
     assert.match(String(error.stderr), /names no Core tag/,
-      "the refusal did not name the missing Core tag");
+      "the skip did not name the missing Core tag");
   }
-  assert.ok(untaggedFailed, "a release certificate was written against an untagged lock");
+  // Status 3 is the wrapper's 'no release manifest' outcome: the build
+  // succeeds, and only the certificate is withheld.
+  assert.equal(untaggedStatus, 3, "an untagged lock did not take the no-certificate path");
+  assert.ok(!fs.existsSync(untaggedOutput), "a release certificate was written against an untagged lock");
 } finally {
   fs.rmSync(workspace, { recursive: true, force: true });
 }
