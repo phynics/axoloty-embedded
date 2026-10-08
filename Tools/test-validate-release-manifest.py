@@ -13,7 +13,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 VALIDATOR = ROOT / "Tools" / "validate-release-manifest.py"
-LOCK = json.loads((ROOT / "axoloty-core.lock.json").read_text(encoding="utf-8"))["core"]
+REPOSITORY_LOCK = json.loads((ROOT / "axoloty-core.lock.json").read_text(encoding="utf-8"))["core"]
+# Release certificates require a tagged lock. The fixture names a tag even when
+# the repository lock is between releases.
+LOCK = {**REPOSITORY_LOCK, "tag": REPOSITORY_LOCK.get("tag") or "v" + REPOSITORY_LOCK["version"]}
 VERSION = "%s-embedded.9" % LOCK["version"]
 IMAGE_SHA = "a" * 64
 FIRMWARE_SHA = "b" * 40
@@ -163,6 +166,16 @@ with tempfile.TemporaryDirectory() as temporary:
         check=False,
     )
     require(relative, 0, "relative repository root was rejected")
+    untagged_lock = {**LOCK, "tag": None}
+    write_json(repo / "axoloty-core.lock.json", {"schemaVersion": 1, "core": untagged_lock})
+    document = json.loads(manifest.read_text(encoding="utf-8"))
+    document["axoloty"]["tag"] = None
+    write_json(manifest, document)
+    require(run(repo, manifest, "--require-qualified"), 1, "a certificate against an untagged lock was accepted")
+    write_json(repo / "axoloty-core.lock.json", {"schemaVersion": 1, "core": LOCK})
+    document["axoloty"]["tag"] = LOCK["tag"]
+    write_json(manifest, document)
+    require(run(repo, manifest, "--require-qualified"), 0, "restoring the tagged lock did not re-qualify the manifest")
     # docs/evidence.md: a build record proves the artifact compiles, not that
     # the profile works. It must not satisfy a qualified manifest's device
     # evidence, even when its checksum and Core revision match exactly.

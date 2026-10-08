@@ -316,6 +316,8 @@ def validate(repo_root, manifest_path, require_qualified, allow_revoked):
             problems.append("axoloty.version does not match the lock version")
         if axoloty.get("tag") != lock_core.get("tag"):
             problems.append("axoloty.tag does not match the lock tag")
+        if not is_nonempty_string(axoloty.get("tag")):
+            problems.append("axoloty.tag is required; a release certificate must name a tagged Core revision")
     elif mode == "preview":
         if axoloty_sha == lock_core.get("revision"):
             problems.append("a preview manifest must build an off-lock Axoloty revision")

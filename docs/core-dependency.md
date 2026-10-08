@@ -11,7 +11,7 @@ This repository builds against one exact Axoloty revision.
 | `core.identity` | Expected repository identity |
 | `core.url` | Fetch URL |
 | `core.version` | Axoloty release version, descriptive |
-| `core.tag` | Release tag, descriptive |
+| `core.tag` | Release tag of exactly `core.revision`, or `null` between releases; checked by the `lock-tag` invariant |
 | `core.revision` | **Authoritative** 40-character commit SHA |
 | `core.revisionFormat` | `git-commit-sha1` |
 | `core.consumerContractPath` | Contract path inside the Core checkout |
@@ -92,8 +92,11 @@ so a release or CI build cannot silently consume uncommitted Core changes.
 1. Merge the Core change in `phynics/axoloty` and let it release, or pick the
    exact commit to move to.
 2. Update `core.revision`, and `core.version` and `core.tag` with it. The
-   version and tag follow Core's own `VERSION` and release tag at that commit;
-   they do not have to change when the revision moves.
+   version follows Core's own `VERSION` file at that commit. The tag is set
+   only when that exact commit is a Core release tag; otherwise it is `null`,
+   and no release certificate can be written until the lock moves to a tag.
+   `Tools/check-invariants.sh` (`lock-tag`) refuses a tag that resolves to
+   another commit.
 3. Run `Tools/prepare-core.sh` with `AXOLOTY_STRICT_CORE=1` from a clean tree,
    and read the report the run actually wrote. Do not assume its shape from
    the previous revision.

@@ -96,6 +96,39 @@ PY
     [ -n "$lock_revision" ] && pass lock "Core revision ${lock_revision:0:12} is well formed"
 fi
 
+# 1b. A lock tag names the locked revision.
+# ---------------------------------------------------------------------------
+# A null tag means the lock sits between Core releases; release certificates
+# refuse it. A non-null tag is a claim that the revision is that release, so
+# it must resolve to exactly the locked commit. Resolve it through the local
+# Core checkout when AXOLOTY_SOURCE_DIR names one, otherwise through the
+# lock's URL. When neither is reachable, report a skip, never a pass.
+
+lock_tag="$(python3 -c 'import json,sys; t=json.load(open(sys.argv[1])).get("core",{}).get("tag"); print(t or "")' axoloty-core.lock.json 2>/dev/null || true)"
+lock_url="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("core",{}).get("url",""))' axoloty-core.lock.json 2>/dev/null || true)"
+if [ -z "$lock_revision" ]; then
+    skip lock-tag 'the lock revision could not be read'
+elif [ -z "$lock_tag" ]; then
+    pass lock-tag "the lock names no Core tag; ${lock_revision:0:12} is between releases and cannot be certified"
+else
+    tag_revision=''
+    if [ -n "${AXOLOTY_SOURCE_DIR:-}" ] && git -C "$AXOLOTY_SOURCE_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+        tag_revision="$(git -C "$AXOLOTY_SOURCE_DIR" rev-parse -q --verify "refs/tags/${lock_tag}^{commit}" 2>/dev/null || true)"
+    fi
+    if [ -z "$tag_revision" ] && [ -n "$lock_url" ]; then
+        tag_refs="$(timeout 30 git ls-remote --tags "$lock_url" "refs/tags/${lock_tag}" "refs/tags/${lock_tag}^{}" 2>/dev/null || true)"
+        tag_revision="$(printf '%s\n' "$tag_refs" | awk '/\^\{\}$/ { print $1; found=1; exit } END { }')"
+        [ -n "$tag_revision" ] || tag_revision="$(printf '%s\n' "$tag_refs" | awk 'NF { print $1; exit }')"
+    fi
+    if [ -z "$tag_revision" ]; then
+        skip lock-tag "could not resolve Core tag ${lock_tag} without a Core checkout or network access"
+    elif [ "$tag_revision" != "$lock_revision" ]; then
+        fail lock-tag "the lock names ${lock_tag} but pins ${lock_revision:0:12}; ${lock_tag} is ${tag_revision:0:12}"
+    else
+        pass lock-tag "Core tag ${lock_tag} is the locked revision ${lock_revision:0:12}"
+    fi
+fi
+
 # ---------------------------------------------------------------------------
 # 2. No portable Core source is copied into this repository.
 # ---------------------------------------------------------------------------
