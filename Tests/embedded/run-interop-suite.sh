@@ -79,12 +79,24 @@ run_step() {
     fi
 }
 
-run_step agent-exchange "$script_dir/run-agent-test.sh"
-run_step coatyjs-a env EMBEDDED_COATY_ROLE=A "$script_dir/run-coatyjs-interop-test.sh"
-run_step coatyjs-b env EMBEDDED_COATY_ROLE=B "$script_dir/run-coatyjs-interop-test.sh"
-run_step last-will "$script_dir/run-last-will-test.sh"
-run_step host-a env EMBEDDED_HOST_ROLE=A "$script_dir/run-host-interop-test.sh"
-run_step host-b env EMBEDDED_HOST_ROLE=B "$script_dir/run-host-interop-test.sh"
+# Dispatch each step in the order the plan printed. Both the plan and this loop
+# read the same `steps` list, so the two can never disagree.
+run_step_in_order() {
+    name=$1
+    case "$name" in
+        coatyjs-a) run_step coatyjs-a env EMBEDDED_COATY_ROLE=A "$script_dir/run-coatyjs-interop-test.sh" ;;
+        coatyjs-b) run_step coatyjs-b env EMBEDDED_COATY_ROLE=B "$script_dir/run-coatyjs-interop-test.sh" ;;
+        host-a) run_step host-a env EMBEDDED_HOST_ROLE=A "$script_dir/run-host-interop-test.sh" ;;
+        host-b) run_step host-b env EMBEDDED_HOST_ROLE=B "$script_dir/run-host-interop-test.sh" ;;
+        agent-exchange) run_step agent-exchange "$script_dir/run-agent-test.sh" ;;
+        last-will) run_step last-will "$script_dir/run-last-will-test.sh" ;;
+        *) echo "run-interop-suite: unknown step '$name'" >&2; exit 64 ;;
+    esac
+}
+
+for step in $steps; do
+    run_step_in_order "$step"
+done
 
 count() {
     printf '%s\n' $1 | grep -c . || true

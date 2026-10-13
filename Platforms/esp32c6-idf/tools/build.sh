@@ -94,8 +94,12 @@ report=$(realpath -e -- "$evidence_dir/preparation.json")
 
 # ESP-IDF materializes managed_components and generated metadata beside the
 # project. Build a writable copy under the proof root while retaining the
-# original repository for provenance checks.
-cp -a "$platform_dir/." "$build_project_dir/"
+# original repository for provenance checks. `cp -a` copies POSIX ACLs, and on
+# a filesystem with default ACLs the container's `cp` fails with
+# "preserving permissions ... Invalid argument" for every file. Preserving
+# `mode` trips the same ACL path; preserve timestamps only. cp still derives
+# each file's mode from the source through the umask, so execute bits survive.
+cp -R --preserve=timestamps "$platform_dir/." "$build_project_dir/"
 
 # IDF applies sdkconfig.defaults only when it first writes sdkconfig. An
 # existing sdkconfig silently keeps the old defaults, so a changed default

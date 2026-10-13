@@ -42,9 +42,12 @@ const command = (executable, args) => {
 };
 const sha256 = crypto.createHash("sha256").update(fs.readFileSync(artifact)).digest("hex");
 const firmwareRevision = command("git", ["-C", firmware, "rev-parse", "HEAD"]);
-const firmwareDirty = command("git", ["-C", firmware, "status", "--porcelain"]) !== null
-  ? command("git", ["-C", firmware, "status", "--porcelain"]) !== ""
-  : null;
+// Device harnesses write their evidence under docs/evidence while a suite runs,
+// and that output is not firmware input. Exclude it from the dirty check so a
+// harness build is not refused because a previous harness left evidence behind.
+// Any other tracked change still marks the checkout dirty.
+const firmwareStatus = command("git", ["-C", firmware, "status", "--porcelain", "--", ":(exclude)docs/evidence"]);
+const firmwareDirty = firmwareStatus !== null ? firmwareStatus !== "" : null;
 if (typeof firmwareRevision !== "string" || !/^[0-9a-f]{40}$/.test(firmwareRevision)) {
   throw new Error("firmware checkout revision is not a full commit SHA");
 }

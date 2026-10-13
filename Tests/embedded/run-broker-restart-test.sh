@@ -40,6 +40,7 @@ if [ ! -x "$mosquitto_bin" ]; then
     echo "run-broker-restart-test: managed broker binary not found at $mosquitto_bin" >&2
     exit 69
 fi
+require_broker_port_free "$broker_port"
 
 device_a=$AXOLOTY_DEVICE_PORT
 device_b=$EMBEDDED_DEVICE_B

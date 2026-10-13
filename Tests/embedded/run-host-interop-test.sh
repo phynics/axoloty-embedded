@@ -45,6 +45,7 @@ if [ -z "${AXOLOTY_DEVICE_PORT:-}" ]; then
     exit 69
 fi
 require_network_env
+require_broker_reachable
 if ! command -v swift >/dev/null 2>&1; then
     echo "run-host-interop-test: swift is required to build the host peer" >&2
     exit 69
