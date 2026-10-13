@@ -48,6 +48,7 @@ if [ -z "${AXOLOTY_DEVICE_PORT:-}" ]; then
     exit 69
 fi
 require_network_env "$profile"
+require_broker_reachable "$profile"
 
 scratch=${AXOLOTY_SCRATCH:-"$repo_root/.axoloty"}
 proof_run_id=${AXOLOTY_PROOF_RUN_ID:-network-test}

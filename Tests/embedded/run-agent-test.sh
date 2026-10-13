@@ -28,6 +28,7 @@ if [ -z "${AXOLOTY_DEVICE_PORT:-}" ] || [ -z "${EMBEDDED_DEVICE_B:-}" ]; then
     exit 69
 fi
 require_network_env
+require_broker_reachable
 
 device_a=$AXOLOTY_DEVICE_PORT
 device_b=$EMBEDDED_DEVICE_B

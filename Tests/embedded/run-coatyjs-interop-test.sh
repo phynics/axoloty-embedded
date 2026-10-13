@@ -47,6 +47,7 @@ if [ -z "${AXOLOTY_DEVICE_PORT:-}" ]; then
     exit 69
 fi
 require_network_env
+require_broker_reachable
 
 agent_dir=${COATYJS_AGENT_DIR:-/coatyjs-agent}
 runner="$agent_dir/embedded-interoperability-runner.js"
