@@ -87,6 +87,9 @@ const topicBenchmarkStatements = manifest.cases.map((corpusCase, index) =>
 const decodeBenchmarkStatements = manifest.cases.map((corpusCase, index) => {
   return `    if (try? ${dtoByFamily[corpusCase.family]}(from: corpusReader(corpusPayload${index}))) != nil { result &+= 1 }`;
 }).join("\n");
+const readerBenchmarkStatements = manifest.cases.map((corpusCase, index) =>
+  `    if corpusReader(corpusPayload${index}).length >= 0 { result &+= 1 }`,
+).join("\n");
 const encodeBenchmarkStatements = manifest.cases.map((corpusCase, index) => {
   return `    if let decoded = try? ${dtoByFamily[corpusCase.family]}(from: corpusReader(corpusPayload${index})) {
         withCorpusEncodeBuffer { output in
@@ -112,6 +115,8 @@ ${corpusConstants}
 struct EmbeddedBenchmarkMetrics {
     let topicParseP50ns: UInt32
     let topicParseP95ns: UInt32
+    let readerP50ns: UInt32
+    let readerP95ns: UInt32
     let dtoDecodeP50ns: UInt32
     let dtoDecodeP95ns: UInt32
     let dtoEncodeP50ns: UInt32
@@ -158,6 +163,13 @@ ${topicBenchmarkStatements}
 private func decodeBenchmarkPass() -> UInt32 {
     var result: UInt32 = 0
 ${decodeBenchmarkStatements}
+    return result
+}
+
+@inline(never)
+private func readerBenchmarkPass() -> UInt32 {
+    var result: UInt32 = 0
+${readerBenchmarkStatements}
     return result
 }
 
@@ -222,12 +234,14 @@ private func measureCorpusPass(_ pass: () -> UInt32) -> (UInt32, UInt32) {
 
 func benchmarkGeneratedCorpus() -> EmbeddedBenchmarkMetrics {
     let topic = measureCorpusPass(topicBenchmarkPass)
+    let reader = measureCorpusPass(readerBenchmarkPass)
     let decode = measureCorpusPass(decodeBenchmarkPass)
     let encode = measureCorpusPass(encodeBenchmarkPass)
     let combined = measureCorpusPass(combinedBenchmarkPass)
     let borrowed = measureCorpusPass(borrowedBenchmarkPass)
     return EmbeddedBenchmarkMetrics(
         topicParseP50ns: topic.0, topicParseP95ns: topic.1,
+        readerP50ns: reader.0, readerP95ns: reader.1,
         dtoDecodeP50ns: decode.0, dtoDecodeP95ns: decode.1,
         dtoEncodeP50ns: encode.0, dtoEncodeP95ns: encode.1,
         combinedP50ns: combined.0, combinedP95ns: combined.1,

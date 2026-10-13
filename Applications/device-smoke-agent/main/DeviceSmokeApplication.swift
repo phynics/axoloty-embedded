@@ -316,6 +316,8 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     struct BenchmarkMetrics {
         let topicParseP50ns: UInt32
         let topicParseP95ns: UInt32
+        let readerP50ns: UInt32
+        let readerP95ns: UInt32
         let dtoDecodeP50ns: UInt32
         let dtoDecodeP95ns: UInt32
         let dtoEncodeP50ns: UInt32
@@ -327,6 +329,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
 
         static let zero = BenchmarkMetrics(
             topicParseP50ns: 0, topicParseP95ns: 0,
+            readerP50ns: 0, readerP95ns: 0,
             dtoDecodeP50ns: 0, dtoDecodeP95ns: 0,
             dtoEncodeP50ns: 0, dtoEncodeP95ns: 0,
             combinedP50ns: 0, combinedP95ns: 0,
@@ -684,6 +687,8 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     let benchmarkMetrics = BenchmarkMetrics(
         topicParseP50ns: generatedMetrics.topicParseP50ns,
         topicParseP95ns: generatedMetrics.topicParseP95ns,
+        readerP50ns: generatedMetrics.readerP50ns,
+        readerP95ns: generatedMetrics.readerP95ns,
         dtoDecodeP50ns: generatedMetrics.dtoDecodeP50ns,
         dtoDecodeP95ns: generatedMetrics.dtoDecodeP95ns,
         dtoEncodeP50ns: generatedMetrics.dtoEncodeP50ns,
@@ -750,6 +755,10 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     seam.printUInt("", benchmarkMetrics.topicParseP50ns)
     seam.print(",\"topicParseP95ns\":")
     seam.printUInt("", benchmarkMetrics.topicParseP95ns)
+    seam.print(",\"readerP50ns\":")
+    seam.printUInt("", benchmarkMetrics.readerP50ns)
+    seam.print(",\"readerP95ns\":")
+    seam.printUInt("", benchmarkMetrics.readerP95ns)
     seam.print(",\"dtoDecodeP50ns\":")
     seam.printUInt("", benchmarkMetrics.dtoDecodeP50ns)
     seam.print(",\"dtoDecodeP95ns\":")
