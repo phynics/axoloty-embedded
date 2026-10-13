@@ -10,6 +10,25 @@ if (!manifestPath || !outputPath) {
 
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 const corpusDirectory = path.dirname(manifestPath);
+// Test-time corpus selectors. A device matrix (13 wire families x 3 size
+// classes) makes the benchmark a mean over every case; selecting one size
+// class, or one exact case, splits a metric by payload size. Both are unset in
+// normal builds, so the full 39-case corpus is generated.
+const sizeFilter = process.env.AXOLOTY_CORPUS_SIZE;
+const caseFilter = process.env.AXOLOTY_CORPUS_CASE;
+if (sizeFilter && caseFilter) {
+  throw new Error("set at most one of AXOLOTY_CORPUS_SIZE and AXOLOTY_CORPUS_CASE");
+}
+if (sizeFilter) {
+  const filtered = manifest.cases.filter(corpusCase => corpusCase.sizeClass === sizeFilter);
+  if (filtered.length === 0) throw new Error(`no corpus cases with sizeClass ${sizeFilter}`);
+  manifest.cases = filtered;
+}
+if (caseFilter) {
+  const filtered = manifest.cases.filter(corpusCase => corpusCase.id === caseFilter);
+  if (filtered.length === 0) throw new Error(`no corpus case with id ${caseFilter}`);
+  manifest.cases = filtered;
+}
 const dtoByFamily = {
   ADV: "AdvertiseWireData", ASC: "AssociateWireData", CHN: "ChannelWireData",
   CLL: "CallWireData", CPL: "CompleteWireData", DAD: "DeadvertiseWireData",
@@ -186,7 +205,7 @@ private func measureCorpusPass(_ pass: () -> UInt32) -> (UInt32, UInt32) {
             for _ in 0..<batch { embeddedBenchmarkSink &+= pass() }
             let elapsed = deviceSmokeSeam().nowMicroseconds() - start
             let netMicroseconds = elapsed > overhead ? elapsed - overhead : 0
-            samples[sampleIndex] = UInt32((netMicroseconds * 1000) / Int64(batch * 39))
+            samples[sampleIndex] = UInt32((netMicroseconds * 1000) / Int64(batch * ${manifest.cases.length}))
         }
         for index in 1..<30 {
             let value = samples[index]
