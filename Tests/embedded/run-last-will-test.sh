@@ -56,21 +56,33 @@ AXOLOTY_DEVICE_ROLE=B AXOLOTY_AGENT_SCENARIO=last-will \
 clear_run_results "$root_a/working-evidence"
 clear_run_results "$root_b/working-evidence"
 
+build_status=0
 AXOLOTY_DEVICE_ROLE=A \
 AXOLOTY_PROOF_RUN_ID="$proof_run_id-a" \
     EMBEDDED_PROOF_ROOT="$root_a" \
     EMBEDDED_BUILD_DIR="$root_a/build" \
     EMBEDDED_EVIDENCE_DIR="$root_a/working-evidence" \
     AXOLOTY_NETWORK_CONFIG_HEADER="$config_a" \
-    "$repo_root/Profiles/$profile/build.sh"
+    "$repo_root/Profiles/$profile/build.sh" || build_status=$?
 
-AXOLOTY_DEVICE_ROLE=B \
-AXOLOTY_PROOF_RUN_ID="$proof_run_id-b" \
-    EMBEDDED_PROOF_ROOT="$root_b" \
-    EMBEDDED_BUILD_DIR="$root_b/build" \
-    EMBEDDED_EVIDENCE_DIR="$root_b/working-evidence" \
-    AXOLOTY_NETWORK_CONFIG_HEADER="$config_b" \
-    "$repo_root/Profiles/$profile/build.sh"
+if [ "$build_status" -eq 0 ]; then
+    AXOLOTY_DEVICE_ROLE=B \
+    AXOLOTY_PROOF_RUN_ID="$proof_run_id-b" \
+        EMBEDDED_PROOF_ROOT="$root_b" \
+        EMBEDDED_BUILD_DIR="$root_b/build" \
+        EMBEDDED_EVIDENCE_DIR="$root_b/working-evidence" \
+        AXOLOTY_NETWORK_CONFIG_HEADER="$config_b" \
+        "$repo_root/Profiles/$profile/build.sh" || build_status=$?
+fi
+
+if [ "$build_status" -ne 0 ]; then
+    write_unexecuted_evidence \
+        "$repo_root/docs/evidence/$profile-last-will-b.json" \
+        "last-will" \
+        "the firmware build failed (exit $build_status) before the board ran; see the last-will working evidence" \
+        "$profile"
+    exit "$build_status"
+fi
 
 load_esptool
 write_device_manifest "$device_a" "$root_a/working-evidence"

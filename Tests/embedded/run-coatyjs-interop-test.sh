@@ -72,13 +72,22 @@ AXOLOTY_DEVICE_ROLE="$role" node "$script_dir/generate-network-config.mjs" "$con
 # A failed build must not leave the previous run's `passed` result in place.
 clear_run_results "$root/working-evidence"
 
+build_status=0
 AXOLOTY_DEVICE_ROLE="$role" \
 AXOLOTY_PROOF_RUN_ID="$proof_run_id-$(printf '%s' "$role" | tr '[:upper:]' '[:lower:]')" \
     EMBEDDED_PROOF_ROOT="$root" \
     EMBEDDED_BUILD_DIR="$root/build" \
     EMBEDDED_EVIDENCE_DIR="$root/working-evidence" \
     AXOLOTY_NETWORK_CONFIG_HEADER="$config" \
-    "$repo_root/Profiles/$profile/build.sh"
+    "$repo_root/Profiles/$profile/build.sh" || build_status=$?
+if [ "$build_status" -ne 0 ]; then
+    write_unexecuted_evidence \
+        "$repo_root/docs/evidence/$profile-coatyjs-interop-$(printf '%s' "$role" | tr '[:upper:]' '[:lower:]').json" \
+        "coatyjs-interop" \
+        "the firmware build failed (exit $build_status) before the board ran; see the CoatyJS interop working evidence" \
+        "$profile"
+    exit "$build_status"
+fi
 
 load_esptool
 evidence="$root/working-evidence"
