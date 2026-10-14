@@ -930,6 +930,81 @@ for path in sys.stdin.read().split():
 fi
 
 # ---------------------------------------------------------------------------
+# 12. Every path named by README.md or AGENTS.md resolves.
+# ---------------------------------------------------------------------------
+# The entry-point docs are what a reader opens first, and a relative link or a
+# backticked repository path that no longer resolves sends that reader to a
+# file that moved or never existed. Prose review does not catch the drift, so
+# the sweep is a rule. A reference may resolve from the file's own directory
+# or from the repository root; absolute URLs, anchors, and non-path tokens
+# (a repository name, a branch) are ignored. A skip is not a pass: it means no
+# README.md or AGENTS.md is tracked at all.
+
+doc_files="$(tracked | grep -E '(^|/)(README|AGENTS)\.md$' || true)"
+if [ -z "$doc_files" ]; then
+    skip doc-paths 'no README.md or AGENTS.md is tracked'
+else
+    doc_report="$(printf '%s\n' "$doc_files" | python3 -c '
+import os, re, sys
+files = [f for f in sys.stdin.read().split() if f]
+link_re = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+tok_re = re.compile(chr(96) + "([^" + chr(96) + "\\n]+)" + chr(96))
+known_top = ("Applications/", "Platforms/", "Profiles/", "Transports/", "Tools/", "docs/", "Tests/", "releases/", ".devcontainer/", ".github/")
+
+def looks_like_path(token):
+    if "/" not in token:
+        return False
+    if token.startswith(("http://", "https://", "mailto:", "#", "AXOLOTY_", "coaty/", "phynics/", ".axoloty")):
+        return False
+    if any(c in token for c in "<>{}*"):
+        return False
+    if " " in token:
+        return False
+    token = token.rstrip("/")
+    if token.startswith(known_top):
+        return True
+    last = token.rsplit("/", 1)[-1]
+    return "." in last and not last.startswith(".")
+
+def is_external(url):
+    return url.startswith(("http://", "https://", "mailto:", "#", "//"))
+
+seen = set()
+for path in files:
+    if path in seen:
+        continue
+    seen.add(path)
+    base = os.path.dirname(path)
+    text = open(path, encoding="utf-8").read()
+    references = []
+    for match in link_re.finditer(text):
+        url = match.group(1).strip()
+        if not is_external(url):
+            references.append(url)
+    for match in tok_re.finditer(text):
+        token = match.group(1).strip()
+        if looks_like_path(token):
+            references.append(token)
+    for reference in references:
+        target = reference.split("#", 1)[0].split("?", 1)[0]
+        if not target:
+            continue
+        candidates = [target]
+        if base:
+            candidates.append(os.path.join(base, target))
+        if not any(os.path.exists(os.path.normpath(candidate)) for candidate in candidates):
+            print("%s\t%s" % (path, reference))
+')"
+    if [ -z "$doc_report" ]; then
+        pass doc-paths 'every path referenced by README.md and AGENTS.md resolves'
+    else
+        while IFS=$'\t' read -r doc_file doc_reference; do
+            [ -n "$doc_file" ] && fail doc-paths "$doc_file references $doc_reference, which does not resolve"
+        done <<< "$doc_report"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 
 printf '\ncheck-invariants: %d passed, %d skipped, %d violation(s)\n' "$checked" "$skipped" "$violations"
 [ "$violations" -eq 0 ] || exit 1
