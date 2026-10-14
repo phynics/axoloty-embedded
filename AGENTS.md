@@ -49,6 +49,10 @@ lock afterwards.
   Foundation or Core host API, catch and map the error into a local type.
 - A profile claims a Core revision only with device evidence for that
   revision. Compatibility is per profile.
+- A path named by `README.md` or `AGENTS.md` exists in the repository. A
+  relative link or backticked repository path that resolves nowhere sends a
+  reader to a file that moved or never existed; `Tools/check-invariants.sh`
+  (`doc-paths`) fails on one.
 - Migration from Axoloty is behavior-preserving. File unrelated discoveries as
   their own issues instead of fixing them inside a migration change.
 

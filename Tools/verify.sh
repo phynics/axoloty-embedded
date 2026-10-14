@@ -89,6 +89,11 @@ if wanted repo; then
     # weakened rule is observed here, not after a release.
     printf '\n== repo: lock-tag invariant regression\n'
     bash Tools/test-check-invariants-lock-tag.sh || repo_failed=1
+    # The `doc-paths` rule is the only thing that catches a README or AGENTS
+    # path that moved. This drives the real rule over throwaway docs so a
+    # weakened rule is observed here, not by a reader following a dead link.
+    printf '\n== repo: doc-path invariant regression\n'
+    bash Tools/test-check-invariants-doc-paths.sh || repo_failed=1
     # The smoke case set is pinned separately: a validator that expects fewer
     # cases still reports a clean pass on a board, so nothing downstream can
     # catch it shrinking.
