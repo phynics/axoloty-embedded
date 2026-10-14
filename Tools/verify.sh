@@ -83,6 +83,12 @@ if wanted repo; then
     bash Tools/check-invariants.sh || repo_failed=1
     printf '\n== repo: release manifest validator\n'
     python3 Tools/test-validate-release-manifest.py || repo_failed=1
+    # The `lock-tag` rule is the only thing that catches a lock whose tag and
+    # revision disagree, and it has three outcomes to get right. This drives
+    # the real rule over throwaway locks and a throwaway Core checkout so a
+    # weakened rule is observed here, not after a release.
+    printf '\n== repo: lock-tag invariant regression\n'
+    bash Tools/test-check-invariants-lock-tag.sh || repo_failed=1
     # The smoke case set is pinned separately: a validator that expects fewer
     # cases still reports a clean pass on a board, so nothing downstream can
     # catch it shrinking.
