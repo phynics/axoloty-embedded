@@ -52,6 +52,10 @@ AXOLOTY_DEVICE_ROLE=A AXOLOTY_AGENT_SCENARIO=last-will \
 AXOLOTY_DEVICE_ROLE=B AXOLOTY_AGENT_SCENARIO=last-will \
     node "$script_dir/generate-network-config.mjs" "$config_b"
 
+# A failed build must not leave the previous run's `passed` result in place.
+clear_run_results "$root_a/working-evidence"
+clear_run_results "$root_b/working-evidence"
+
 AXOLOTY_DEVICE_ROLE=A \
 AXOLOTY_PROOF_RUN_ID="$proof_run_id-a" \
     EMBEDDED_PROOF_ROOT="$root_a" \

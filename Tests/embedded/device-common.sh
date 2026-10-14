@@ -84,6 +84,33 @@ socket.on("error", () => finish(false));
     fi
 }
 
+# Removes one working-evidence directory's run results and proof files. A
+# harness calls this before it builds, so a failed build cannot leave the
+# previous run's `passed` result where the next reader looks for it.
+clear_run_results() {
+    clear_dir=$1
+    rm -f "$clear_dir/swift-smoke-log.txt" "$clear_dir/swift-smoke-result.json" \
+        "$clear_dir/go-proof.json" "$clear_dir/device-manifest.json" \
+        "$clear_dir/device-info-raw.txt" "$clear_dir/flash.log"
+}
+
+# Writes an `unexecuted` device evidence record for a run that did not happen.
+# The record states a reason; it never claims a result. `profile` defaults to
+# esp32c6-mqtt and `check` names the check the harness would have driven.
+write_unexecuted_evidence() {
+    unexecuted_output=$1
+    unexecuted_check=$2
+    unexecuted_reason=$3
+    unexecuted_profile=${4:-esp32c6-mqtt}
+    unexecuted_core=$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).core.revision || "")' \
+        "$repo_root/axoloty-core.lock.json" 2>/dev/null || true)
+    PROFILE_NAME="$unexecuted_profile" \
+    CHECK_NAME="$unexecuted_check" \
+    REASON="$unexecuted_reason" \
+    CORE_REVISION="$unexecuted_core" \
+        node "$repo_root/Tests/embedded/write-unexecuted-evidence.mjs" "$unexecuted_output"
+}
+
 # Enters the ESP-IDF Python environment and sets `esptool` to its esptool.py.
 load_esptool() {
     idf_root=${IDF_PATH:-/opt/esp/idf}

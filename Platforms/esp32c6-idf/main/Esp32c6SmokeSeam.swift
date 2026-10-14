@@ -7,8 +7,21 @@
 // struct stays allocation-free and the application receives plain C function
 // pointers.
 
-@inline(__always)
-private func ignoreExchangeMilestone(_: UInt32) {}
+/// Prints one exchange milestone as a plain-text marker. The marker is not a
+/// smoke protocol record, so the JSON Lines validators ignore it; the
+/// broker-restart harness reads it to restart the broker only after both roles
+/// have consumed their Wi-Fi reconnect. The milestone names are a harness
+/// contract, so they stay stable.
+private func printExchangeMilestone(_ value: UInt32) {
+    switch DeviceSmokeExchangeMilestone(rawValue: value) {
+    case .connected: axoloty_print("axoloty:milestone:connected\n")
+    case .subscribed: axoloty_print("axoloty:milestone:subscribed\n")
+    case .reconnected: axoloty_print("axoloty:milestone:reconnected\n")
+    case .advertised: axoloty_print("axoloty:milestone:advertised\n")
+    case .resolved: axoloty_print("axoloty:milestone:resolved\n")
+    case .none: break
+    }
+}
 
 /// Builds the seam this platform installs before starting the application.
 func esp32c6SmokeSeam() -> DeviceSmokeSeam {
@@ -51,7 +64,7 @@ func esp32c6SmokeSeam() -> DeviceSmokeSeam {
             waitForReconnect: embeddedExchangeWaitForReconnect,
             disconnect: embeddedExchangeDisconnect
         ),
-        exchangeMilestone: ignoreExchangeMilestone,
+        exchangeMilestone: printExchangeMilestone,
         deviceDisplayName: { axoloty_device_display_name($0, $1) }
     )
 }

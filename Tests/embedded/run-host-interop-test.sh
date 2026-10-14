@@ -71,6 +71,9 @@ rm -f "$ready"
 
 AXOLOTY_DEVICE_ROLE="$role" node "$script_dir/generate-network-config.mjs" "$config"
 
+# A failed build must not leave the previous run's `passed` result in place.
+clear_run_results "$root/working-evidence"
+
 AXOLOTY_DEVICE_ROLE="$role" \
 AXOLOTY_PROOF_RUN_ID="$proof_run_id-$(printf '%s' "$role" | tr '[:upper:]' '[:lower:]')" \
     EMBEDDED_PROOF_ROOT="$root" \
