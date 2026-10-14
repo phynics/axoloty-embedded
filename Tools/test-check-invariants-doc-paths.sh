@@ -45,11 +45,12 @@ new_case() {
     git -C "$case_dir" init -q
 }
 
-# write <case-dir> <repo-relative-path> <line>. One line per call.
+# write <case-dir> <repo-relative-path>. Content arrives on stdin, so a
+# fixture can hold a literal backtick without a shell-expansion warning.
 write() {
-    local dir="$1" path="$2" line="$3"
+    local dir="$1" path="$2"
     mkdir -p "$dir/$(dirname "$path")"
-    printf '%s\n' "$line" > "$dir/$path"
+    cat > "$dir/$path"
 }
 
 # run <case-dir>. Stage the tree so `git ls-files` sees it, then run the real
@@ -81,49 +82,69 @@ expect() {
 
 # A relative link that resolves from the file's own directory passes.
 new_case
-write "$case_dir" README.md '[guide](docs/guide.md)'
-write "$case_dir" docs/guide.md 'guide'
+write "$case_dir" README.md <<'EOF'
+[guide](docs/guide.md)
+EOF
+write "$case_dir" docs/guide.md <<'EOF'
+guide
+EOF
 output="$(run "$case_dir")"
 expect link-resolves "$output" 'ok       [doc-paths]' 'VIOLATION'
 
 # A relative link to a file that is not there fails and names the target.
 new_case
-write "$case_dir" README.md '[guide](docs/missing.md)'
+write "$case_dir" README.md <<'EOF'
+[guide](docs/missing.md)
+EOF
 output="$(run "$case_dir")"
 expect link-broken "$output" 'VIOLATION [doc-paths] README.md references docs/missing.md' 'ok       [doc-paths]'
 
 # A backticked repository path that resolves from the repository root passes.
 new_case
-write "$case_dir" AGENTS.md 'Run `Tools/prepare-core.sh` before a build.'
-write "$case_dir" Tools/prepare-core.sh 'prepare'
+write "$case_dir" AGENTS.md <<'EOF'
+Run `Tools/prepare-core.sh` before a build.
+EOF
+write "$case_dir" Tools/prepare-core.sh <<'EOF'
+prepare
+EOF
 output="$(run "$case_dir")"
 expect code-resolves "$output" 'ok       [doc-paths]' 'VIOLATION'
 
 # The exact shape that motivated the rule: an inline path in a subdirectory
 # guide that resolves neither from that directory nor from the root fails.
 new_case
-write "$case_dir" Platforms/AGENTS.md '`cmake/axoloty-source.cmake` is the pattern to copy.'
+write "$case_dir" Platforms/AGENTS.md <<'EOF'
+`cmake/axoloty-source.cmake` is the pattern to copy.
+EOF
 output="$(run "$case_dir")"
 expect code-broken "$output" 'VIOLATION [doc-paths] Platforms/AGENTS.md references cmake/axoloty-source.cmake' 'ok       [doc-paths]'
 
 # A reference that is not a path is ignored: an absolute URL, an in-page
 # anchor, a repository name, and a branch name all pass.
 new_case
-write "$case_dir" README.md '[core](https://example.invalid/x) [top](#top) `phynics/axoloty` `origin/main`'
+write "$case_dir" README.md <<'EOF'
+[core](https://example.invalid/x) [top](#top) `phynics/axoloty` `origin/main`
+EOF
 output="$(run "$case_dir")"
 expect non-paths-ignored "$output" 'ok       [doc-paths]' 'VIOLATION'
 
 # A doc-path reference that resolves from a subdirectory file's own directory
 # passes even though the root copy does not exist.
 new_case
-write "$case_dir" Transports/README.md 'See [the backend](zenoh-pico/README.md).'
-write "$case_dir" Transports/zenoh-pico/README.md 'backend'
+write "$case_dir" Transports/README.md <<'EOF'
+See [the backend](zenoh-pico/README.md).
+EOF
+write "$case_dir" Transports/zenoh-pico/README.md <<'EOF'
+backend
+EOF
 output="$(run "$case_dir")"
 expect subdirectory-link "$output" 'ok       [doc-paths]' 'VIOLATION'
 
 # A repository with no README.md or AGENTS.md skips, and a skip is not a pass.
 new_case
-write "$case_dir" docs/notes.md 'notes'
+write "$case_dir" docs/notes.md <<'EOF'
+notes
+EOF
 output="$(run "$case_dir")"
 expect no-docs "$output" 'skipped  [doc-paths]' 'ok       [doc-paths]'
 

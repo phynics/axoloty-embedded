@@ -948,7 +948,7 @@ else
 import os, re, sys
 files = [f for f in sys.stdin.read().split() if f]
 link_re = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
-tok_re = re.compile(r"`([^`\n]+)`")
+tok_re = re.compile(chr(96) + "([^" + chr(96) + "\\n]+)" + chr(96))
 known_top = ("Applications/", "Platforms/", "Profiles/", "Transports/", "Tools/", "docs/", "Tests/", "releases/", ".devcontainer/", ".github/")
 
 def looks_like_path(token):
