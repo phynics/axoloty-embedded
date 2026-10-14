@@ -96,7 +96,9 @@ so a release or CI build cannot silently consume uncommitted Core changes.
    only when that exact commit is a Core release tag; otherwise it is `null`,
    and no release certificate can be written until the lock moves to a tag.
    `Tools/check-invariants.sh` (`lock-tag`) refuses a tag that resolves to
-   another commit.
+   another commit. `Tools/test-check-invariants-lock-tag.sh` pins the rule's
+   pass, fail, and skip outcomes in the `repo` tier, so a weakened rule is
+   observed on every verification run.
 3. Run `Tools/prepare-core.sh` with `AXOLOTY_STRICT_CORE=1` from a clean tree,
    and read the report the run actually wrote. Do not assume its shape from
    the previous revision.
