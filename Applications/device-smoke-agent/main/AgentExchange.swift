@@ -38,6 +38,11 @@ struct AgentExchangeResult: OptionSet {
 }
 
 private struct AgentExchangeDeadline {
+    /// Total budget for one exchange, from network setup through cleanup. A
+    /// broker-restart wait spends whatever remains, so a restart the harness
+    /// begins after the exchange starts still has a bounded deadline.
+    static let totalMS: UInt64 = 90_000
+
     let endMS: UInt64
 
     func remaining(using seam: DeviceSmokeSeam) -> UInt32 {
@@ -130,7 +135,7 @@ func runDeviceAgentExchange(
 
     resetStaticDeviceAgents()
     let startMS = UInt64(max(0, seam.nowMicroseconds() / 1_000))
-    let deadline = AgentExchangeDeadline(endMS: startMS + 90_000)
+    let deadline = AgentExchangeDeadline(endMS: startMS + AgentExchangeDeadline.totalMS)
     var result: AgentExchangeResult = []
     let networkBits = seam.networkPrepare(90_000)
     if (networkBits & 1) != 0 { result.insert(.wifi) }
@@ -215,10 +220,17 @@ func runDeviceAgentExchange(
                         )
                     }
                     if scenario == .brokerRestart {
-                        let readyPublished = publishControlMessage(
+                        // The ready message tells the harness this role passed
+                        // its Wi-Fi reconnect and is about to wait for the
+                        // broker restart. A broker that is already stopping
+                        // refuses the publish, and that refusal is exactly the
+                        // condition the wait below is for: the third connect
+                        // cannot begin until the broker returns. Never skip the
+                        // wait because the message was refused.
+                        _ = publishControlMessage(
                             topic: "axoloty/test/agent-ready/B", payload: "ready", seam: seam
                         )
-                        if readyPublished && deadline.remaining(using: seam) > 0 &&
+                        if deadline.remaining(using: seam) > 0 &&
                             seam.carrier.waitForReconnect(deadline.remaining(using: seam)) != 0 {
                             result.insert(.brokerReconnected)
                         } else {

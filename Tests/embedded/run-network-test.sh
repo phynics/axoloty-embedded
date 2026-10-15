@@ -66,12 +66,24 @@ trap cleanup EXIT
 
 AXOLOTY_NETWORK_PROFILE="$profile" node "$script_dir/generate-network-config.mjs" "$config_header"
 
+# A failed build must not leave the previous run's `passed` result in place.
+clear_run_results "$evidence_dir"
+
+build_status=0
 AXOLOTY_PROOF_RUN_ID="$proof_run_id" \
     EMBEDDED_PROOF_ROOT="$proof_root" \
     EMBEDDED_BUILD_DIR="$build_dir" \
     EMBEDDED_EVIDENCE_DIR="$evidence_dir" \
     AXOLOTY_NETWORK_CONFIG_HEADER="$config_header" \
-    "$repo_root/Profiles/$profile/build.sh"
+    "$repo_root/Profiles/$profile/build.sh" || build_status=$?
+if [ "$build_status" -ne 0 ]; then
+    write_unexecuted_evidence \
+        "$repo_root/docs/evidence/$profile-network-test.json" \
+        "network-test" \
+        "the firmware build failed (exit $build_status) before the board ran; see $evidence_dir/build.log" \
+        "$profile"
+    exit "$build_status"
+fi
 
 AXOLOTY_CORPUS_MANIFEST="$corpus_manifest" \
     EMBEDDED_VALIDATOR="$script_dir/network-validator.mjs" \

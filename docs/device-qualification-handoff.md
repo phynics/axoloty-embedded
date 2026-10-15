@@ -192,6 +192,30 @@ Then a release becomes possible: `Tools/release.sh --profile esp32c6-mqtt`
 refuses to produce one from a build whose `build` or `device` tier reported
 `SKIP`, so until step 3 passes, there is nothing to release.
 
+## Broker-restart rehearsal (intermittent reconnect)
+
+The broker-restart harness does not restart the broker after a fixed delay. A
+role prints `axoloty:milestone:reconnected` once its forced Wi-Fi reconnect is
+consumed, and the harness restarts the broker only after both roles report the
+milestone. A restart that lands before the Wi-Fi reconnect would spend a role's
+third connect on it, and the run would fail intermittently.
+
+A single pass does not characterise an intermittent failure. Repeat the check
+and read the rate:
+
+```bash
+EMBEDDED_BROKER_RESTART_RUNS=5 Tests/embedded/run-broker-restart-test.sh
+```
+
+It prints `broker-restart: N/5 runs passed, M failed`, and records how long each
+run took to reach both milestones. The device's exchange budget is 90 seconds
+from exchange start, so the broker-reconnect wait gets whatever remains; the
+readiness budget is `EMBEDDED_BROKER_RESTART_SETTLE_MS` (default 30000 ms),
+after which a missing milestone fails the run instead of waiting a fixed delay.
+A repeat writes no tracked evidence, because a rate is a characterisation, not a
+qualification. Record the pass rate and the readiness time from the run output
+in the issue or the qualification notes.
+
 ## The case count (resolved 2026-09-19)
 
 An earlier review counted `expectedSmokeTests` (22) plus `expectedVectorTests`
