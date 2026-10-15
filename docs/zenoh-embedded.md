@@ -254,8 +254,14 @@ backend; each is visible in the code or in a returned result code.
   directory no longer occurs. Reproducible-build and Swift-linker checks pass
   for both profiles; the observed MQTT reproducible hash was
   `123cf479116c4169512c544602d8ccb67d68b1bedafe567309517e15acdf1e2f`.
-- **No device or resource evidence.** None was produced and none was invented.
-  See `docs/evidence/esp32c6-zenoh-*.json`.
+- **The C-only carrier scenario passes on a device.** `Profiles/esp32c6-zenoh/qualify-carrier-scenario.sh`
+  ran 12 of 13 steps `passed`, `0` `failed`, with `router_absent_then_present`
+  `unavailable` because a bare device cannot drop and restore the router. The
+  record is `docs/evidence/esp32c6-zenoh-c-only-carrier-scenario.json`; it names
+  the unit, the firmware SHA-256, and the locked Core revision. The run reports
+  `resources` `unexecuted` because the device hook cannot read the worker-stack
+  high-water mark or the steady-state allocation count, and it invents neither.
+  No resource threshold is set yet.
 
 The release manifest now knows this backend. `write-release-manifest.mjs` reads
 the `eclipse-zenoh/zenoh-pico` identity, version, and revision from
@@ -271,6 +277,11 @@ release.
 
 - **A profile claims its Core revision only with device evidence.** The lock is
   now above the facade, so both profiles declare `68e46c76` and no longer need
-  `AXOLOTY_PREVIEW_CORE_REVISION`. Nothing in this repository has run the Zenoh
-  profile on a board, so the raise is recorded as build-only and the Zenoh
-  device evidence stays `unexecuted`. See `docs/evidence/esp32c6-zenoh-*.json`.
+  `AXOLOTY_PREVIEW_CORE_REVISION`. The C-only carrier scenario has now run on a
+  board at that revision (see above), but that is transport-level evidence, not
+  a protocol qualification: the Swift-protocol device checks (`embedded-zenoh-smoke`
+  over Zenoh, the two-board agent exchange, and board-to-host interop) are still
+  blocked on the CBOR wire profile and are tracked in
+  [#51](https://github.com/phynics/axoloty-embedded/issues/51) and
+  [#56](https://github.com/phynics/axoloty-embedded/issues/56). The profile holds
+  no release certificate.
