@@ -12,7 +12,7 @@ stays Embedded-Swift compatible. The split is tracked by
 | Profile | Application × platform × transport | Builds | Device qualification |
 |---|---|---|---|
 | [`esp32c6-mqtt`](./Profiles/esp32c6-mqtt) | device-smoke-agent × ESP32-C6 (ESP-IDF) × ESP-IDF MQTT | yes, reproducibly | **none current**: `0.8.2-embedded.2` is [revoked](./releases/revocations/esp32c6-mqtt) |
-| [`esp32c6-zenoh`](./Profiles/esp32c6-zenoh) | device-smoke-agent × ESP32-C6 (ESP-IDF) × zenoh-pico 1.10.0 | yes, reproducibly | not yet run ([#8](https://github.com/phynics/axoloty-embedded/issues/8)) |
+| [`esp32c6-zenoh`](./Profiles/esp32c6-zenoh) | device-smoke-agent × ESP32-C6 (ESP-IDF) × zenoh-pico 1.10.0 | yes, reproducibly | C-only carrier scenario passed on device ([#8](https://github.com/phynics/axoloty-embedded/issues/8)); Swift-protocol transport qualification pending on CBOR ([#51](https://github.com/phynics/axoloty-embedded/issues/51), [#56](https://github.com/phynics/axoloty-embedded/issues/56)) |
 
 Both profiles requalify on hardware against a tagged Core release under the
 [finalization plan](https://github.com/phynics/axoloty/issues/796#issuecomment-6047498382).

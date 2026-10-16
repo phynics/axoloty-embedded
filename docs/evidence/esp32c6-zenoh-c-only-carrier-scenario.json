@@ -3,8 +3,14 @@
   "profile": "esp32c6-zenoh",
   "check": "c-only-carrier-scenario",
   "tier": "device",
-  "status": "unexecuted",
-  "recordedAt": "2026-10-04",
+  "status": "passed",
+  "recordedAt": "2026-10-15",
+  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
+  "firmwareSHA256": "deb4293e88afbd2c5eb07706ceedc1b87eabe8cd7ca970f02be046ec05bfe76e",
   "coreRevision": "68e46c764a555a027f2779c74e8dd04a6bc4bb06",
-  "reason": "no device port was named (AXOLOTY_DEVICE_PORT is unset), so no ESP32-C6 board ran the C-only carrier scenario"
+  "protocol": "13-step C-only carrier scenario over serial JSON Lines",
+  "result": "12 passed, 1 unavailable, 0 failed",
+  "unavailableSteps": [
+    "router_absent_then_present"
+  ]
 }
