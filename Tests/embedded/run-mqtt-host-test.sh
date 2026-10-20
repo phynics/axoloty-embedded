@@ -54,7 +54,10 @@ swiftc -D EMBEDDED_MQTT_HOST_TEST \
 # Nix's standalone Swift compiler does not always add the dispatch library to
 # the executable search path. Native CI images already provide it.
 swift_runtime=$(swiftc -print-target-info | awk -F'"' '/runtimeLibraryPaths/{getline; print $2; exit}')
-dispatch_dir=$(dirname "$(find /nix/store -name libdispatch.so 2>/dev/null | head -1)")
+dispatch_dir=""
+if [ "$(uname -s)" = "Linux" ] && [ -d /nix/store ]; then
+    dispatch_dir=$(dirname "$(find /nix/store -name libdispatch.so 2>/dev/null | head -1)")
+fi
 LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}:$swift_runtime:$dispatch_dir" \
     "$tmp/embedded-mqtt-host-test"
 echo "embedded MQTT host seam tests passed"

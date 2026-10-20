@@ -8,7 +8,7 @@
   "firmwareRevision": "e63e7bd26c2469434cc2b0100fc10520dbe13a8a",
   "firmwareSHA256": "11808e2a68d2019ce77dab4dc40387ec0362978fe05d46e85d0d38c227efd7f9",
   "firmwareSizeBytes": 841120,
-  "coreRevision": "68e46c764a555a027f2779c74e8dd04a6bc4bb06",
+  "coreRevision": "f8c201f717e843d7b838ba1d9ff56bd5be729522",
   "toolchain": {
     "swift": "Swift 6.4 (swift-6.4-RELEASE)",
     "espIdf": "ESP-IDF v5.4",
