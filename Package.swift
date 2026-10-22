@@ -22,7 +22,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/phynics/axoloty.git",
-            revision: "68e46c764a555a027f2779c74e8dd04a6bc4bb06"
+            revision: "f8c201f717e843d7b838ba1d9ff56bd5be729522"
         ),
         .package(
             url: "https://github.com/swift-server-community/mqtt-nio.git",
