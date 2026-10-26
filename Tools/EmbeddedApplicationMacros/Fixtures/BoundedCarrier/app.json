@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "name": "bounded-carrier",
+  "sources": ["BoundedCarrier.swift"],
+  "requirements": {
+    "platform": ["console.write"],
+    "carrier": ["publish", "poll"]
+  },
+  "capacities": {
+    "maxTopicLength": 4,
+    "maxPayloadSize": 5,
+    "applicationStateBytes": 1
+  }
+}

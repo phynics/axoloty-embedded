@@ -14,7 +14,8 @@ transport, and host parity.
 
 | File | Owns |
 |---|---|
-| `main/ZenohCarrier.swift` | A bounded, synchronous adapter over Core's `ZenohSession` and `ZenohFrameStorage`: open, up to eight subscriptions, publish, poll, unsubscribe, reconnect observation, and close. Borrowed bytes are consumed synchronously. No callback enters Swift. |
+| `main/axoloty_carrier_v1.c` | The versioned application carrier table and bounded network-configuration byte-copy adapters. Its last-will capability names the support-query callback; Zenoh answers unsupported and configuration remains unavailable. |
+| `main/ZenohCarrier.swift` | A bounded, synchronous adapter over Core's `ZenohSession` and `ZenohFrameStorage`: open, up to eight subscriptions, publish, poll, unsubscribe, reconnect observation, and close. Exported ABI callbacks consume borrowed bytes synchronously and never retain them. |
 | `main/ZenohNetworkProbe.swift` | Zenoh-specific network probe mechanics. It records broker last-will and single-client loopback receive as explicitly unsupported; it does not emit a pass for either. |
 | `main/zenoh_pico_facade.c` | The `zenoh-pico` backend of Core's `axoloty_zenoh_*` ABI. Zenoh calls in, bounded bytes out, no retained caller pointer. |
 | `main/zenoh_pico_queue.{h,c}` | Fixed session and subscriber registries, bounded receive queues, drop counters, and generation tokens that reject late callbacks. No Zenoh or SDK header, so host tests check it without a board. |
@@ -74,3 +75,10 @@ build results, and qualification gaps.
 
 [axoloty-embedded#8]: https://github.com/phynics/axoloty-embedded/issues/8
 [axoloty#845]: https://github.com/phynics/axoloty/issues/845
+# Carrier capability query
+
+The `lastWill` manifest capability means this carrier implements the ABI query
+that reports whether last-will configuration is supported. Zenoh returns a
+successful query with `supported = 0`; it does not implement last-will wire
+behavior, and `configure_last_will` returns failure. This distinction lets the
+existing smoke application query the optional operation and skip it honestly.

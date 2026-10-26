@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "name": "minimal-console",
+  "sources": ["ConsoleOnly.swift"],
+  "requirements": {
+    "platform": ["console.write"],
+    "carrier": []
+  },
+  "capacities": {
+    "maxTopicLength": 64,
+    "maxPayloadSize": 128,
+    "applicationStateBytes": 1
+  }
+}

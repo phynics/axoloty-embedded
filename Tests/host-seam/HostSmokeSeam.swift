@@ -98,16 +98,22 @@ private func hostNetworkRole() -> UInt32 { HostSmokeConfiguration.networkRole }
 @inline(__always)
 private func hostNetworkScenario() -> UInt32 { HostSmokeConfiguration.networkScenario }
 @inline(__always)
-private func hostNetworkPrepare(_ deadline: UInt32) -> UInt32 { _ = deadline; return 0 }
+private func hostNetworkPrepare(_ deadline: UInt32) -> UInt32 { _ = deadline; return HostSmokeConfiguration.networkConfigured == 0 ? 0 : 3 }
 @inline(__always)
-private func hostNetworkReconnect(_ deadline: UInt32) -> UInt32 { _ = deadline; return 0 }
+private func hostNetworkReconnect(_ deadline: UInt32) -> UInt32 { _ = deadline; return HostSmokeConfiguration.networkConfigured == 0 ? 0 : 3 }
 @inline(__always)
 private func hostNetworkCopyTopic(_ buffer: UnsafeMutablePointer<UInt8>, _ capacity: Int32) -> Int32 {
-    _ = buffer; _ = capacity; return 0
+    let topic = Array("host/topic".utf8)
+    guard HostSmokeConfiguration.networkConfigured != 0, capacity >= Int32(topic.count) else { return 0 }
+    for (index, byte) in topic.enumerated() { buffer[index] = byte }
+    return Int32(topic.count)
 }
 @inline(__always)
 private func hostNetworkCopyPayload(_ buffer: UnsafeMutablePointer<UInt8>, _ capacity: Int32) -> Int32 {
-    _ = buffer; _ = capacity; return 0
+    let payload = Array("host-payload".utf8)
+    guard HostSmokeConfiguration.networkConfigured != 0, capacity >= Int32(payload.count) else { return 0 }
+    for (index, byte) in payload.enumerated() { buffer[index] = byte }
+    return Int32(payload.count)
 }
 @inline(__always)
 private func hostNetworkCleanup() -> UInt32 { 1 }
@@ -123,13 +129,11 @@ private func hostCarrierProbe(
     _ record: (StaticString, Bool) -> Void,
     _ recordUnsupported: (StaticString) -> Void
 ) {
-    _ = networkPrepare
-    _ = networkReconnect
-    _ = networkCopyTopic
-    _ = networkCopyPayload
-    _ = networkCleanup
-    _ = record
-    _ = recordUnsupported
+    if HostSmokeConfiguration.networkConfigured != 0 {
+        runCarrierNetworkProbe(networkPrepare: networkPrepare, networkReconnect: networkReconnect,
+            networkCopyTopic: networkCopyTopic, networkCopyPayload: networkCopyPayload,
+            networkCleanup: networkCleanup, record: record, recordUnsupported: recordUnsupported)
+    }
 }
 @inline(__always)
 private func hostCarrierConfigureLastWill(

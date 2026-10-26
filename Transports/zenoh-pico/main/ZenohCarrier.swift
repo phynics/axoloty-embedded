@@ -67,6 +67,16 @@ private struct ZenohCarrierSlot {
     var subscription: ZenohSubscription?
 }
 
+/// The richer internal poll result keeps ABI buffer pressure separate from
+/// transport errors while the legacy application seam remains Int32-based.
+fileprivate enum ZenohCarrierPollOutcome {
+    case frame
+    case noEvent
+    case closed
+    case insufficientCapacity
+    case failed
+}
+
 /// Records one publish outcome in the transport-neutral carrier counters.
 ///
 /// `Core` owns what each `ZenohResult` means; this maps that already-decided
@@ -451,10 +461,28 @@ struct ZenohCarrier: ~Copyable {
         payload: UnsafeMutablePointer<UInt8>, payloadCapacity: Int32,
         payloadLength: UnsafeMutablePointer<Int32>
     ) -> Int32 {
+        switch pollOneEventOutcome(
+            topic: topic, topicCapacity: topicCapacity, topicLength: topicLength,
+            payload: payload, payloadCapacity: payloadCapacity, payloadLength: payloadLength
+        ) {
+        case .frame: return 1
+        case .noEvent: return 0
+        case .closed: return -2
+        case .insufficientCapacity, .failed: return -1
+        }
+    }
+
+    /// Polls once and retains the legacy seam's copy-on-read behavior.
+    fileprivate mutating func pollOneEventOutcome(
+        topic: UnsafeMutablePointer<UInt8>, topicCapacity: Int32,
+        topicLength: UnsafeMutablePointer<Int32>,
+        payload: UnsafeMutablePointer<UInt8>, payloadCapacity: Int32,
+        payloadLength: UnsafeMutablePointer<Int32>
+    ) -> ZenohCarrierPollOutcome {
         guard topicCapacity > 0, topicCapacity <= Int32(ZenohFrameStorage.keyCapacity),
-              payloadCapacity >= 0, payloadCapacity <= Int32(ZenohFrameStorage.payloadCapacity) else { return -1 }
-        if phase == .disconnected { return -2 }
-        guard phase == .subscribed else { return -1 }
+              payloadCapacity >= 0, payloadCapacity <= Int32(ZenohFrameStorage.payloadCapacity) else { return .failed }
+        if phase == .disconnected { return .closed }
+        guard phase == .subscribed else { return .failed }
         if hasPendingFrame {
             return copyPendingFrame(
                 topic: topic, topicCapacity: topicCapacity, topicLength: topicLength,
@@ -462,7 +490,7 @@ struct ZenohCarrier: ~Copyable {
             )
         }
         let active = activeSlotCount()
-        guard active > 0 else { return 0 }
+        guard active > 0 else { return .noEvent }
         for _ in 0..<Self.maximumSubscriptions {
             pollCursor = (pollCursor + 1) % Self.maximumSubscriptions
             let slot = slotAt(pollCursor)
@@ -486,15 +514,15 @@ struct ZenohCarrier: ~Copyable {
                 case .queueEmpty:
                     continue
                 case .notOpen:
-                    return -2
+                    return .closed
                 default:
                     // Drop notifications and transport failures surface as an
                     // error, matching the sibling transport's overflow code.
-                    return -1
+                    return .failed
                 }
             }
         }
-        return 0
+        return .noEvent
     }
 
     /// Copies the retained pending frame when it fits, keeping it otherwise.
@@ -503,7 +531,7 @@ struct ZenohCarrier: ~Copyable {
         topicLength: UnsafeMutablePointer<Int32>,
         payload: UnsafeMutablePointer<UInt8>, payloadCapacity: Int32,
         payloadLength: UnsafeMutablePointer<Int32>
-    ) -> Int32 {
+    ) -> ZenohCarrierPollOutcome {
         let keyOK = frames.withKeyBytes { key in
             key.withBytes { raw, count in
                 guard count > 0, count <= Int(topicCapacity) else { return false }
@@ -524,12 +552,12 @@ struct ZenohCarrier: ~Copyable {
                 return true
             }
         }
-        guard keyOK && payloadOK else { return -1 }
+        guard keyOK && payloadOK else { return .insufficientCapacity }
         // The frame has now crossed into caller storage, which is the only
         // point at which "received" is true rather than merely pending.
         _ = carrier_diagnostics_add(CARRIER_METRIC_FRAMES_RECEIVED, 1)
         hasPendingFrame = false
-        return 1
+        return .frame
     }
 
     /// Observes router connectivity until the deadline, without touching
@@ -690,10 +718,135 @@ func embeddedExchangePollOneEvent(
     )
 }
 
+/// Returns the typed poll result for the v1 ABI adapter. The legacy seam above
+/// keeps its historical `1/0/-2/-1` contract for existing callers.
+fileprivate func embeddedExchangePollOneEventOutcome(
+    _ topic: UnsafeMutablePointer<UInt8>, _ topicCapacity: Int32, _ topicLength: UnsafeMutablePointer<Int32>,
+    _ payload: UnsafeMutablePointer<UInt8>, _ payloadCapacity: Int32, _ payloadLength: UnsafeMutablePointer<Int32>
+) -> ZenohCarrierPollOutcome {
+    applicationExchangeCarrier.pollOneEventOutcome(
+        topic: topic, topicCapacity: topicCapacity, topicLength: topicLength,
+        payload: payload, payloadCapacity: payloadCapacity, payloadLength: payloadLength
+    )
+}
+
 func embeddedExchangeWaitForReconnect(_ deadlineMS: UInt32) -> Int32 {
     applicationExchangeCarrier.waitForReconnect(deadlineMS: deadlineMS) ? 1 : 0
 }
 
 func embeddedExchangeDisconnect() -> Int32 {
     applicationExchangeCarrier.disconnect() ? 1 : 0
+}
+
+nonisolated(unsafe) private var emptyCarrierByte: UInt8 = 0
+
+@_cdecl("axoloty_zenoh_v1_supports_last_will")
+public func axoloty_zenoh_v1_supports_last_will(
+    _ context: UnsafeMutableRawPointer?, _ supported: UnsafeMutablePointer<UInt32>?
+) -> Int32 {
+    _ = context
+    guard let supported else { return AXOLOTY_ABI_STATUS_INVALID_ARGUMENT }
+    supported.pointee = 0
+    return AXOLOTY_ABI_STATUS_OK
+}
+
+@_cdecl("axoloty_zenoh_v1_configure_last_will")
+public func axoloty_zenoh_v1_configure_last_will(
+    _ context: UnsafeMutableRawPointer?, _ topic: UnsafePointer<UInt8>?, _ topicLength: UInt32,
+    _ payload: UnsafePointer<UInt8>?, _ payloadLength: UInt32
+) -> Int32 {
+    _ = context
+    guard let topic, let payload, topicLength <= UInt32(Int32.max), payloadLength <= UInt32(Int32.max) else {
+        return AXOLOTY_ABI_STATUS_INVALID_ARGUMENT
+    }
+    return embeddedExchangeConfigureLastWill(topic, Int32(topicLength), payload, Int32(payloadLength)) != 0
+        ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED
+}
+
+@_cdecl("axoloty_zenoh_v1_connect")
+public func axoloty_zenoh_v1_connect(_ context: UnsafeMutableRawPointer?, _ deadline: UInt32) -> Int32 {
+    _ = context
+    return embeddedExchangeConnect(deadline) != 0 ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED
+}
+
+@_cdecl("axoloty_zenoh_v1_subscribe")
+public func axoloty_zenoh_v1_subscribe(
+    _ context: UnsafeMutableRawPointer?, _ topic: UnsafePointer<UInt8>?, _ length: UInt32, _ deadline: UInt32
+) -> Int32 {
+    _ = context
+    guard let topic, length <= UInt32(Int32.max) else { return AXOLOTY_ABI_STATUS_INVALID_ARGUMENT }
+    return embeddedExchangeSubscribe(topic, Int32(length), deadline) != 0
+        ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED
+}
+
+@_cdecl("axoloty_zenoh_v1_unsubscribe")
+public func axoloty_zenoh_v1_unsubscribe(
+    _ context: UnsafeMutableRawPointer?, _ topic: UnsafePointer<UInt8>?, _ length: UInt32, _ deadline: UInt32
+) -> Int32 {
+    _ = context
+    guard let topic, length <= UInt32(Int32.max) else { return AXOLOTY_ABI_STATUS_INVALID_ARGUMENT }
+    return embeddedExchangeUnsubscribe(topic, Int32(length), deadline) != 0
+        ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED
+}
+
+@_cdecl("axoloty_zenoh_v1_publish")
+public func axoloty_zenoh_v1_publish(
+    _ context: UnsafeMutableRawPointer?, _ topic: UnsafePointer<UInt8>?, _ topicLength: UInt32,
+    _ payload: UnsafePointer<UInt8>?, _ payloadLength: UInt32
+) -> Int32 {
+    _ = context
+    guard let topic, topicLength <= UInt32(Int32.max), payloadLength <= UInt32(Int32.max),
+          (payloadLength == 0 || payload != nil) else {
+        return AXOLOTY_ABI_STATUS_INVALID_ARGUMENT
+    }
+    if let payload {
+        return embeddedExchangePublish(topic, Int32(topicLength), payload, Int32(payloadLength)) != 0
+            ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED
+    }
+    return withUnsafePointer(to: &emptyCarrierByte) { empty in
+        embeddedExchangePublish(topic, Int32(topicLength), empty, 0) != 0
+            ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED
+    }
+}
+
+@_cdecl("axoloty_zenoh_v1_poll")
+public func axoloty_zenoh_v1_poll(
+    _ context: UnsafeMutableRawPointer?, _ topic: UnsafeMutablePointer<UInt8>?, _ topicCapacity: UInt32,
+    _ topicLength: UnsafeMutablePointer<UInt32>?, _ payload: UnsafeMutablePointer<UInt8>?,
+    _ payloadCapacity: UInt32, _ payloadLength: UnsafeMutablePointer<UInt32>?
+) -> Int32 {
+    _ = context
+    guard let topic, let topicLength, let payload, let payloadLength,
+          topicCapacity <= UInt32(Int32.max), payloadCapacity <= UInt32(Int32.max) else {
+        return AXOLOTY_ABI_STATUS_INVALID_ARGUMENT
+    }
+    var copiedTopic: Int32 = 0
+    var copiedPayload: Int32 = 0
+    switch embeddedExchangePollOneEventOutcome(topic, Int32(topicCapacity), &copiedTopic,
+                                                payload, Int32(payloadCapacity), &copiedPayload) {
+    case .frame:
+        guard copiedTopic > 0, UInt32(copiedTopic) <= topicCapacity,
+              copiedPayload >= 0, UInt32(copiedPayload) <= payloadCapacity else {
+            return AXOLOTY_ABI_STATUS_FAILED
+        }
+        topicLength.pointee = UInt32(copiedTopic)
+        payloadLength.pointee = UInt32(copiedPayload)
+        return AXOLOTY_ABI_STATUS_OK
+    case .noEvent: return AXOLOTY_ABI_STATUS_NO_EVENT
+    case .closed: return AXOLOTY_ABI_STATUS_CLOSED
+    case .insufficientCapacity: return AXOLOTY_ABI_STATUS_BUFFER_TOO_SMALL
+    case .failed: return AXOLOTY_ABI_STATUS_FAILED
+    }
+}
+
+@_cdecl("axoloty_zenoh_v1_reconnect")
+public func axoloty_zenoh_v1_reconnect(_ context: UnsafeMutableRawPointer?, _ deadline: UInt32) -> Int32 {
+    _ = context
+    return embeddedExchangeWaitForReconnect(deadline) != 0 ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED
+}
+
+@_cdecl("axoloty_zenoh_v1_disconnect")
+public func axoloty_zenoh_v1_disconnect(_ context: UnsafeMutableRawPointer?) -> Int32 {
+    _ = context
+    return embeddedExchangeDisconnect() != 0 ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED
 }

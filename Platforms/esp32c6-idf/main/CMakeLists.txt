@@ -59,6 +59,106 @@ endforeach()
 set(AXOLOTY_APPLICATION_MAIN_DIR "${AXOLOTY_APPLICATION_DIR}/main")
 set(AXOLOTY_TRANSPORT_MAIN_DIR "${AXOLOTY_TRANSPORT_DIR}/main")
 get_filename_component(AXOLOTY_SELECTED_TRANSPORT_NAME "${AXOLOTY_TRANSPORT_DIR}" NAME)
+if(NOT DEFINED AXOLOTY_REPOSITORY_ROOT OR "${AXOLOTY_REPOSITORY_ROOT}" STREQUAL "")
+    if(DEFINED ENV{AXOLOTY_REPOSITORY_ROOT})
+        set(AXOLOTY_REPOSITORY_ROOT "$ENV{AXOLOTY_REPOSITORY_ROOT}")
+    endif()
+endif()
+if(NOT AXOLOTY_REPOSITORY_ROOT OR NOT IS_DIRECTORY "${AXOLOTY_REPOSITORY_ROOT}")
+    message(FATAL_ERROR "AXOLOTY_REPOSITORY_ROOT must name the firmware repository root")
+endif()
+file(REAL_PATH "${AXOLOTY_REPOSITORY_ROOT}" AXOLOTY_REPOSITORY_ROOT_REAL)
+if(NOT "${AXOLOTY_REPOSITORY_ROOT}" STREQUAL "${AXOLOTY_REPOSITORY_ROOT_REAL}")
+    message(FATAL_ERROR "AXOLOTY_REPOSITORY_ROOT must be canonical")
+endif()
+if(NOT DEFINED AXOLOTY_PROFILE_DIR OR "${AXOLOTY_PROFILE_DIR}" STREQUAL "")
+    if(DEFINED ENV{AXOLOTY_PROFILE_DIR})
+        set(AXOLOTY_PROFILE_DIR "$ENV{AXOLOTY_PROFILE_DIR}")
+    endif()
+endif()
+if(NOT AXOLOTY_PROFILE_DIR OR NOT IS_DIRECTORY "${AXOLOTY_PROFILE_DIR}")
+    message(FATAL_ERROR "AXOLOTY_PROFILE_DIR must name the selected profile directory")
+endif()
+file(REAL_PATH "${AXOLOTY_PROFILE_DIR}" AXOLOTY_PROFILE_DIR_REAL)
+if(NOT "${AXOLOTY_PROFILE_DIR}" STREQUAL "${AXOLOTY_PROFILE_DIR_REAL}")
+    message(FATAL_ERROR "AXOLOTY_PROFILE_DIR must be canonical")
+endif()
+file(READ "${AXOLOTY_PROFILE_DIR}/profile.json" AXOLOTY_PROFILE_JSON)
+string(JSON AXOLOTY_PROFILE_PLATFORM GET "${AXOLOTY_PROFILE_JSON}" platform)
+set(AXOLOTY_PLATFORM_DIR "${AXOLOTY_REPOSITORY_ROOT}/Platforms/${AXOLOTY_PROFILE_PLATFORM}")
+if(NOT IS_DIRECTORY "${AXOLOTY_PLATFORM_DIR}")
+    message(FATAL_ERROR "selected platform directory is missing: ${AXOLOTY_PLATFORM_DIR}")
+endif()
+set(AXOLOTY_INTEROP_DIR "${AXOLOTY_REPOSITORY_ROOT}/Interop")
+
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(AXOLOTY_REQUIREMENTS_SWIFT "${CMAKE_CURRENT_BINARY_DIR}/ManifestRequirements.swift")
+set(AXOLOTY_COMPOSITION_INPUTS
+    "${AXOLOTY_PROFILE_DIR}/profile.json"
+    "${AXOLOTY_APPLICATION_DIR}/app.json"
+    "${AXOLOTY_PLATFORM_DIR}/platform.json"
+    "${AXOLOTY_TRANSPORT_DIR}/transport.json"
+    "${AXOLOTY_REPOSITORY_ROOT}/axoloty-core.lock.json"
+    "${AXOLOTY_REPOSITORY_ROOT}/Tools/validate-composition.py"
+    "${AXOLOTY_REPOSITORY_ROOT}/Tools/capability_catalog.py"
+    "${AXOLOTY_REPOSITORY_ROOT}/Interop/axoloty_platform_v1.h"
+    "${AXOLOTY_REPOSITORY_ROOT}/Interop/axoloty_carrier_v1.h"
+)
+foreach(AXOLOTY_COMPOSITION_INPUT IN LISTS AXOLOTY_COMPOSITION_INPUTS)
+    if(NOT EXISTS "${AXOLOTY_COMPOSITION_INPUT}")
+        message(FATAL_ERROR "composition input is missing: ${AXOLOTY_COMPOSITION_INPUT}")
+    endif()
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${AXOLOTY_COMPOSITION_INPUT}")
+endforeach()
+execute_process(
+    COMMAND "${Python3_EXECUTABLE}" "${AXOLOTY_REPOSITORY_ROOT}/Tools/validate-composition.py"
+        --repo-root "${AXOLOTY_REPOSITORY_ROOT}"
+        --profile "${AXOLOTY_PROFILE_DIR}/profile.json"
+        --emit-requirements "${AXOLOTY_REQUIREMENTS_SWIFT}"
+    RESULT_VARIABLE AXOLOTY_COMPOSITION_STATUS
+    OUTPUT_VARIABLE AXOLOTY_COMPOSITION_OUTPUT
+    ERROR_VARIABLE AXOLOTY_COMPOSITION_ERROR
+)
+if(NOT AXOLOTY_COMPOSITION_STATUS EQUAL 0)
+    message(FATAL_ERROR "manifest composition validation/generation failed: ${AXOLOTY_COMPOSITION_ERROR}")
+endif()
+message(STATUS "${AXOLOTY_COMPOSITION_OUTPUT}Generated manifest requirements: ${AXOLOTY_REQUIREMENTS_SWIFT}")
+
+set(AXOLOTY_APPLICATION_MANIFEST "${AXOLOTY_APPLICATION_DIR}/app.json")
+if(NOT EXISTS "${AXOLOTY_APPLICATION_MANIFEST}")
+    message(FATAL_ERROR "selected application has no app.json: ${AXOLOTY_APPLICATION_MANIFEST}")
+endif()
+file(READ "${AXOLOTY_APPLICATION_MANIFEST}" AXOLOTY_APPLICATION_JSON)
+string(JSON AXOLOTY_APPLICATION_SOURCE_COUNT LENGTH "${AXOLOTY_APPLICATION_JSON}" sources)
+if(AXOLOTY_APPLICATION_SOURCE_COUNT LESS 1)
+    message(FATAL_ERROR "app.json must list at least one Swift source")
+endif()
+math(EXPR AXOLOTY_APPLICATION_SOURCE_LAST "${AXOLOTY_APPLICATION_SOURCE_COUNT} - 1")
+set(AXOLOTY_APPLICATION_SWIFT_SOURCES)
+foreach(AXOLOTY_SOURCE_INDEX RANGE ${AXOLOTY_APPLICATION_SOURCE_LAST})
+    string(JSON AXOLOTY_APPLICATION_SOURCE GET
+        "${AXOLOTY_APPLICATION_JSON}" sources ${AXOLOTY_SOURCE_INDEX})
+    if(NOT AXOLOTY_APPLICATION_SOURCE MATCHES "[.]swift$")
+        message(FATAL_ERROR "application manifest source is not Swift: ${AXOLOTY_APPLICATION_SOURCE}")
+    endif()
+    set(AXOLOTY_APPLICATION_SOURCE_PATH "${AXOLOTY_APPLICATION_DIR}/${AXOLOTY_APPLICATION_SOURCE}")
+    if(NOT EXISTS "${AXOLOTY_APPLICATION_SOURCE_PATH}")
+        message(FATAL_ERROR "application manifest source is missing: ${AXOLOTY_APPLICATION_SOURCE_PATH}")
+    endif()
+    list(APPEND AXOLOTY_APPLICATION_SWIFT_SOURCES "${AXOLOTY_APPLICATION_SOURCE_PATH}")
+endforeach()
+
+if(NOT DEFINED AXOLOTY_EMBEDDED_MACRO_PLUGIN OR "${AXOLOTY_EMBEDDED_MACRO_PLUGIN}" STREQUAL "")
+    if(DEFINED ENV{AXOLOTY_EMBEDDED_MACRO_PLUGIN})
+        set(AXOLOTY_EMBEDDED_MACRO_PLUGIN "$ENV{AXOLOTY_EMBEDDED_MACRO_PLUGIN}")
+    endif()
+endif()
+if(NOT EXISTS "${AXOLOTY_EMBEDDED_MACRO_PLUGIN}")
+    message(FATAL_ERROR "AXOLOTY_EMBEDDED_MACRO_PLUGIN is required; run Tools/build-embedded-macro.sh first")
+endif()
+if(IS_DIRECTORY "${AXOLOTY_EMBEDDED_MACRO_PLUGIN}")
+    message(FATAL_ERROR "AXOLOTY_EMBEDDED_MACRO_PLUGIN must name the host executable")
+endif()
 
 # Only the Zenoh transport supplies a carrier-scenario device entry point. Fail
 # closed when a profile asks for the qualification build and selects another
@@ -90,25 +190,26 @@ if(IS_DIRECTORY "${AXOLOTY_TRANSPORT_DIR}/include")
 endif()
 
 set(AXOLOTY_SWIFT_SOURCES
-    ${AXOLOTY_APPLICATION_MAIN_DIR}/DeviceSmokeApplication.swift
-    ${AXOLOTY_APPLICATION_MAIN_DIR}/AgentExchange.swift
-    ${AXOLOTY_APPLICATION_MAIN_DIR}/ProfileInterest.swift
-    ${AXOLOTY_APPLICATION_MAIN_DIR}/StaticDeviceAgent.swift
-    ${AXOLOTY_APPLICATION_MAIN_DIR}/DeviceSmokeSeam.swift
-    ${AXOLOTY_APPLICATION_MAIN_DIR}/ProtocolModuleConsumer.swift
-    ${AXOLOTY_APPLICATION_MAIN_DIR}/ObjectModelModuleConsumer.swift
-    ${AXOLOTY_APPLICATION_MAIN_DIR}/CoatyModelsModuleConsumer.swift
+    ${AXOLOTY_APPLICATION_SWIFT_SOURCES}
+    ${AXOLOTY_REQUIREMENTS_SWIFT}
+    ${AXOLOTY_REPOSITORY_ROOT}/Sources/EmbeddedCapabilities/EmbeddedCapabilities.swift
+    ${AXOLOTY_REPOSITORY_ROOT}/Sources/EmbeddedCapabilities/EmbeddedApplicationMacro.swift
+    ${AXOLOTY_REPOSITORY_ROOT}/Sources/EmbeddedCapabilities/EmbeddedApplicationDefinition.swift
+    ${AXOLOTY_REPOSITORY_ROOT}/Sources/EmbeddedCapabilities/EmbeddedApplicationEntryAdapter.swift
+    ${AXOLOTY_REPOSITORY_ROOT}/Sources/EmbeddedCapabilities/EmbeddedRequirements.swift
     ${AXOLOTY_TRANSPORT_SWIFT_SOURCES}
-    ${CMAKE_CURRENT_LIST_DIR}/Esp32c6SmokeSeam.swift
-    ${CMAKE_CURRENT_LIST_DIR}/Esp32c6AppMain.swift
 )
 
 # The qualification build supplies its own C entry point and must not also
 # link the shared smoke entry point. The flag is read above and defaults off,
-# so the shared smoke image keeps `Esp32c6AppMain.swift`.
-if(AXOLOTY_QUALIFICATION_CARRIER_SCENARIO)
-    list(REMOVE_ITEM AXOLOTY_SWIFT_SOURCES
-        "${CMAKE_CURRENT_LIST_DIR}/Esp32c6AppMain.swift"
+# so the normal image keeps `Esp32c6AppMain.c`.
+set(AXOLOTY_PLATFORM_C_SOURCES
+    "${CMAKE_CURRENT_LIST_DIR}/axoloty_platform_v1.c"
+    "${AXOLOTY_INTEROP_DIR}/axoloty_application_entry_v1.c"
+)
+if(NOT AXOLOTY_QUALIFICATION_CARRIER_SCENARIO)
+    list(APPEND AXOLOTY_PLATFORM_C_SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/Esp32c6AppMain.c"
     )
 endif()
 
@@ -143,9 +244,9 @@ idf_component_register(
         "log_helper.c"
         "network_bootstrap.c"
         "runtime_identity.c"
+        ${AXOLOTY_PLATFORM_C_SOURCES}
         ${AXOLOTY_TRANSPORT_C_SOURCES}
-    PRIV_INCLUDE_DIRS "." "${CMAKE_CURRENT_BINARY_DIR}"
-        "${AXOLOTY_APPLICATION_MAIN_DIR}"
+    PRIV_INCLUDE_DIRS "." "${CMAKE_CURRENT_BINARY_DIR}" "${AXOLOTY_INTEROP_DIR}"
         "${AXOLOTY_APPLICATION_DIR}/include"
         "${AXOLOTY_TRANSPORT_MAIN_DIR}"
         ${AXOLOTY_TRANSPORT_INCLUDE_DIRS}
@@ -194,6 +295,11 @@ idf_component_register_swift(
     ${COMPONENT_LIB}
     BRIDGING_HEADER ${AXOLOTY_MAIN_BRIDGING_HEADER}
     SRCS ${AXOLOTY_SWIFT_SOURCES}
+)
+
+target_compile_options(${COMPONENT_LIB} PRIVATE
+    "$<$<COMPILE_LANGUAGE:Swift>:-load-plugin-executable>"
+    "$<$<COMPILE_LANGUAGE:Swift>:${AXOLOTY_EMBEDDED_MACRO_PLUGIN}#EmbeddedApplicationMacroImplementation>"
 )
 
 # The carrier-scenario device source is guarded by this macro. It is defined

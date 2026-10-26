@@ -14,6 +14,10 @@
 #include "freertos/task.h"
 #include "sdkconfig.h"
 
+// The neutral application ABI is the public Swift import surface for the
+// generated entry adapter, capability wrappers, and carrier status values.
+#include "axoloty_application_entry_v1.h"
+
 // Exposes the selected scheduler frequency to the transport's bounded wait
 // calculation. Embedded Swift does not import the SDK's config macros.
 #ifndef AXOLOTY_TICKS_FROM_MS_DEFINED

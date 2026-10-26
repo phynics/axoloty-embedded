@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 enum {
@@ -24,12 +25,29 @@ static unsigned host_failures;
 static unsigned host_calls[9];
 static unsigned host_resubscriptions;
 static int host_event_ready;
+static unsigned char host_event_topic[256];
+static unsigned char host_event_payload[2048];
+static int host_event_topic_length;
+static int host_event_payload_length;
+
+void host_mqtt_set_event(const unsigned char *topic, int topic_length,
+                        const unsigned char *payload, int payload_length) {
+    if (topic == NULL || topic_length <= 0 || topic_length > (int)sizeof(host_event_topic) ||
+        payload == NULL || payload_length < 0 || payload_length > (int)sizeof(host_event_payload)) return;
+    memcpy(host_event_topic, topic, (size_t)topic_length);
+    memcpy(host_event_payload, payload, (size_t)payload_length);
+    host_event_topic_length = topic_length;
+    host_event_payload_length = payload_length;
+    host_event_ready = 1;
+}
 
 void host_mqtt_reset(void) {
     host_failures = 0;
     memset(host_calls, 0, sizeof(host_calls));
     host_resubscriptions = 0;
     host_event_ready = 0;
+    host_event_topic_length = 0;
+    host_event_payload_length = 0;
 }
 
 void host_mqtt_set_failures(unsigned failures) { host_failures = failures; }
@@ -37,7 +55,12 @@ unsigned host_mqtt_call_count(unsigned operation) {
     return operation < 9 ? host_calls[operation] : 0;
 }
 unsigned host_mqtt_resubscription_count(void) { return host_resubscriptions; }
-void host_mqtt_queue_event(void) { host_event_ready = 1; }
+void host_mqtt_queue_event(void) {
+    static const unsigned char default_topic[] = "coaty/3/test";
+    static const unsigned char default_payload[] = "{}";
+    host_mqtt_set_event(default_topic, (int)(sizeof(default_topic) - 1),
+                        default_payload, (int)(sizeof(default_payload) - 1));
+}
 
 int axoloty_mqtt_configure_last_will(const unsigned char *topic, int topic_length,
                                      const unsigned char *payload, int payload_length) {
@@ -51,7 +74,9 @@ int axoloty_mqtt_connect_wait(unsigned deadline_ms) {
 }
 int axoloty_mqtt_subscribe_wait(const unsigned char *topic, int topic_length, unsigned deadline_ms) {
     (void)topic; (void)topic_length; (void)deadline_ms; ++host_calls[2];
-    return (host_failures & FAIL_SUBSCRIBE) == 0;
+    const char *fail_at = getenv("HOST_MQTT_FAIL_SUBSCRIBE_AT");
+    return (host_failures & FAIL_SUBSCRIBE) == 0 &&
+        (fail_at == NULL || strtoul(fail_at, NULL, 10) != host_calls[2]);
 }
 int axoloty_mqtt_unsubscribe(const unsigned char *topic, int topic_length) {
     (void)topic; (void)topic_length; ++host_calls[7];
@@ -75,19 +100,17 @@ int axoloty_mqtt_reconnect_wait(unsigned deadline_ms) {
 int axoloty_mqtt_poll_one_event(unsigned char *topic, int topic_capacity,
                                 int *topic_length, unsigned char *payload,
                                 int payload_capacity, int *payload_length) {
-    static const unsigned char expected_topic[] = "coaty/3/test";
-    static const unsigned char expected_payload[] = "{}";
     ++host_calls[8];
     if (host_failures & FAIL_POLL) return -1;
     if (!host_event_ready) return 0;
     host_event_ready = 0;
     if (!topic || !topic_length || !payload || !payload_length ||
-        topic_capacity < (int)(sizeof(expected_topic) - 1) ||
-        payload_capacity < (int)(sizeof(expected_payload) - 1)) return -1;
-    memcpy(topic, expected_topic, sizeof(expected_topic) - 1);
-    memcpy(payload, expected_payload, sizeof(expected_payload) - 1);
-    *topic_length = (int)(sizeof(expected_topic) - 1);
-    *payload_length = (int)(sizeof(expected_payload) - 1);
+        topic_capacity < host_event_topic_length ||
+        payload_capacity < host_event_payload_length) return -1;
+    memcpy(topic, host_event_topic, (size_t)host_event_topic_length);
+    memcpy(payload, host_event_payload, (size_t)host_event_payload_length);
+    *topic_length = host_event_topic_length;
+    *payload_length = host_event_payload_length;
     return 1;
 }
 int axoloty_mqtt_disconnect(void) {

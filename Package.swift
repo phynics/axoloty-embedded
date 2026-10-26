@@ -45,6 +45,13 @@ let package = Package(
                 .product(name: "AxolotyCoatyModels", package: "Axoloty"),
             ],
             path: "Applications/device-smoke-agent/main",
+            exclude: [
+                // The ABI entry needs the @EmbeddedApplication plugin and the
+                // EmbeddedCapabilities module. Only the firmware build wires
+                // both; the host harness drives the seam directly.
+                "DeviceSmokeCapabilityBridge.swift",
+                "EmbeddedApplication.swift",
+            ],
             swiftSettings: [
                 .define("HOST_AGENT_EXCHANGE"),
                 .swiftLanguageMode(.v5),

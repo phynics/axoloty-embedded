@@ -3,6 +3,7 @@
 #ifndef AXOLOTY_MQTT_CARRIER_H
 #define AXOLOTY_MQTT_CARRIER_H
 
+#include "../../../Interop/axoloty_abi_status_v1.h"
 #include "../../../Interop/swift_c_interop.h"
 
 int axoloty_mqtt_configure_last_will(

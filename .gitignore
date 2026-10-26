@@ -1,3 +1,4 @@
 .axoloty/
 .testing/
 .DS_Store
+__pycache__/

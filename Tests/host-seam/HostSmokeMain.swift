@@ -16,6 +16,32 @@ import Darwin
 @main
 struct HostSmokeMain {
     static func main() {
+        if getenv("HOST_SMOKE_EXCHANGE_SEAM") != nil {
+            let role = UInt32(getenv("HOST_SMOKE_EXCHANGE_ROLE").map { strtoul($0, nil, 10) } ?? 1)
+            let scenario = UInt32(getenv("HOST_SMOKE_EXCHANGE_SCENARIO").map { strtoul($0, nil, 10) } ?? 0)
+            let failAt = Int(getenv("HOST_MQTT_FAIL_SUBSCRIBE_AT").map { strtoul($0, nil, 10) } ?? 0)
+            runHostExchangeSeamBaseline(role: role, scenario: scenario, failSubscribeAt: failAt)
+            exit(0)
+        }
+        if getenv("HOST_SMOKE_EXCHANGE_ABI") != nil {
+            prepareHostExchangePeerFrame()
+            exit(axoloty_application_main(
+                axoloty_platform_get_v1(),
+                host_exchange_carrier_get_v1()
+            ))
+        }
+        // The ABI mode drives the same application through the generated C
+        // entry and validated capability tables; the default mode uses the
+        // seam directly. Both must produce the same completion counts.
+        if getenv("HOST_SMOKE_ABI") != nil {
+            exit(axoloty_application_main(
+                axoloty_platform_get_v1(),
+                axoloty_carrier_get_v1()
+            ))
+        }
+        if getenv("HOST_SMOKE_CONFIGURED_SEAM") != nil {
+            HostSmokeConfiguration.networkConfigured = 1
+        }
         checkExchangeFailureCleanup()
         exit(startDeviceSmoke(hostSmokeSeam()))
     }

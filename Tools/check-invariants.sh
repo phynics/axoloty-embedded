@@ -304,6 +304,31 @@ elif [ "$platform_bad" -eq 0 ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# 5b. One neutral platform dispatcher owns the image entry point.
+# ---------------------------------------------------------------------------
+
+main_component='Platforms/esp32c6-idf/main/CMakeLists.txt'
+normal_entry='Platforms/esp32c6-idf/main/Esp32c6AppMain.c'
+entry_bad=0
+if [ ! -f "$normal_entry" ] || ! grep -Eq 'void[[:space:]]+app_main[[:space:]]*\(' "$normal_entry"; then
+    fail application-entry 'normal ESP-IDF image has no C app_main entry point'
+    entry_bad=1
+elif ! grep -Fq 'axoloty_application_main(' "$normal_entry"; then
+    fail application-entry 'normal platform entry does not call the neutral application dispatcher'
+    entry_bad=1
+fi
+# Literal CMake source reference; the ${...} is a CMake variable, not shell.
+main_entry_ref="\"\${CMAKE_CURRENT_LIST_DIR}/Esp32c6AppMain.c\""
+if [ ! -f "$main_component" ] ||
+   ! grep -Fq 'if(NOT AXOLOTY_QUALIFICATION_CARRIER_SCENARIO)' "$main_component" ||
+   ! grep -Fq "$main_entry_ref" "$main_component" ||
+   ! grep -Fq 'set(AXOLOTY_QUALIFICATION_CARRIER_SCENARIO ON)' "$main_component"; then
+    fail application-entry 'normal and carrier-qualification entry selection is not mutually exclusive'
+    entry_bad=1
+fi
+[ "$entry_bad" -eq 0 ] && pass application-entry 'normal image has one app_main, uses the neutral application dispatcher, and qualification selects its own entry'
+
+# ---------------------------------------------------------------------------
 # 6. Never read Core outside the prepared report.
 # ---------------------------------------------------------------------------
 # Parent-directory discovery and root .build scanning were the exact failures
@@ -878,7 +903,7 @@ fi
 # moves the code toward the device. Spell every error type: `throws(E)`.
 # `rethrows` is unaffected. Comments and string literals are ignored.
 
-swift_files="$(tracked '*.swift')"
+swift_files="$(tracked '*.swift' | while IFS= read -r file; do [ -f "$file" ] && printf '%s\n' "$file"; done)"
 if [ -z "$swift_files" ]; then
     skip typed-throws 'no tracked Swift source'
 else

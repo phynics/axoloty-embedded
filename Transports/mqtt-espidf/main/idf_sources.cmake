@@ -14,6 +14,7 @@ set(AXOLOTY_TRANSPORT_SWIFT_SOURCES
 )
 
 set(AXOLOTY_TRANSPORT_C_SOURCES
+    "${AXOLOTY_TRANSPORT_MAIN_DIR}/axoloty_carrier_v1.c"
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/mqtt_carrier_espidf.c"
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/mqtt_event_validation.c"
 )

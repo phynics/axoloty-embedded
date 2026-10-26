@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "name": "zenoh-pico",
+  "capabilities": [
+    "lastWill",
+    "connect",
+    "subscribe",
+    "unsubscribe",
+    "publish",
+    "poll",
+    "reconnect",
+    "disconnect",
+    "networkProbe"
+  ]
+}
