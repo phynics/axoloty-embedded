@@ -44,7 +44,7 @@ static int32_t platform_log(void *context, const uint8_t *bytes, uint32_t length
     (void)context;
     if (bytes == NULL && length != 0) return AXOLOTY_ABI_STATUS_INVALID_ARGUMENT;
     for (uint32_t index = 0; index < length; ++index) {
-        esp_rom_output_to_channels((char)bytes[index]);
+        esp_rom_printf("%c", (int)bytes[index]);
     }
     return AXOLOTY_ABI_STATUS_OK;
 }

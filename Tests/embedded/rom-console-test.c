@@ -17,16 +17,34 @@
 static uint8_t output[128];
 static size_t output_length;
 static unsigned format_calls;
+static unsigned channel_calls;
+static unsigned rejected_format_calls;
 
+/*
+ * The supplied ESP-IDF source and C6 link map show the direct channel sink
+ * reaches UART0, which is not the selected native USB console. Model that
+ * sink as invisible here. The %c formatter records a candidate USB-visible
+ * path for this host contract test; it does not prove target ROM behavior.
+ */
 void esp_rom_output_to_channels(char byte) {
-    if (output_length >= sizeof(output)) abort();
-    output[output_length++] = (uint8_t)byte;
+    (void)byte;
+    ++channel_calls;
 }
 
 int esp_rom_printf(const char *format, ...) {
-    (void)format;
+    if (strcmp(format, "%c") != 0) {
+        ++rejected_format_calls;
+        return -1;
+    }
+
+    va_list arguments;
+    va_start(arguments, format);
+    const int byte = va_arg(arguments, int);
+    va_end(arguments);
     ++format_calls;
-    return -1;
+    if (output_length >= sizeof(output)) abort();
+    output[output_length++] = (uint8_t)byte;
+    return 1;
 }
 
 static void expect_write(const uint8_t *input, uint32_t length, const uint8_t *expected, size_t expected_length) {
@@ -37,8 +55,8 @@ static void expect_write(const uint8_t *input, uint32_t length, const uint8_t *e
         fprintf(stderr, "write_log output mismatch (got %zu bytes, expected %zu)\n", output_length - before, expected_length);
         abort();
     }
-    if (format_calls != 0) {
-        fputs("write_log called esp_rom_printf instead of the byte sink\n", stderr);
+    if (format_calls != output_length || channel_calls != 0 || rejected_format_calls != 0) {
+        fputs("write_log did not use one accepted ROM %c call per byte\n", stderr);
         abort();
     }
 }
@@ -61,8 +79,8 @@ int main(void) {
         fputs("write_log repeated-call byte ordering mismatch\n", stderr);
         return 1;
     }
-    if (format_calls != 0) {
-        fputs("write_log called esp_rom_printf instead of the byte sink\n", stderr);
+    if (format_calls != output_length || channel_calls != 0 || rejected_format_calls != 0) {
+        fputs("write_log did not use one accepted ROM %c call per byte\n", stderr);
         return 1;
     }
     puts("ROM console byte forwarding tests passed");
