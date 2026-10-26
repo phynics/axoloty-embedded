@@ -51,6 +51,9 @@ docs/           this repository's contracts
 ESP-IDF is the platform integration that exists first, not a permanent
 architectural assumption.
 
+See the [Embedded application and platform ABI](./docs/embedded-abi.md) for
+the entry contract, capability tables, manifests, and extension workflow.
+
 ## Exact Core dependency
 
 [`axoloty-core.lock.json`](./axoloty-core.lock.json) names the exact Axoloty

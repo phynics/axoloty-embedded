@@ -1,5 +1,8 @@
 # Embedded application entry contract
 
+For the versioned table layouts, capability mappings, manifest rules, and
+current evidence limits, see the [Embedded application and platform ABI](embedded-abi.md).
+
 An application declares one synchronous namespace entry. Swift checks its
 `State` and `run` signature through `EmbeddedApplicationDefinition`; the macro
 checks declaration shape and generates the neutral C entry.
