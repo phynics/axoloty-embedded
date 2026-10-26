@@ -318,7 +318,7 @@ elif ! grep -Fq 'axoloty_application_main(' "$normal_entry"; then
     entry_bad=1
 fi
 # Literal CMake source reference; the ${...} is a CMake variable, not shell.
-main_entry_ref='"${CMAKE_CURRENT_LIST_DIR}/Esp32c6AppMain.c"'
+main_entry_ref="\"\${CMAKE_CURRENT_LIST_DIR}/Esp32c6AppMain.c\""
 if [ ! -f "$main_component" ] ||
    ! grep -Fq 'if(NOT AXOLOTY_QUALIFICATION_CARRIER_SCENARIO)' "$main_component" ||
    ! grep -Fq "$main_entry_ref" "$main_component" ||
