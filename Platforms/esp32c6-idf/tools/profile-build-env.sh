@@ -28,6 +28,14 @@
 #       AXOLOTY_APPLICATION_DIR or AXOLOTY_TRANSPORT_DIR, remove the whole
 #       build directory so the next configure starts from the current
 #       selection, and say so. A matching cache is left untouched.
+#   axoloty_stage_network_config_header <header-or-empty> <project_dir>
+#       Stage the private network header (or a non-secret unconfigured header)
+#       into a freshly copied platform project and refresh only its timestamp.
+#       The selected C consumers declare it as an OBJECT_DEPENDS input because
+#       __has_include cannot record a dependency on a header that was absent.
+#       Keeping the path present and refreshing its timestamp handles absent,
+#       changed, and removed private configuration without storing a
+#       secret-derived key.
 
 axoloty_default_proof_root() {
     scratch=${1:-}
@@ -122,4 +130,38 @@ axoloty_clear_stale_profile_cache() {
         rm -rf -- "$build_dir"
     fi
     return 0
+}
+
+axoloty_stage_network_config_header() {
+    config_header=${1:-}
+    project_dir=${2:-}
+    if [ -z "$project_dir" ]; then
+        echo "error: axoloty_stage_network_config_header requires the staged project directory" >&2
+        return 64
+    fi
+    source_file="$project_dir/main/network_bootstrap.c"
+    staged_header="$project_dir/main/axoloty_network_config.h"
+    if [ ! -f "$source_file" ]; then
+        echo "error: staged network bootstrap source is missing: $source_file" >&2
+        return 64
+    fi
+    if [ -n "$config_header" ]; then
+        if [ ! -f "$config_header" ]; then
+            echo "error: AXOLOTY_NETWORK_CONFIG_HEADER is not a file: $config_header" >&2
+            return 64
+        fi
+        cp "$config_header" "$staged_header"
+        echo "network config: private header injected into the build project"
+    else
+        # A prior depfile may still name this file. Keep it present so both
+        # Make and Ninja can rebuild cleanly when private configuration goes
+        # away; this default contains no operator data.
+        printf '%s\n' \
+            '#define AXOLOTY_NETWORK_CONFIGURED 0' \
+            '#define axoloty_runtime_identity ""' > "$staged_header"
+    fi
+    # The build project is a timestamp-preserving copy of tracked sources. The
+    # CMake OBJECT_DEPENDS entries make consumers observe this input even when
+    # their prior depfiles were created while it did not exist.
+    touch "$staged_header"
 }
