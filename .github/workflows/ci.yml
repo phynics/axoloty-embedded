@@ -103,6 +103,7 @@ jobs:
       - name: Host firmware checks
         run: >-
           Tools/verify.sh --tier build
+          --require build:rom-console
           --require build:runtime-identity
           --require build:shared-flags
           --require build:mqtt-host-seam
