@@ -6,6 +6,12 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
+/// Errors raised while ``EmbeddedApplicationMacro`` builds peer declarations.
+public enum EmbeddedApplicationMacroError: Error {
+    /// The generated extension declaration string could not be parsed.
+    case invalidExtensionSyntax
+}
+
 private struct EmbeddedApplicationDiagnostic: DiagnosticMessage {
     let message: String
     var diagnosticID: MessageID { MessageID(domain: "EmbeddedApplication", id: "invalid-declaration") }
@@ -17,7 +23,7 @@ public struct EmbeddedApplicationMacro: PeerMacro, ExtensionMacro {
         of node: AttributeSyntax,
         providingPeersOf declaration: some DeclSyntaxProtocol,
         in context: some MacroExpansionContext
-    ) throws -> [DeclSyntax] {
+    ) throws(EmbeddedApplicationMacroError) -> [DeclSyntax] {
         guard let appName = supportedNamespaceName(declaration) else {
             diagnose("@EmbeddedApplication requires a namespace enum or struct", at: node, in: context)
             return []
@@ -133,11 +139,15 @@ public struct EmbeddedApplicationMacro: PeerMacro, ExtensionMacro {
         providingExtensionsOf type: some TypeSyntaxProtocol,
         conformingTo protocols: [TypeSyntax],
         in context: some MacroExpansionContext
-    ) throws -> [ExtensionDeclSyntax] {
+    ) throws(EmbeddedApplicationMacroError) -> [ExtensionDeclSyntax] {
         guard supportedNamespaceName(declaration) != nil else {
             return []
         }
-        return [try ExtensionDeclSyntax("extension \(type): EmbeddedApplicationDefinition {}")]
+        do {
+            return [try ExtensionDeclSyntax("extension \(type): EmbeddedApplicationDefinition {}")]
+        } catch {
+            throw .invalidExtensionSyntax
+        }
     }
 }
 
