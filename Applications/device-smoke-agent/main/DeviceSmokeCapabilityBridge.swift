@@ -160,7 +160,7 @@ private func deviceDisplayName(_ buffer: UnsafeMutablePointer<UInt8>, _ capacity
 
 /// Runs one carrier operation and reports whether it succeeded.
 @inline(__always)
-private func carrierResult(_ body: () throws -> Void) -> Int32 {
+private func carrierResult(_ body: () throws(EmbeddedCapabilityError) -> Void) -> Int32 {
     (try? body()) == nil ? 0 : 1
 }
 
@@ -200,19 +200,19 @@ private func capabilityDeviceSmokeSeam() -> DeviceSmokeSeam {
             supportsLastWill: { (try? carrierCapabilities().supportsLastWill()) == true ? 1 : 0 },
             configureLastWill: { topic, topicLength, payload, payloadLength in
                 guard topicLength > 0, payloadLength >= 0 else { return 0 }
-                return carrierResult {
+                return carrierResult { () throws(EmbeddedCapabilityError) -> Void in
                     try carrierCapabilities().configureLastWill(
                         topic: topic, topicLength: UInt32(topicLength),
                         payload: payload, payloadLength: UInt32(payloadLength)
                     )
                 }
             },
-            connect: { deadline in carrierResult {
+            connect: { deadline in carrierResult { () throws(EmbeddedCapabilityError) -> Void in
                 try carrierCapabilities().connect(deadlineMilliseconds: deadline)
             } },
             subscribe: { topic, length, deadline in
                 guard length > 0 else { return 0 }
-                return carrierResult {
+                return carrierResult { () throws(EmbeddedCapabilityError) -> Void in
                     try carrierCapabilities().subscribe(
                         topic: topic, length: UInt32(length), deadlineMilliseconds: deadline
                     )
@@ -220,7 +220,7 @@ private func capabilityDeviceSmokeSeam() -> DeviceSmokeSeam {
             },
             unsubscribe: { topic, length, deadline in
                 guard length > 0 else { return 0 }
-                return carrierResult {
+                return carrierResult { () throws(EmbeddedCapabilityError) -> Void in
                     try carrierCapabilities().unsubscribe(
                         topic: topic, length: UInt32(length), deadlineMilliseconds: deadline
                     )
@@ -228,7 +228,7 @@ private func capabilityDeviceSmokeSeam() -> DeviceSmokeSeam {
             },
             publish: { topic, topicLength, payload, payloadLength in
                 guard topicLength > 0, payloadLength >= 0 else { return 0 }
-                return carrierResult {
+                return carrierResult { () throws(EmbeddedCapabilityError) -> Void in
                     try carrierCapabilities().publish(
                         topic: topic, topicLength: UInt32(topicLength),
                         payload: payload, payloadLength: UInt32(payloadLength)
@@ -255,10 +255,10 @@ private func capabilityDeviceSmokeSeam() -> DeviceSmokeSeam {
                     return -2
                 }
             },
-            waitForReconnect: { deadline in carrierResult {
+            waitForReconnect: { deadline in carrierResult { () throws(EmbeddedCapabilityError) -> Void in
                 try carrierCapabilities().waitForReconnect(deadlineMilliseconds: deadline)
             } },
-            disconnect: { carrierResult { try carrierCapabilities().disconnect() } }
+            disconnect: { carrierResult { () throws(EmbeddedCapabilityError) -> Void in try carrierCapabilities().disconnect() } }
         ),
         exchangeMilestone: exchangeMilestone,
         deviceDisplayName: deviceDisplayName
