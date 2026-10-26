@@ -64,7 +64,7 @@ fi
 
 # The same preparation report the firmware build reads. Its `zenohCore` entry is
 # the only source of the header path, its SHA-256, and the module map; see
-# Platforms/esp32c6-idf/cmake/axoloty-source.cmake.
+# Platforms/common/axoloty-core.cmake.
 scratch=${AXOLOTY_SCRATCH:-"$repo_root/.axoloty"}
 report=${AXOLOTY_PREPARATION_REPORT:-"$scratch/core-preparation.json"}
 if [ ! -f "$report" ]; then

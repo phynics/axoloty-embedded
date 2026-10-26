@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Atakan DULKER. Licensed under the MIT License.
 
 # Proves the parent-directory escape checks in
-# Platforms/esp32c6-idf/cmake/axoloty-source.cmake actually fire.
+# Platforms/common/axoloty-core.cmake actually fire.
 #
 # Those checks compared a relative path against "^\\.\\./". `\.` is not a valid
 # escape sequence in a CMake string: in the ESP-IDF requirements pass, where the
@@ -45,7 +45,7 @@ set -eu
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH='' cd -- "$script_dir/../.." && pwd)
-resolver="$repo_root/Platforms/esp32c6-idf/cmake/axoloty-source.cmake"
+resolver="$repo_root/Platforms/common/axoloty-core.cmake"
 
 for tool in cmake python3; do
     command -v "$tool" >/dev/null 2>&1 || {
