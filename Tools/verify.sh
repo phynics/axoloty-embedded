@@ -162,6 +162,9 @@ check_script() {
 }
 
 if wanted build; then
+    check_script network-config-cache \
+        'a host C compiler or make is unavailable for the network configuration cache check' \
+        Tests/embedded/check-network-config-cache.sh
     check_script rom-console \
         'no host C compiler is available for the ROM console check' \
         Tests/embedded/run-rom-console-test.sh

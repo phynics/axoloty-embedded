@@ -271,6 +271,30 @@ idf_component_register(
     LDFRAGMENTS "linker.lf"
 )
 
+# The config header is staged before CMake configures this copied project.
+# These consumers use __has_include, so an object built while the header was
+# absent cannot learn about it from its depfile. Make the staged header an
+# explicit input to every selected translation unit that reads it. The staging
+# helper refreshes only the header timestamp, so no tracked source is touched.
+set(AXOLOTY_NETWORK_CONFIG_HEADER
+    "${CMAKE_CURRENT_LIST_DIR}/axoloty_network_config.h"
+)
+set(AXOLOTY_NETWORK_CONFIG_CONSUMERS
+    "${CMAKE_CURRENT_LIST_DIR}/network_bootstrap.c"
+)
+if(AXOLOTY_SELECTED_TRANSPORT_NAME STREQUAL "mqtt-espidf")
+    list(APPEND AXOLOTY_NETWORK_CONFIG_CONSUMERS
+        "${AXOLOTY_TRANSPORT_MAIN_DIR}/mqtt_carrier_espidf.c"
+    )
+elseif(AXOLOTY_SELECTED_TRANSPORT_NAME STREQUAL "zenoh-pico")
+    list(APPEND AXOLOTY_NETWORK_CONFIG_CONSUMERS
+        "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_endpoint.c"
+    )
+endif()
+set_source_files_properties(${AXOLOTY_NETWORK_CONFIG_CONSUMERS}
+    PROPERTIES OBJECT_DEPENDS "${AXOLOTY_NETWORK_CONFIG_HEADER}"
+)
+
 # The Zenoh transport's carrier is written against the prepared
 # AxolotyZenohCore module. Order its publication and the Core-generated
 # facade module map before the main Swift compile, but only for the profile
