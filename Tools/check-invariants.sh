@@ -369,8 +369,8 @@ require_component_text() {
 if [ ! -d "$component_root" ]; then
     skip core-component-order 'no ESP-IDF component tree exists yet'
 else
-    require_component_text "$source_resolver" 'file(GLOB collected_sources "${source_directory}/*.swift")' 'the common helper does not collect reported Swift sources'
-    require_component_text 'Platforms/esp32c6-idf/cmake/axoloty-source.cmake' 'include("${AXOLOTY_COMMON_CORE_HELPER}")' 'the SDK compatibility wrapper does not include the common helper'
+    require_component_text "$source_resolver" "file(GLOB collected_sources \"\${source_directory}/*.swift\")" 'the common helper does not collect reported Swift sources'
+    require_component_text 'Platforms/esp32c6-idf/cmake/axoloty-source.cmake' "include(\"\${AXOLOTY_COMMON_CORE_HELPER}\")" 'the SDK compatibility wrapper does not include the common helper'
     require_component_text 'Platforms/esp32c6-idf/cmake/axoloty-source.cmake' 'AXOLOTY_REPOSITORY_ROOT' 'the staged SDK wrapper does not resolve the common helper through the repository input'
     for component in axoloty_wire axoloty_object_model axoloty_protocol axoloty_coaty_models axoloty_zenoh_core; do
         require_component_text "$component_root/$component/CMakeLists.txt" 'axoloty_collect_swift_sources(' "$component does not use the common prepared-source collector"
