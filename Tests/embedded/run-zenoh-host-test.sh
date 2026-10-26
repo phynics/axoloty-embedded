@@ -272,6 +272,8 @@ swiftc -swift-version 6 -enable-experimental-feature Lifetimes -parse-as-library
     -I "$transport_main" -I "$facade_include" -I "$repo_root/Interop" \
     -c "$script_dir/zenoh-host-hal.c" -o "$tmp/hal.o"
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
+    -I "$repo_root/Interop" -c "$transport_main/axoloty_carrier_v1.c" -o "$tmp/carrier-table.o"
+"$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
     -I "$transport_main" -I "$facade_include" \
     -c "$script_dir/zenoh-queue-test.c" -o "$tmp/queue-test.o"
 # The carrier-diagnostics conformance vectors. Compiled against the production
@@ -293,6 +295,13 @@ swiftc -swift-version 6 -enable-experimental-feature Lifetimes -parse-as-library
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
     -I "$transport_main" -I "$facade_include" \
     -c "$transport_main/zenoh_pico_queue.c" -o "$tmp/queue.o"
+# The host ABI probe uses deterministic private network configuration while
+# compiling the production endpoint and copy callbacks.
+cat >"$tmp/axoloty_network_config.h" <<'EOF'
+#define AXOLOTY_NETWORK_CONFIGURED 1
+static const char axoloty_zenoh_host[] = "127.0.0.1";
+static const unsigned short axoloty_zenoh_port = 7447;
+EOF
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
     -I "$transport_main" -I "$tmp" -I "$repo_root/Platforms/esp32c6-idf/main" \
     -c "$transport_main/zenoh_endpoint.c" -o "$tmp/endpoint.o"
@@ -305,6 +314,7 @@ swiftc -D EMBEDDED_ZENOH_HOST_TEST \
     -I "$transport_main" \
     -I "$script_dir" \
     -I "$repo_root/Interop" \
+    -import-objc-header "$repo_root/Interop/axoloty_carrier_v1.h" \
     -Xcc -I"$transport_main" \
     -Xcc -fmodule-map-file="$facade_modulemap" \
     -Xcc -fmodule-map-file="$script_dir/zenoh_host_test.modulemap" \
@@ -312,7 +322,7 @@ swiftc -D EMBEDDED_ZENOH_HOST_TEST \
     "$transport_main/ZenohNetworkProbe.swift" \
     "$repo_root/Applications/device-smoke-agent/main/ProfileInterest.swift" \
     "$script_dir/zenoh-host-test.swift" \
-    "$tmp/hal.o" "$tmp/queue.o" "$tmp/queue-test.o" "$tmp/validation.o" "$tmp/endpoint.o" \
+    "$tmp/hal.o" "$tmp/carrier-table.o" "$tmp/queue.o" "$tmp/queue-test.o" "$tmp/validation.o" "$tmp/endpoint.o" \
     "$tmp/diagnostics.o" "$tmp/diagnostics-test.o" \
     "$tmp/_JSONCore.o" "$tmp/AxolotyWire.o" "$tmp/AxolotyZenohCore.o" \
     -Xlinker -lpthread \

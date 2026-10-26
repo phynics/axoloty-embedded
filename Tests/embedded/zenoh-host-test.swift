@@ -58,6 +58,129 @@ private struct EmbeddedZenohHostTest {
         carrierDiagnostics()
         probeRecords()
         facadeContract()
+        carrierABIQuery()
+    }
+
+    // MARK: - Production carrier ABI table
+
+    static func carrierABIQuery() {
+        guard let table = axoloty_carrier_get_v1() else { preconditionFailure("Zenoh carrier table missing") }
+        check(axoloty_carrier_v1_validate_requirements(table, 1, 1) != 0,
+              "Zenoh table supplies the last-will query function")
+        var supported: UInt32 = 99
+        check(table.pointee.supports_last_will!(table.pointee.context, &supported) == AXOLOTY_ABI_STATUS_OK,
+              "Zenoh last-will support query succeeds")
+        check(supported == 0, "Zenoh reports last-will unsupported")
+        let topic: [UInt8] = Array("topic".utf8)
+        let payload: [UInt8] = Array("payload".utf8)
+        let configured = topic.withUnsafeBufferPointer { topicBuffer in
+            payload.withUnsafeBufferPointer { payloadBuffer in
+                table.pointee.configure_last_will!(table.pointee.context, topicBuffer.baseAddress,
+                    UInt32(topic.count), payloadBuffer.baseAddress, UInt32(payload.count))
+            }
+        }
+        check(configured == AXOLOTY_ABI_STATUS_FAILED, "Zenoh last-will configuration remains unavailable")
+        var topicBytes = [UInt8](repeating: 0, count: 32)
+        var payloadBytes = [UInt8](repeating: 0, count: 32)
+        var topicLength: UInt32 = 0
+        var payloadLength: UInt32 = 0
+        let topicStatus = topicBytes.withUnsafeMutableBufferPointer { buffer in
+            table.pointee.copy_probe_topic!(table.pointee.context, buffer.baseAddress,
+                                             UInt32(buffer.count), &topicLength)
+        }
+        let payloadStatus = payloadBytes.withUnsafeMutableBufferPointer { buffer in
+            table.pointee.copy_probe_payload!(table.pointee.context, buffer.baseAddress,
+                                               UInt32(buffer.count), &payloadLength)
+        }
+        check(topicStatus == AXOLOTY_ABI_STATUS_OK && topicLength == 21,
+              "Zenoh ABI probe copies configured deterministic topic")
+        check(payloadStatus == AXOLOTY_ABI_STATUS_OK && payloadLength == 19,
+              "Zenoh ABI probe copies configured deterministic payload")
+        check(String(decoding: topicBytes.prefix(Int(topicLength)), as: UTF8.self) == "axoloty/network/probe",
+              "Zenoh ABI topic bytes match network configuration")
+        check(String(decoding: payloadBytes.prefix(Int(payloadLength)), as: UTF8.self) == "axoloty-zenoh-probe",
+              "Zenoh ABI payload bytes match network configuration")
+
+        host_zenoh_reset()
+        check(table.pointee.connect!(table.pointee.context, 5_000) == AXOLOTY_ABI_STATUS_OK,
+              "Zenoh ABI connect callback opens the production carrier")
+        let exchangeKey = Array("abi/topic".utf8)
+        let exchangePayload = Array("abi-payload".utf8)
+        let subscribed = exchangeKey.withUnsafeBufferPointer { key in
+            table.pointee.subscribe!(table.pointee.context, key.baseAddress, UInt32(key.count), 1_000)
+        }
+        check(subscribed == AXOLOTY_ABI_STATUS_OK, "Zenoh ABI subscribe callback succeeds")
+        let published = exchangeKey.withUnsafeBufferPointer { key in
+            exchangePayload.withUnsafeBufferPointer { payload in
+                table.pointee.publish!(table.pointee.context, key.baseAddress, UInt32(key.count),
+                    payload.baseAddress, UInt32(payload.count))
+            }
+        }
+        check(published == AXOLOTY_ABI_STATUS_OK, "Zenoh ABI publish callback succeeds")
+        check(table.pointee.wait_for_reconnect!(table.pointee.context, 1_000) == AXOLOTY_ABI_STATUS_OK,
+              "Zenoh ABI reconnect callback observes configured router")
+        var outTopic = [UInt8](repeating: 0, count: 256)
+        var outPayload = [UInt8](repeating: 0, count: 2_048)
+        var outTopicLength: UInt32 = 0
+        var outPayloadLength: UInt32 = 0
+        let emptyPoll = outTopic.withUnsafeMutableBufferPointer { topic in
+            outPayload.withUnsafeMutableBufferPointer { payload in
+                table.pointee.poll_one_event!(table.pointee.context, topic.baseAddress, UInt32(topic.count),
+                    &outTopicLength, payload.baseAddress, UInt32(payload.count), &outPayloadLength)
+            }
+        }
+        check(emptyPoll == AXOLOTY_ABI_STATUS_NO_EVENT, "Zenoh ABI poll maps an empty queue")
+        exchangeKey.withUnsafeBufferPointer { key in
+            exchangePayload.withUnsafeBufferPointer { payload in
+                host_zenoh_set_sample(key.baseAddress, Int32(key.count), payload.baseAddress, Int32(payload.count))
+            }
+        }
+        let receivedBeforeSmallBuffer = ZenohCarrier.diagnostics.frames_received
+        var smallTopic = [UInt8](repeating: 0, count: exchangeKey.count - 1)
+        var smallPayload = [UInt8](repeating: 0, count: exchangePayload.count)
+        var smallTopicLength: UInt32 = 77
+        var smallPayloadLength: UInt32 = 88
+        let tooSmall = smallTopic.withUnsafeMutableBufferPointer { topic in
+            smallPayload.withUnsafeMutableBufferPointer { payload in
+                table.pointee.poll_one_event!(table.pointee.context, topic.baseAddress,
+                    UInt32(topic.count), &smallTopicLength, payload.baseAddress,
+                    UInt32(payload.count), &smallPayloadLength)
+            }
+        }
+        check(tooSmall == AXOLOTY_ABI_STATUS_BUFFER_TOO_SMALL,
+              "Zenoh ABI poll distinguishes retained-frame capacity pressure")
+        check(smallTopicLength == 77 && smallPayloadLength == 88,
+              "Zenoh ABI small-buffer poll leaves output lengths untouched")
+        check(ZenohCarrier.diagnostics.frames_received == receivedBeforeSmallBuffer,
+              "Zenoh ABI small-buffer poll does not count a retained frame as received")
+        let framePoll = outTopic.withUnsafeMutableBufferPointer { topic in
+            outPayload.withUnsafeMutableBufferPointer { payload in
+                table.pointee.poll_one_event!(table.pointee.context, topic.baseAddress, UInt32(topic.count),
+                    &outTopicLength, payload.baseAddress, UInt32(payload.count), &outPayloadLength)
+            }
+        }
+        check(framePoll == AXOLOTY_ABI_STATUS_OK && outTopicLength == UInt32(exchangeKey.count) &&
+              outPayloadLength == UInt32(exchangePayload.count), "Zenoh ABI poll copies configured frame")
+        check(Array(outTopic.prefix(Int(outTopicLength))) == exchangeKey &&
+              Array(outPayload.prefix(Int(outPayloadLength))) == exchangePayload,
+              "Zenoh ABI retry copies the exact retained frame bytes")
+        check(ZenohCarrier.diagnostics.frames_received == receivedBeforeSmallBuffer + 1,
+              "Zenoh ABI retained-frame retry counts exactly one received frame")
+        let afterRetry = outTopic.withUnsafeMutableBufferPointer { topic in
+            outPayload.withUnsafeMutableBufferPointer { payload in
+                table.pointee.poll_one_event!(table.pointee.context, topic.baseAddress, UInt32(topic.count),
+                    &outTopicLength, payload.baseAddress, UInt32(payload.count), &outPayloadLength)
+            }
+        }
+        check(afterRetry == AXOLOTY_ABI_STATUS_NO_EVENT &&
+              ZenohCarrier.diagnostics.frames_received == receivedBeforeSmallBuffer + 1,
+              "Zenoh ABI retry consumes the pending frame once")
+        let unsubscribed = exchangeKey.withUnsafeBufferPointer { key in
+            table.pointee.unsubscribe!(table.pointee.context, key.baseAddress, UInt32(key.count), 1_000)
+        }
+        check(unsubscribed == AXOLOTY_ABI_STATUS_OK, "Zenoh ABI unsubscribe callback succeeds")
+        check(table.pointee.disconnect!(table.pointee.context) == AXOLOTY_ABI_STATUS_OK,
+              "Zenoh ABI disconnect callback succeeds")
     }
 
     // MARK: - Lifecycle

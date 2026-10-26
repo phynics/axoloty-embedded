@@ -29,6 +29,7 @@ set(AXOLOTY_TRANSPORT_SWIFT_SOURCES
 # hold no protocol rule and no Zenoh type; the scenario drives only the
 # Core-owned facade ABI and the transport's own counters.
 set(AXOLOTY_TRANSPORT_C_SOURCES
+    "${AXOLOTY_TRANSPORT_MAIN_DIR}/axoloty_carrier_v1.c"
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_sample_validation.c"
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_pico_queue.c"
     "${AXOLOTY_TRANSPORT_MAIN_DIR}/zenoh_pico_facade.c"

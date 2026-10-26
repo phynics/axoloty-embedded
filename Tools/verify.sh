@@ -99,6 +99,7 @@ if wanted repo; then
     # catch it shrinking.
     printf '\n== repo: smoke case coverage\n'
     bash Tools/check-smoke-coverage.sh || repo_failed=1
+    Tests/embedded/check-profile-composition.sh || repo_failed=1
     if [ "$repo_failed" -eq 0 ]; then
         record PASS repo 'invariants hold and the smoke case set matches its baseline'
     else

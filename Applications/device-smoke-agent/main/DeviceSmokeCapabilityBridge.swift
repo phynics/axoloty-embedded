@@ -81,7 +81,8 @@ private func exchangeMilestone(_ value: UInt32) {
 private func metric(_ field: (axoloty_platform_metrics_v1) -> UInt32) -> UInt32 {
     withUnsafeTemporaryAllocation(of: axoloty_platform_metrics_v1.self, capacity: 1) { storage in
         let output = storage.baseAddress!
-        _ = try? activeCapabilities().platform.readMetrics(into: output)
+        output.initialize(to: axoloty_platform_metrics_v1())
+        guard (try? activeCapabilities().platform.readMetrics(into: output)) != nil else { return 0 }
         return field(output.pointee)
     }
 }
