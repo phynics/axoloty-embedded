@@ -183,7 +183,7 @@ if wanted build; then
         Tests/embedded/run-profile-isolation-test.sh
     check_script unsupported-validator \
         'node is not available for the unsupported-status validator check' \
-        AXOLOTY_CORPUS_MANIFEST="$repo_root/Applications/device-smoke-agent/fixtures/manifest.json" \
+        env AXOLOTY_CORPUS_MANIFEST="$repo_root/Applications/device-smoke-agent/fixtures/manifest.json" \
             node Tests/embedded/test-unsupported-validator.mjs
     # The release manifest is the compatibility certificate. This runs the real
     # generator against tracked-shape fixtures, so a backend that silently takes
