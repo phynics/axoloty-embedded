@@ -162,6 +162,9 @@ check_script() {
 }
 
 if wanted build; then
+    check_script rom-console \
+        'no host C compiler is available for the ROM console check' \
+        Tests/embedded/run-rom-console-test.sh
     check_script runtime-identity \
         'no host C compiler is available for the runtime identity check' \
         Tests/embedded/run-runtime-identity-test.sh
