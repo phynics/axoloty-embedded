@@ -100,6 +100,7 @@ if wanted repo; then
     printf '\n== repo: smoke case coverage\n'
     bash Tools/check-smoke-coverage.sh || repo_failed=1
     Tests/embedded/check-profile-composition.sh || repo_failed=1
+    Tests/embedded/check-application-boundary-invariants.sh || repo_failed=1
     if [ "$repo_failed" -eq 0 ]; then
         record PASS repo 'invariants hold and the smoke case set matches its baseline'
     else
@@ -182,7 +183,8 @@ if wanted build; then
         Tests/embedded/run-profile-isolation-test.sh
     check_script unsupported-validator \
         'node is not available for the unsupported-status validator check' \
-        node Tests/embedded/test-unsupported-validator.mjs
+        AXOLOTY_CORPUS_MANIFEST="$repo_root/Applications/device-smoke-agent/fixtures/manifest.json" \
+            node Tests/embedded/test-unsupported-validator.mjs
     # The release manifest is the compatibility certificate. This runs the real
     # generator against tracked-shape fixtures, so a backend that silently takes
     # the SDK version for the wrong transport is observed rather than assumed.

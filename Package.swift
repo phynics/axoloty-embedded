@@ -38,7 +38,6 @@ let package = Package(
             name: "DeviceSmokeApplication",
             dependencies: [
                 "DeviceSmokeHostSupport",
-                "StaticDeviceAgentInterop",
                 .product(name: "AxolotyWire", package: "Axoloty"),
                 .product(name: "AxolotyProtocol", package: "Axoloty"),
                 .product(name: "AxolotyObjectModel", package: "Axoloty"),
@@ -56,12 +55,6 @@ let package = Package(
                 .define("HOST_AGENT_EXCHANGE"),
                 .swiftLanguageMode(.v5),
             ]
-        ),
-        .target(
-            name: "StaticDeviceAgentInterop",
-            path: "Applications/device-smoke-agent",
-            sources: ["interop/static_device_agent_interop.c"],
-            publicHeadersPath: "include"
         ),
         .target(
             name: "EmbeddedMQTTClient",

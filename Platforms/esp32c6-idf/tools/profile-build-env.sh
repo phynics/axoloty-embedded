@@ -19,10 +19,9 @@
 #       a profile it stays <scratch>/firmware. An explicit EMBEDDED_PROOF_ROOT
 #       always wins; callers apply it with ${EMBEDDED_PROOF_ROOT:-$(...)}.
 #   axoloty_verify_profile_selection
-#       Return 0 only when AXOLOTY_APPLICATION_DIR and AXOLOTY_TRANSPORT_DIR
-#       name the application and transport that AXOLOTY_PROFILE_DIR/profile.json
-#       selects, on the platform it selects. Needs node, like the profile
-#       build scripts. Prints the mismatch to stderr and returns 64.
+#       Return 0 only when the selected application and transport manifests
+#       agree with AXOLOTY_PROFILE_DIR/profile.json. Needs node, like the
+#       profile build scripts. Prints the mismatch to stderr and returns 64.
 #   axoloty_clear_stale_profile_cache <build_dir>
 #       When <build_dir>/CMakeCache.txt caches a selection that differs from
 #       AXOLOTY_APPLICATION_DIR or AXOLOTY_TRANSPORT_DIR, remove the whole
@@ -89,8 +88,9 @@ for (const field of ["application", "platform", "transport"]) {
         return 1
     }
     mismatch=0
-    if [ "${AXOLOTY_APPLICATION_DIR:-}" != "$repo_root/Applications/$application" ]; then
-        echo "error: AXOLOTY_APPLICATION_DIR (${AXOLOTY_APPLICATION_DIR:-unset}) does not match the profile application '$application'" >&2
+    if [ -z "${AXOLOTY_APPLICATION_DIR:-}" ] || ! node "$repo_root/Tools/select-profile-application.mjs" \
+        "$AXOLOTY_PROFILE_DIR" "$AXOLOTY_APPLICATION_DIR" >/dev/null; then
+        echo "error: AXOLOTY_APPLICATION_DIR is not the profile-selected application" >&2
         mismatch=1
     fi
     if [ "${AXOLOTY_TRANSPORT_DIR:-}" != "$repo_root/Transports/$transport" ]; then

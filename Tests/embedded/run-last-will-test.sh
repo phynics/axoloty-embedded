@@ -90,6 +90,7 @@ write_device_manifest "$device_b" "$root_b/working-evidence"
 
 SERIAL_TOOLS="$script_dir/serial-tools.mjs" \
 ESPTOOL_TOOLS="$script_dir/esptool-tools.mjs" \
+AXOLOTY_CORPUS_MANIFEST="$repo_root/Applications/device-smoke-agent/fixtures/manifest.json" \
 AGENT_VALIDATOR="$script_dir/agent-validator.mjs" \
 EVIDENCE_WRITER="$script_dir/write-device-evidence.mjs" \
 ESPTOOL="$esptool" \

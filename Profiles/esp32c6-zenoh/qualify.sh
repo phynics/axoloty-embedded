@@ -51,7 +51,8 @@ if [ -n "${AXOLOTY_PREVIEW_CORE_REVISION:-}" ]; then
 fi
 
 export AXOLOTY_PROFILE_DIR="$script_dir"
-export AXOLOTY_APPLICATION_DIR="$repo_root/Applications/$application"
+AXOLOTY_APPLICATION_DIR=$(node "$repo_root/Tools/select-profile-application.mjs" "$script_dir")
+export AXOLOTY_APPLICATION_DIR
 export AXOLOTY_TRANSPORT_DIR="$repo_root/Transports/$transport"
 export AXOLOTY_CORPUS_MANIFEST="$AXOLOTY_APPLICATION_DIR/fixtures/manifest.json"
 

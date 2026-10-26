@@ -138,7 +138,6 @@ compile_host_app() {
         -D EMBEDDED_MQTT_HOST_TEST \
         $exchange_define \
         -I "$work" \
-        -I "$repo_root/Applications/device-smoke-agent/include" \
         -I "$repo_root/Transports/mqtt-espidf/include" \
         -I "$repo_root/Interop" \
         -import-objc-header "$script_dir/abi-host-fixture.h" \
