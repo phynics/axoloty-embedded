@@ -55,7 +55,12 @@ unsigned host_mqtt_call_count(unsigned operation) {
     return operation < 9 ? host_calls[operation] : 0;
 }
 unsigned host_mqtt_resubscription_count(void) { return host_resubscriptions; }
-void host_mqtt_queue_event(void) { host_event_ready = 1; }
+void host_mqtt_queue_event(void) {
+    static const unsigned char default_topic[] = "coaty/3/test";
+    static const unsigned char default_payload[] = "{}";
+    host_mqtt_set_event(default_topic, (int)(sizeof(default_topic) - 1),
+                        default_payload, (int)(sizeof(default_payload) - 1));
+}
 
 int axoloty_mqtt_configure_last_will(const unsigned char *topic, int topic_length,
                                      const unsigned char *payload, int payload_length) {
