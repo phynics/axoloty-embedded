@@ -110,6 +110,7 @@ config_header="$proof_root/axoloty_network_config.h"
 corpus_manifest="$repo_root/Applications/device-smoke-agent/fixtures/manifest.json"
 smoke_result="$evidence_dir/swift-smoke-result.json"
 
+# shellcheck disable=SC2329 # invoked through the EXIT trap on the next line
 cleanup() {
     rm -f "$config_header" \
         "$proof_root/platform/main/axoloty_network_config.h"

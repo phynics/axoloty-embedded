@@ -317,9 +317,11 @@ elif ! grep -Fq 'axoloty_application_main(' "$normal_entry"; then
     fail application-entry 'normal platform entry does not call the neutral application dispatcher'
     entry_bad=1
 fi
+# Literal CMake source reference; the ${...} is a CMake variable, not shell.
+main_entry_ref='"${CMAKE_CURRENT_LIST_DIR}/Esp32c6AppMain.c"'
 if [ ! -f "$main_component" ] ||
    ! grep -Fq 'if(NOT AXOLOTY_QUALIFICATION_CARRIER_SCENARIO)' "$main_component" ||
-   ! grep -Fq '"${CMAKE_CURRENT_LIST_DIR}/Esp32c6AppMain.c"' "$main_component" ||
+   ! grep -Fq "$main_entry_ref" "$main_component" ||
    ! grep -Fq 'set(AXOLOTY_QUALIFICATION_CARRIER_SCENARIO ON)' "$main_component"; then
     fail application-entry 'normal and carrier-qualification entry selection is not mutually exclusive'
     entry_bad=1
