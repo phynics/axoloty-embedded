@@ -112,6 +112,20 @@ clang -std=c11 -O2 -Wall -Wextra -Werror -I "$platform_main" -I "$transport_main
     -c "$transport_main/mqtt_event_validation.c" -o "$work/validation.o"
 clang -std=c11 -O2 -Wall -Wextra -Werror -I "$platform_main" -I "$transport_main" \
     -c "$platform_main/runtime_identity.c" -o "$work/identity.o"
+clang -std=c11 -O2 -Wall -Wextra -Werror -I "$platform_main" -I "$transport_main" \
+    -I "$repo_root/Transports/mqtt-espidf/include" -I "$repo_root/Interop" \
+    -c "$transport_main/axoloty_carrier_v1.c" -o "$work/carrier-table.o"
+clang -std=c11 -O2 -Wall -Wextra -Werror -I "$repo_root/Interop" \
+    -c "$repo_root/Interop/axoloty_application_entry_v1.c" -o "$work/application-entry-helper.o"
+clang -std=c11 -O2 -Wall -Wextra -Werror -I "$repo_root/Interop" \
+    -c "$script_dir/abi-host-tables.c" -o "$work/abi-host-tables.o"
+
+# Requirements come from the application manifest; the macro plugin expands the
+# application's pure-Swift entry exactly as the firmware build does.
+plugin=$(sh "$repo_root/Tools/build-embedded-macro.sh")
+python3 "$repo_root/Tools/validate-composition.py" --repo-root "$repo_root" \
+    --app-manifest "$repo_root/Applications/device-smoke-agent/app.json" \
+    --emit-requirements "$work/ApplicationRequirements.swift"
 
 # The real application sources plus the host seam. No production source changes
 # for the host beyond the seam the application already accepts.
@@ -121,6 +135,14 @@ swiftc -swift-version 5 -enable-experimental-feature Lifetimes \
     -I "$repo_root/Applications/device-smoke-agent/include" \
     -I "$repo_root/Transports/mqtt-espidf/include" \
     -I "$repo_root/Interop" \
+    -import-objc-header "$repo_root/Interop/axoloty_application_entry_v1.h" \
+    -load-plugin-executable "$plugin#EmbeddedApplicationMacroImplementation" \
+    "$repo_root/Sources/EmbeddedCapabilities/EmbeddedApplicationMacro.swift" \
+    "$repo_root/Sources/EmbeddedCapabilities/EmbeddedApplicationDefinition.swift" \
+    "$repo_root/Sources/EmbeddedCapabilities/EmbeddedApplicationEntryAdapter.swift" \
+    "$repo_root/Sources/EmbeddedCapabilities/EmbeddedCapabilities.swift" \
+    "$repo_root/Sources/EmbeddedCapabilities/EmbeddedRequirements.swift" \
+    "$work/ApplicationRequirements.swift" \
     $(sources "$app_dir") \
     "$transport_main/EmbeddedMQTTClient.swift" \
     "$transport_main/CarrierNetworkProbe.swift" \
@@ -131,8 +153,10 @@ swiftc -swift-version 5 -enable-experimental-feature Lifetimes \
 
 output="$work/host-smoke-output.jsonl"
 "$work/host-smoke" > "$output" 2>&1 || true
+abi_output="$work/host-smoke-abi-output.jsonl"
+HOST_SMOKE_ABI=1 "$work/host-smoke" > "$abi_output" 2>&1 || true
 
-node - "$output" <<'JS'
+node - "$output" "$abi_output" <<'JS'
 import fs from "node:fs";
 const [path] = process.argv.slice(2);
 const lines = fs.readFileSync(path, "utf8").split(/\r?\n/);
@@ -156,5 +180,32 @@ if (!restarted) {
   console.error("run-host-smoke-test: the application did not reach its restart event");
   process.exit(1);
 }
-console.log(`host smoke passed: ${completion.counts.passed} checks`);
+const abiPath = process.argv[3];
+const abiLines = fs.readFileSync(abiPath, "utf8").split(/\r?\n/);
+const abiRecords = abiLines.flatMap(line => {
+  const start = line.indexOf("{");
+  if (start < 0) return [];
+  try { return [JSON.parse(line.slice(start))]; } catch { return []; }
+});
+const abiCompletion = abiRecords.find(record => record.caseId === "completion");
+if (!abiCompletion) {
+  console.error("run-host-smoke-test: the ABI entry emitted no completion record");
+  console.error(fs.readFileSync(abiPath, "utf8").split(/\r?\n/).slice(-30).join("\n"));
+  process.exit(1);
+}
+if (abiCompletion.status !== "completed" || abiCompletion.counts?.failed !== 0) {
+  console.error(`run-host-smoke-test: ABI completion status ${abiCompletion.status} counts ${JSON.stringify(abiCompletion.counts)}`);
+  process.exit(1);
+}
+if (!abiRecords.some(record => record.host === "restart")) {
+  console.error("run-host-smoke-test: the ABI entry did not reach its restart event");
+  process.exit(1);
+}
+if (JSON.stringify(abiCompletion.counts) !== JSON.stringify(completion.counts)) {
+  console.error("run-host-smoke-test: seam and ABI runs disagree");
+  console.error(`seam ${JSON.stringify(completion.counts)}`);
+  console.error(`abi  ${JSON.stringify(abiCompletion.counts)}`);
+  process.exit(1);
+}
+console.log(`host smoke passed: ${completion.counts.passed} checks (seam and ABI entry)`);
 JS

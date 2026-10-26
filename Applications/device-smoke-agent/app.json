@@ -5,6 +5,7 @@
     "main/AgentExchange.swift",
     "main/CoatyModelsModuleConsumer.swift",
     "main/DeviceSmokeApplication.swift",
+    "main/DeviceSmokeCapabilityBridge.swift",
     "main/DeviceSmokeSeam.swift",
     "main/EmbeddedApplication.swift",
     "main/ObjectModelModuleConsumer.swift",

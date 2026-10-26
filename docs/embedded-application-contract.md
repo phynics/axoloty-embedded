@@ -92,5 +92,10 @@ manifest record before invoking a callback. Returned lengths must fit both the
 caller buffer and the declared maximum.
 
 The state budget is propagated in `EmbeddedRequirements`; this unit does not
-prove the state object's size or storage placement. Smoke's legacy
-`DeviceSmokeSeam` adapter mismatch also remains an integration task.
+prove the state object's size or storage placement. The device smoke
+application now consumes the generated entry: `main/DeviceSmokeCapabilityBridge.swift`
+turns the validated capabilities back into the seam the application already
+runs against. The carrier probe stays with the selected transport, which
+exports the neutral `runCarrierNetworkProbe` operation; the application names
+that operation rather than a carrier, and the transport keeps ownership of its
+evidence record names and mechanics.

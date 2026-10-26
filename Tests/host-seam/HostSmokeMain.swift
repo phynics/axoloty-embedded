@@ -16,6 +16,15 @@ import Darwin
 @main
 struct HostSmokeMain {
     static func main() {
+        // The ABI mode drives the same application through the generated C
+        // entry and validated capability tables; the default mode uses the
+        // seam directly. Both must produce the same completion counts.
+        if getenv("HOST_SMOKE_ABI") != nil {
+            exit(axoloty_application_main(
+                axoloty_platform_get_v1(),
+                axoloty_carrier_get_v1()
+            ))
+        }
         checkExchangeFailureCleanup()
         exit(startDeviceSmoke(hostSmokeSeam()))
     }
