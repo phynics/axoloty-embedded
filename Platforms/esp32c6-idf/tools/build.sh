@@ -22,6 +22,7 @@ set -eu
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 platform_dir=$(CDPATH='' cd -- "$script_dir/.." && pwd)
 repo_root=$(git -C "$script_dir" rev-parse --show-toplevel)
+repo_root=$(realpath -e -- "$repo_root")
 
 if [ -z "${AXOLOTY_APPLICATION_DIR:-}" ] || [ ! -d "$AXOLOTY_APPLICATION_DIR" ]; then
     echo "error: AXOLOTY_APPLICATION_DIR must name the selected application directory" >&2
@@ -40,6 +41,16 @@ if [ -z "${AXOLOTY_PROFILE_DIR:-}" ]; then
     echo "error: AXOLOTY_PROFILE_DIR must name the selected profile; build through Profiles/<name>/build.sh" >&2
     exit 64
 fi
+if [ -z "${AXOLOTY_REPOSITORY_ROOT:-}" ] || [ ! -d "$AXOLOTY_REPOSITORY_ROOT" ]; then
+    echo "error: AXOLOTY_REPOSITORY_ROOT must name the firmware repository root" >&2
+    exit 64
+fi
+AXOLOTY_REPOSITORY_ROOT=$(realpath -e -- "$AXOLOTY_REPOSITORY_ROOT")
+if [ "$AXOLOTY_REPOSITORY_ROOT" != "$repo_root" ]; then
+    echo "error: AXOLOTY_REPOSITORY_ROOT does not match the build checkout" >&2
+    exit 64
+fi
+export AXOLOTY_REPOSITORY_ROOT AXOLOTY_PROFILE_DIR
 default_proof_root=$(axoloty_default_proof_root "$scratch")
 proof_root=${EMBEDDED_PROOF_ROOT:-"$default_proof_root"}
 build_dir=${EMBEDDED_BUILD_DIR:-"$proof_root/build"}
@@ -155,6 +166,21 @@ fi
 export AXOLOTY_PREPARATION_REPORT="$report"
 export AXOLOTY_APPLICATION_DIR
 export AXOLOTY_TRANSPORT_DIR
+export AXOLOTY_PROFILE_DIR AXOLOTY_REPOSITORY_ROOT
+
+# SwiftSyntax macros execute on the host even when the target compiler emits
+# Embedded Swift. Bootstrap them with the host toolchain before ESP-IDF
+# configures the target compilation.
+if [ -z "${AXOLOTY_EMBEDDED_MACRO_PLUGIN:-}" ]; then
+    AXOLOTY_EMBEDDED_MACRO_PLUGIN=$(AXOLOTY_SCRATCH="$scratch" \
+        sh "$repo_root/Tools/build-embedded-macro.sh")
+fi
+if [ ! -x "$AXOLOTY_EMBEDDED_MACRO_PLUGIN" ]; then
+    echo "error: AXOLOTY_EMBEDDED_MACRO_PLUGIN is not an executable host plugin: $AXOLOTY_EMBEDDED_MACRO_PLUGIN" >&2
+    exit 64
+fi
+export AXOLOTY_EMBEDDED_MACRO_PLUGIN
+export AXOLOTY_PROFILE_DIR AXOLOTY_REPOSITORY_ROOT
 
 
 : > "$evidence_dir/build.log"
@@ -162,6 +188,11 @@ cd "$build_project_dir"
 if [ ! -f "$build_dir/CMakeCache.txt" ] ||
     ! grep -q '^IDF_TARGET:STRING=esp32c6$' "$build_dir/CMakeCache.txt"; then
     idf.py -B "$build_dir" -D SDKCONFIG="$sdkconfig" \
+        -D AXOLOTY_REPOSITORY_ROOT="$AXOLOTY_REPOSITORY_ROOT" \
+        -D AXOLOTY_PROFILE_DIR="$AXOLOTY_PROFILE_DIR" \
+        -D AXOLOTY_EMBEDDED_MACRO_PLUGIN="$AXOLOTY_EMBEDDED_MACRO_PLUGIN" \
+        -D AXOLOTY_REPOSITORY_ROOT="$AXOLOTY_REPOSITORY_ROOT" \
+        -D AXOLOTY_PROFILE_DIR="$AXOLOTY_PROFILE_DIR" \
         -D AXOLOTY_APPLICATION_DIR="$AXOLOTY_APPLICATION_DIR" \
         -D AXOLOTY_TRANSPORT_DIR="$AXOLOTY_TRANSPORT_DIR" \
         -D AXOLOTY_PREPARATION_REPORT="$report" \
@@ -175,6 +206,11 @@ echo "Core report: $report"
 echo "parallelism: ${CMAKE_BUILD_PARALLEL_LEVEL:-default}"
 set +e
 idf.py -B "$build_dir" -D SDKCONFIG="$sdkconfig" \
+    -D AXOLOTY_REPOSITORY_ROOT="$AXOLOTY_REPOSITORY_ROOT" \
+    -D AXOLOTY_PROFILE_DIR="$AXOLOTY_PROFILE_DIR" \
+    -D AXOLOTY_EMBEDDED_MACRO_PLUGIN="$AXOLOTY_EMBEDDED_MACRO_PLUGIN" \
+    -D AXOLOTY_REPOSITORY_ROOT="$AXOLOTY_REPOSITORY_ROOT" \
+    -D AXOLOTY_PROFILE_DIR="$AXOLOTY_PROFILE_DIR" \
     -D AXOLOTY_APPLICATION_DIR="$AXOLOTY_APPLICATION_DIR" \
     -D AXOLOTY_TRANSPORT_DIR="$AXOLOTY_TRANSPORT_DIR" \
     -D AXOLOTY_PREPARATION_REPORT="$report" \

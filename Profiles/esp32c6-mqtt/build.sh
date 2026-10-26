@@ -30,6 +30,7 @@ platform=$(read_field platform)
 transport=$(read_field transport)
 
 export AXOLOTY_PROFILE_DIR="$script_dir"
+export AXOLOTY_REPOSITORY_ROOT="$repo_root"
 export AXOLOTY_APPLICATION_DIR="$repo_root/Applications/$application"
 export AXOLOTY_TRANSPORT_DIR="$repo_root/Transports/$transport"
 

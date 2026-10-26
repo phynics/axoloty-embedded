@@ -186,3 +186,111 @@ func embeddedExchangeWaitForReconnect(_ deadlineMS: UInt32) -> Int32 {
 func embeddedExchangeDisconnect() -> Int32 {
     applicationExchangeClient.disconnect() ? 1 : 0
 }
+
+@_cdecl("axoloty_mqtt_v1_supports_last_will")
+public func axoloty_mqtt_v1_supports_last_will(
+    _ context: UnsafeMutableRawPointer?, _ supported: UnsafeMutablePointer<UInt32>?
+) -> Int32 {
+    _ = context
+    guard let supported else { return AXOLOTY_ABI_STATUS_INVALID_ARGUMENT }
+    supported.pointee = embeddedExchangeSupportsLastWill() == 0 ? 0 : 1
+    return AXOLOTY_ABI_STATUS_OK
+}
+
+@_cdecl("axoloty_mqtt_v1_configure_last_will")
+public func axoloty_mqtt_v1_configure_last_will(
+    _ context: UnsafeMutableRawPointer?, _ topic: UnsafePointer<UInt8>?, _ topicLength: UInt32,
+    _ payload: UnsafePointer<UInt8>?, _ payloadLength: UInt32
+) -> Int32 {
+    _ = context
+    guard let topic, let payload, topicLength <= UInt32(Int32.max), payloadLength <= UInt32(Int32.max) else {
+        return AXOLOTY_ABI_STATUS_INVALID_ARGUMENT
+    }
+    return embeddedExchangeConfigureLastWill(topic, Int32(topicLength), payload, Int32(payloadLength)) != 0
+        ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED
+}
+
+@_cdecl("axoloty_mqtt_v1_connect")
+public func axoloty_mqtt_v1_connect(_ context: UnsafeMutableRawPointer?, _ deadline: UInt32) -> Int32 {
+    _ = context
+    return embeddedExchangeConnect(deadline) != 0 ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED
+}
+
+@_cdecl("axoloty_mqtt_v1_subscribe")
+public func axoloty_mqtt_v1_subscribe(
+    _ context: UnsafeMutableRawPointer?, _ topic: UnsafePointer<UInt8>?, _ length: UInt32, _ deadline: UInt32
+) -> Int32 {
+    _ = context
+    guard let topic, length <= UInt32(Int32.max) else { return AXOLOTY_ABI_STATUS_INVALID_ARGUMENT }
+    return embeddedExchangeSubscribe(topic, Int32(length), deadline) != 0
+        ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED
+}
+
+@_cdecl("axoloty_mqtt_v1_unsubscribe")
+public func axoloty_mqtt_v1_unsubscribe(
+    _ context: UnsafeMutableRawPointer?, _ topic: UnsafePointer<UInt8>?, _ length: UInt32, _ deadline: UInt32
+) -> Int32 {
+    _ = context
+    guard let topic, length <= UInt32(Int32.max) else { return AXOLOTY_ABI_STATUS_INVALID_ARGUMENT }
+    return embeddedExchangeUnsubscribe(topic, Int32(length), deadline) != 0
+        ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED
+}
+
+@_cdecl("axoloty_mqtt_v1_publish")
+public func axoloty_mqtt_v1_publish(
+    _ context: UnsafeMutableRawPointer?, _ topic: UnsafePointer<UInt8>?, _ topicLength: UInt32,
+    _ payload: UnsafePointer<UInt8>?, _ payloadLength: UInt32
+) -> Int32 {
+    _ = context
+    guard let topic, let payload, topicLength <= UInt32(Int32.max), payloadLength <= UInt32(Int32.max) else {
+        return AXOLOTY_ABI_STATUS_INVALID_ARGUMENT
+    }
+    return embeddedExchangePublish(topic, Int32(topicLength), payload, Int32(payloadLength)) != 0
+        ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED
+}
+
+@_cdecl("axoloty_mqtt_v1_poll_one_event")
+public func axoloty_mqtt_v1_poll_one_event(
+    _ context: UnsafeMutableRawPointer?, _ topic: UnsafeMutablePointer<UInt8>?, _ topicCapacity: UInt32,
+    _ topicLength: UnsafeMutablePointer<UInt32>?, _ payload: UnsafeMutablePointer<UInt8>?,
+    _ payloadCapacity: UInt32, _ payloadLength: UnsafeMutablePointer<UInt32>?
+) -> Int32 {
+    _ = context
+    guard let topic, let topicLength, let payload, let payloadLength,
+          topicCapacity <= UInt32(Int32.max), payloadCapacity <= UInt32(Int32.max) else {
+        return AXOLOTY_ABI_STATUS_INVALID_ARGUMENT
+    }
+    var copiedTopicLength: Int32 = 0
+    var copiedPayloadLength: Int32 = 0
+    let status = embeddedExchangePollOneEvent(
+        topic, Int32(topicCapacity), &copiedTopicLength,
+        payload, Int32(payloadCapacity), &copiedPayloadLength
+    )
+    if status == 1 {
+        topicLength.pointee = UInt32(copiedTopicLength)
+        payloadLength.pointee = UInt32(copiedPayloadLength)
+        return AXOLOTY_ABI_STATUS_OK
+    }
+    if status == 0 { return AXOLOTY_ABI_STATUS_NO_EVENT }
+    if status == -2 { return AXOLOTY_ABI_STATUS_CLOSED }
+    return AXOLOTY_ABI_STATUS_FAILED
+}
+
+@_cdecl("axoloty_mqtt_v1_wait_for_reconnect")
+public func axoloty_mqtt_v1_wait_for_reconnect(_ context: UnsafeMutableRawPointer?, _ deadline: UInt32) -> Int32 {
+    _ = context
+    return embeddedExchangeWaitForReconnect(deadline) != 0 ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED
+}
+
+@_cdecl("axoloty_mqtt_v1_wait_for_loopback")
+public func axoloty_mqtt_v1_wait_for_loopback(_ context: UnsafeMutableRawPointer?, _ deadline: UInt32) -> Int32 {
+    _ = context
+    return applicationExchangeClient.waitForLoopback(deadlineMS: deadline)
+        ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED
+}
+
+@_cdecl("axoloty_mqtt_v1_disconnect")
+public func axoloty_mqtt_v1_disconnect(_ context: UnsafeMutableRawPointer?) -> Int32 {
+    _ = context
+    return embeddedExchangeDisconnect() != 0 ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED
+}

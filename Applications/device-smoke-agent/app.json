@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "name": "device-smoke-agent",
+  "sources": [
+    "main/AgentExchange.swift",
+    "main/CoatyModelsModuleConsumer.swift",
+    "main/DeviceSmokeApplication.swift",
+    "main/DeviceSmokeSeam.swift",
+    "main/EmbeddedApplication.swift",
+    "main/ObjectModelModuleConsumer.swift",
+    "main/ProfileInterest.swift",
+    "main/ProtocolModuleConsumer.swift",
+    "main/StaticDeviceAgent.swift"
+  ],
+  "requirements": {
+    "platform": [
+      "clock.monotonicMicroseconds",
+      "scheduler.delayTicks",
+      "device.restart",
+      "console.write",
+      "diagnostics.heap",
+      "diagnostics.stack",
+      "network.configuration",
+      "network.bootstrap",
+      "network.reconnect",
+      "device.displayName"
+    ],
+    "carrier": [
+      "lastWill",
+      "connect",
+      "subscribe",
+      "unsubscribe",
+      "publish",
+      "poll",
+      "reconnect",
+      "disconnect",
+      "networkProbe"
+    ]
+  },
+  "capacities": {
+    "maxTopicLength": 256,
+    "maxPayloadSize": 2048,
+    "applicationStateBytes": 8
+  }
+}
