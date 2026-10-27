@@ -353,7 +353,7 @@ done
 # not in Core source-policy checks.
 
 component_root='Platforms/esp32c6-idf/components'
-source_resolver='Platforms/esp32c6-idf/cmake/axoloty-source.cmake'
+source_resolver='Platforms/common/axoloty-core.cmake'
 main_component='Platforms/esp32c6-idf/main/CMakeLists.txt'
 component_order_bad=0
 require_component_text() {
@@ -369,24 +369,51 @@ require_component_text() {
 if [ ! -d "$component_root" ]; then
     skip core-component-order 'no ESP-IDF component tree exists yet'
 else
+    require_component_text "$source_resolver" "file(GLOB collected_sources \"\${source_directory}/*.swift\")" 'the common helper does not collect reported Swift sources'
+    require_component_text 'Platforms/esp32c6-idf/cmake/axoloty-source.cmake' "include(\"\${AXOLOTY_COMMON_CORE_HELPER}\")" 'the SDK compatibility wrapper does not include the common helper'
+    require_component_text 'Platforms/esp32c6-idf/cmake/axoloty-source.cmake' 'AXOLOTY_REPOSITORY_ROOT' 'the staged SDK wrapper does not resolve the common helper through the repository input'
+    for component in axoloty_wire axoloty_object_model axoloty_protocol axoloty_coaty_models axoloty_zenoh_core; do
+        require_component_text "$component_root/$component/CMakeLists.txt" 'axoloty_collect_swift_sources(' "$component does not use the common prepared-source collector"
+    done
+    binding_report="$(python3 - "$component_root" <<'PY'
+from pathlib import Path
+import re
+import sys
+root = Path(sys.argv[1])
+for name in ("wire", "object_model", "protocol", "coaty_models", "zenoh_core"):
+    path = root / ("axoloty_" + name) / "CMakeLists.txt"
+    text = re.sub(r"(?m)#.*$", "", path.read_text()) if path.is_file() else ""
+    prefix = "AXOLOTY_" + name.upper()
+    pattern = (r"axoloty_collect_swift_sources\s*\(\s*" + re.escape(prefix + "_SOURCES")
+               + r'\s+"\$\{' + re.escape(prefix + "_SOURCE_DIR") + r'\}"\s+')
+    if not re.search(pattern, text):
+        print(f"{name} component collector is not bound to {prefix}_SOURCE_DIR")
+PY
+)"
+    while IFS= read -r line; do
+        if [ -n "$line" ]; then
+            fail core-component-order "$line"
+            component_order_bad=1
+        fi
+    done <<< "$binding_report"
     for variable in AXOLOTY_WIRE_SOURCE_DIR AXOLOTY_OBJECT_MODEL_SOURCE_DIR AXOLOTY_PROTOCOL_SOURCE_DIR AXOLOTY_COATY_MODELS_SOURCE_DIR AXOLOTY_STATIC_RUNTIME_SOURCE_DIR; do
         require_component_text "$source_resolver" "$variable" "$source_resolver does not resolve $variable from the preparation report"
     done
-    require_component_text "$component_root/axoloty_wire/CMakeLists.txt" "\"\${AXOLOTY_WIRE_SOURCE_DIR}/*.swift\"" 'the wire component does not compile the prepared AxolotyWire sources'
+    require_component_text "$component_root/axoloty_wire/CMakeLists.txt" "\"\${AXOLOTY_WIRE_SOURCE_DIR}\"" 'the wire component does not compile the prepared AxolotyWire sources'
     require_component_text "$component_root/axoloty_wire/CMakeLists.txt" 'add_custom_target(axoloty_wire_module_alias' 'the wire component does not publish its importable module alias'
-    require_component_text "$component_root/axoloty_object_model/CMakeLists.txt" "\"\${AXOLOTY_OBJECT_MODEL_SOURCE_DIR}/*.swift\"" 'the object-model component does not compile the prepared sources'
+    require_component_text "$component_root/axoloty_object_model/CMakeLists.txt" "\"\${AXOLOTY_OBJECT_MODEL_SOURCE_DIR}\"" 'the object-model component does not compile the prepared sources'
     require_component_text "$component_root/axoloty_object_model/CMakeLists.txt" 'axoloty_wire_module_alias' 'the object-model component does not wait for AxolotyWire'
     require_component_text "$component_root/axoloty_object_model/CMakeLists.txt" 'add_custom_target(axoloty_object_model_module_alias' 'the object-model component does not publish its importable module alias'
-    require_component_text "$component_root/axoloty_protocol/CMakeLists.txt" "\"\${AXOLOTY_PROTOCOL_SOURCE_DIR}/*.swift\"" 'the protocol component does not compile the prepared sources'
+    require_component_text "$component_root/axoloty_protocol/CMakeLists.txt" "\"\${AXOLOTY_PROTOCOL_SOURCE_DIR}\"" 'the protocol component does not compile the prepared sources'
     require_component_text "$component_root/axoloty_protocol/CMakeLists.txt" 'axoloty_object_model_module_alias' 'the protocol component does not wait for AxolotyObjectModel'
     require_component_text "$component_root/axoloty_protocol/CMakeLists.txt" 'add_custom_target(axoloty_protocol_module_alias' 'the protocol component does not publish its importable module alias'
-    require_component_text "$component_root/axoloty_coaty_models/CMakeLists.txt" "\"\${AXOLOTY_COATY_MODELS_SOURCE_DIR}/*.swift\"" 'the Coaty-model component does not compile the prepared sources'
+    require_component_text "$component_root/axoloty_coaty_models/CMakeLists.txt" "\"\${AXOLOTY_COATY_MODELS_SOURCE_DIR}\"" 'the Coaty-model component does not compile the prepared sources'
     require_component_text "$component_root/axoloty_coaty_models/CMakeLists.txt" 'axoloty_object_model_module_alias' 'the Coaty-model component does not wait for AxolotyObjectModel'
     require_component_text "$component_root/axoloty_static_runtime/CMakeLists.txt" 'AXOLOTY_STATIC_RUNTIME_SOURCE_DIR' 'the static-runtime component does not compile prepared sources'
     require_component_text "$component_root/axoloty_static_runtime/CMakeLists.txt" 'axoloty_protocol_module_alias' 'the static-runtime component does not wait for AxolotyProtocol'
     require_component_text "$main_component" 'axoloty_static_runtime_module_alias' 'the main component does not wait for AxolotyStaticRuntime'
     require_component_text "$source_resolver" 'AXOLOTY_ZENOH_CORE_SOURCE_DIR' "$source_resolver does not resolve AXOLOTY_ZENOH_CORE_SOURCE_DIR from the preparation report"
-    require_component_text "$component_root/axoloty_zenoh_core/CMakeLists.txt" "\"\${AXOLOTY_ZENOH_CORE_SOURCE_DIR}/*.swift\"" 'the Zenoh-core component does not compile the prepared AxolotyZenohCore sources'
+    require_component_text "$component_root/axoloty_zenoh_core/CMakeLists.txt" "\"\${AXOLOTY_ZENOH_CORE_SOURCE_DIR}\"" 'the Zenoh-core component does not compile the prepared AxolotyZenohCore sources'
     require_component_text "$component_root/axoloty_zenoh_core/CMakeLists.txt" 'axoloty_wire_module_alias' 'the Zenoh-core component does not wait for AxolotyWire'
     require_component_text "$component_root/axoloty_zenoh_core/CMakeLists.txt" "fmodule-map-file=\${AXOLOTY_ZENOH_FACADE_MODULE_MAP}" 'the Zenoh-core component does not bind the Core-generated facade module map'
     require_component_text "$component_root/axoloty_zenoh_core/CMakeLists.txt" 'AXOLOTY_ZENOH_FACADE_MODULE_DIR' 'the Zenoh-core component does not add the generated facade module-map directory to Swift Clang search paths'
@@ -513,7 +540,7 @@ fi
 # path is the same mistake in a different shape, so the absence of that shape
 # is a rule here too, not a review habit.
 
-facade_resolver='Platforms/esp32c6-idf/cmake/axoloty-source.cmake'
+facade_resolver='Platforms/common/axoloty-core.cmake'
 facade_manifest='Transports/zenoh-pico/main/idf_sources.cmake'
 facade_host_seam='Tests/embedded/run-zenoh-host-test.sh'
 facade_bad=0

@@ -4,13 +4,7 @@
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/axoloty-source.cmake")
 
-file(GLOB AXOLOTY_PROTOCOL_SOURCES
-    "${AXOLOTY_PROTOCOL_SOURCE_DIR}/*.swift"
-)
-
-if(NOT AXOLOTY_PROTOCOL_SOURCES)
-    message(FATAL_ERROR "No AxolotyProtocol sources found at ${AXOLOTY_PROTOCOL_SOURCE_DIR}")
-endif()
+axoloty_collect_swift_sources(AXOLOTY_PROTOCOL_SOURCES "${AXOLOTY_PROTOCOL_SOURCE_DIR}" protocol)
 
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/empty_bridging_header.h "")
 
@@ -34,9 +28,7 @@ if(TARGET axoloty_wire_module_alias)
     add_dependencies(axoloty_wire_module_alias ${WIRE_COMPONENT_LIB})
     add_dependencies(${COMPONENT_LIB} axoloty_wire_module_alias)
 endif()
-set_source_files_properties(${AXOLOTY_PROTOCOL_SOURCES}
-    PROPERTIES OBJECT_DEPENDS "${WIRE_MODULE_ALIAS}"
-)
+axoloty_append_swift_module_dependency(${AXOLOTY_PROTOCOL_SOURCES} "${WIRE_MODULE_ALIAS}")
 idf_component_get_property(OBJECT_MODEL_COMPONENT_LIB axoloty_object_model COMPONENT_LIB)
 get_target_property(OBJECT_MODEL_COMPONENT_BINARY_DIR ${OBJECT_MODEL_COMPONENT_LIB} BINARY_DIR)
 set(OBJECT_MODEL_MODULE_ALIAS
@@ -46,9 +38,7 @@ if(TARGET axoloty_object_model_module_alias)
     add_dependencies(axoloty_object_model_module_alias ${OBJECT_MODEL_COMPONENT_LIB})
     add_dependencies(${COMPONENT_LIB} axoloty_object_model_module_alias)
 endif()
-set_source_files_properties(${AXOLOTY_PROTOCOL_SOURCES}
-    APPEND PROPERTIES OBJECT_DEPENDS "${OBJECT_MODEL_MODULE_ALIAS}"
-)
+axoloty_append_swift_module_dependency(${AXOLOTY_PROTOCOL_SOURCES} "${OBJECT_MODEL_MODULE_ALIAS}")
 idf_component_get_property(JSON_CORE_COMPONENT_LIB json_core COMPONENT_LIB)
 add_dependencies(${COMPONENT_LIB} ${JSON_CORE_COMPONENT_LIB})
 

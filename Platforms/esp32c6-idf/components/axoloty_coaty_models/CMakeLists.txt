@@ -5,13 +5,11 @@
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/axoloty-source.cmake")
 
-file(GLOB AXOLOTY_COATY_MODELS_SOURCES
-    "${AXOLOTY_COATY_MODELS_SOURCE_DIR}/*.swift"
+axoloty_collect_swift_sources(
+    AXOLOTY_COATY_MODELS_SOURCES
+    "${AXOLOTY_COATY_MODELS_SOURCE_DIR}"
+    coaty_models
 )
-
-if(NOT AXOLOTY_COATY_MODELS_SOURCES)
-    message(FATAL_ERROR "No AxolotyCoatyModels sources found at ${AXOLOTY_COATY_MODELS_SOURCE_DIR}")
-endif()
 
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/empty_bridging_header.h "")
 
@@ -35,9 +33,7 @@ if(TARGET axoloty_object_model_module_alias)
     add_dependencies(axoloty_object_model_module_alias ${OBJECT_MODEL_COMPONENT_LIB})
     add_dependencies(${COMPONENT_LIB} axoloty_object_model_module_alias)
 endif()
-set_source_files_properties(${AXOLOTY_COATY_MODELS_SOURCES}
-    PROPERTIES OBJECT_DEPENDS "${OBJECT_MODEL_MODULE_ALIAS}"
-)
+axoloty_append_swift_module_dependency(${AXOLOTY_COATY_MODELS_SOURCES} "${OBJECT_MODEL_MODULE_ALIAS}")
 
 # AxolotyObjectModel's public module imports AxolotyWire. The object-model
 # component's private wire dependency does not make that transitive module
@@ -53,9 +49,7 @@ if(TARGET axoloty_wire_module_alias)
     add_dependencies(axoloty_wire_module_alias ${WIRE_COMPONENT_LIB})
     add_dependencies(${COMPONENT_LIB} axoloty_wire_module_alias)
 endif()
-set_source_files_properties(${AXOLOTY_COATY_MODELS_SOURCES}
-    APPEND PROPERTIES OBJECT_DEPENDS "${WIRE_MODULE_ALIAS}"
-)
+axoloty_append_swift_module_dependency(${AXOLOTY_COATY_MODELS_SOURCES} "${WIRE_MODULE_ALIAS}")
 
 # AxolotyWire imports the pinned `_JSONCore` module. Keep its published module
 # directory and build completion visible here as well; loading AxolotyWire
@@ -66,9 +60,7 @@ set(JSON_CORE_MODULE_ALIAS
     "${JSON_CORE_COMPONENT_BINARY_DIR}/_JSONCore.swiftmodule"
 )
 add_dependencies(${COMPONENT_LIB} ${JSON_CORE_COMPONENT_LIB})
-set_source_files_properties(${AXOLOTY_COATY_MODELS_SOURCES}
-    APPEND PROPERTIES OBJECT_DEPENDS "${JSON_CORE_MODULE_ALIAS}"
-)
+axoloty_append_swift_module_dependency(${AXOLOTY_COATY_MODELS_SOURCES} "${JSON_CORE_MODULE_ALIAS}")
 
 set_property(TARGET ${COMPONENT_LIB} PROPERTY INTERFACE_COMPILE_OPTIONS "")
 target_compile_options(${COMPONENT_LIB} PRIVATE

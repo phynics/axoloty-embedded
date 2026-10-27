@@ -42,9 +42,7 @@ if(TARGET axoloty_object_model_module_alias)
     add_dependencies(axoloty_object_model_module_alias ${OBJECT_MODEL_COMPONENT_LIB})
     add_dependencies(${COMPONENT_LIB} axoloty_object_model_module_alias)
 endif()
-set_source_files_properties(${AXOLOTY_STATIC_RUNTIME_SOURCES}
-    APPEND PROPERTIES OBJECT_DEPENDS "${OBJECT_MODEL_MODULE_ALIAS}"
-)
+axoloty_append_swift_module_dependency(${AXOLOTY_STATIC_RUNTIME_SOURCES} "${OBJECT_MODEL_MODULE_ALIAS}")
 
 # AxolotyProtocol transitively imports AxolotyWire and `_JSONCore`. Make the
 # transitive module aliases explicit so a clean parallel build cannot compile
@@ -58,18 +56,14 @@ if(TARGET axoloty_wire_module_alias)
     add_dependencies(axoloty_wire_module_alias ${WIRE_COMPONENT_LIB})
     add_dependencies(${COMPONENT_LIB} axoloty_wire_module_alias)
 endif()
-set_source_files_properties(${AXOLOTY_STATIC_RUNTIME_SOURCES}
-    APPEND PROPERTIES OBJECT_DEPENDS "${WIRE_MODULE_ALIAS}"
-)
+axoloty_append_swift_module_dependency(${AXOLOTY_STATIC_RUNTIME_SOURCES} "${WIRE_MODULE_ALIAS}")
 idf_component_get_property(JSON_CORE_COMPONENT_LIB json_core COMPONENT_LIB)
 get_target_property(JSON_CORE_COMPONENT_BINARY_DIR ${JSON_CORE_COMPONENT_LIB} BINARY_DIR)
 set(JSON_CORE_MODULE_ALIAS
     "${JSON_CORE_COMPONENT_BINARY_DIR}/_JSONCore.swiftmodule"
 )
 add_dependencies(${COMPONENT_LIB} ${JSON_CORE_COMPONENT_LIB})
-set_source_files_properties(${AXOLOTY_STATIC_RUNTIME_SOURCES}
-    APPEND PROPERTIES OBJECT_DEPENDS "${JSON_CORE_MODULE_ALIAS}"
-)
+axoloty_append_swift_module_dependency(${AXOLOTY_STATIC_RUNTIME_SOURCES} "${JSON_CORE_MODULE_ALIAS}")
 
 set_property(TARGET ${COMPONENT_LIB} PROPERTY INTERFACE_COMPILE_OPTIONS "")
 target_compile_options(${COMPONENT_LIB} PRIVATE

@@ -4,13 +4,7 @@
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/axoloty-source.cmake")
 
-file(GLOB AXOLOTY_WIRE_SOURCES
-    "${AXOLOTY_WIRE_SOURCE_DIR}/*.swift"
-)
-
-if(NOT AXOLOTY_WIRE_SOURCES)
-    message(FATAL_ERROR "No AxolotyWire sources found at ${AXOLOTY_WIRE_SOURCE_DIR}")
-endif()
+axoloty_collect_swift_sources(AXOLOTY_WIRE_SOURCES "${AXOLOTY_WIRE_SOURCE_DIR}" wire)
 
 # Create an empty bridging header — AxolotyWire is pure Swift and needs
 # no C interop. The idf_swift component requires a BRIDGING_HEADER.

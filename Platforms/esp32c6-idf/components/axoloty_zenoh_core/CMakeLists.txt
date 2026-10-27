@@ -34,13 +34,7 @@ if(NOT DEFINED AXOLOTY_ZENOH_CORE_SOURCE_DIR OR "${AXOLOTY_ZENOH_CORE_SOURCE_DIR
     )
 endif()
 
-file(GLOB AXOLOTY_ZENOH_CORE_SOURCES
-    "${AXOLOTY_ZENOH_CORE_SOURCE_DIR}/*.swift"
-)
-
-if(NOT AXOLOTY_ZENOH_CORE_SOURCES)
-    message(FATAL_ERROR "No AxolotyZenohCore sources found at ${AXOLOTY_ZENOH_CORE_SOURCE_DIR}")
-endif()
+axoloty_collect_swift_sources(AXOLOTY_ZENOH_CORE_SOURCES "${AXOLOTY_ZENOH_CORE_SOURCE_DIR}" zenoh_core)
 
 if(NOT DEFINED AXOLOTY_ZENOH_FACADE_MODULE_MAP OR "${AXOLOTY_ZENOH_FACADE_MODULE_MAP}" STREQUAL "")
     message(FATAL_ERROR
@@ -95,9 +89,7 @@ if(TARGET axoloty_wire_module_alias)
     add_dependencies(axoloty_wire_module_alias ${WIRE_COMPONENT_LIB})
     add_dependencies(${COMPONENT_LIB} axoloty_wire_module_alias)
 endif()
-set_source_files_properties(${AXOLOTY_ZENOH_CORE_SOURCES}
-    PROPERTIES OBJECT_DEPENDS "${WIRE_MODULE_ALIAS}"
-)
+axoloty_append_swift_module_dependency(${AXOLOTY_ZENOH_CORE_SOURCES} "${WIRE_MODULE_ALIAS}")
 idf_component_get_property(JSON_CORE_COMPONENT_LIB json_core COMPONENT_LIB)
 add_dependencies(${COMPONENT_LIB} ${JSON_CORE_COMPONENT_LIB})
 
