@@ -22,6 +22,11 @@ import AxolotyObjectModel
 /// dispatching, which is identical on the 32-bit device and safe on a host.
 nonisolated(unsafe) private var routerDispatchObserved = false
 
+/// Reads the router's first-use flag without changing its value.
+func touchRouterDispatchObservation() {
+    _ = routerDispatchObserved
+}
+
 private func recordRouterDispatch(
     _: UInt32,
     _: UnsafePointer<UInt8>?, _: Int,

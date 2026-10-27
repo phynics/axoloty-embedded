@@ -5,6 +5,9 @@ public protocol EmbeddedApplicationDefinition {
     /// The app-owned state passed to every entry invocation.
     associatedtype State: ~Copyable
 
+    /// Initializes inventoried app-owned static state before generated state access.
+    static func initializeStaticState()
+
     /// Runs the application with bounded capabilities and caller-owned state.
     ///
     /// - Parameters:
@@ -15,6 +18,11 @@ public protocol EmbeddedApplicationDefinition {
         _ capabilities: EmbeddedCapabilities,
         state: inout State
     ) -> EmbeddedApplicationResult
+}
+
+public extension EmbeddedApplicationDefinition {
+    /// Provides the unchanged no-op behavior for applications that do not opt in.
+    static func initializeStaticState() {}
 }
 
 /// A bounded application-level failure. ABI and bootstrap errors are separate.

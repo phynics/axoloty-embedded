@@ -29,9 +29,45 @@ public struct EmbeddedApplicationMacro: PeerMacro, ExtensionMacro {
             return []
         }
 
-        guard validateShape(declaration, attribute: node, context: context) else {
+        guard let traceEnabled = traceArgument(node, context: context),
+              validateShape(declaration, attribute: node, traceEnabled: traceEnabled, context: context) else {
             return []
         }
+
+        let traceEntry = traceEnabled ? """
+                    EmbeddedApplicationEntryAdapter.requireHeapTraceInitialization(
+                        EmbeddedApplicationRequirements.self
+                    )
+                    guard EmbeddedApplicationEntryAdapter.hasHeapTraceRequirements(
+                        EmbeddedApplicationRequirements.current
+                    ) else {
+                        return AXOLOTY_APPLICATION_STATUS_TRACE_REQUIREMENTS_MISMATCH
+                    }
+                    do {
+                        try capabilities.platform.beginHeapTrace()
+                    } catch let error {
+                        return EmbeddedApplicationEntryAdapter.traceStatus(for: error)
+                    }
+                    \(appName).initializeStaticState()
+                    return withUnsafeMutablePointer(to: &__axoloty_application_state) { statePointer in
+                        let allocationCount: UInt32
+                        do {
+                            allocationCount = try capabilities.platform.endHeapTrace()
+                        } catch let error as EmbeddedHeapTraceError {
+                            return EmbeddedApplicationEntryAdapter.traceStatus(for: error)
+                        } catch {
+                            return EmbeddedApplicationEntryAdapter.invalidABIStatus
+                        }
+                        guard allocationCount == 0 else {
+                            return EmbeddedApplicationEntryAdapter.traceAllocationsObservedStatus
+                        }
+                        let result = \(appName).run(capabilities, state: &statePointer.pointee)
+                        return EmbeddedApplicationEntryAdapter.status(for: result)
+                    }
+            """ : """
+                    let result = \(appName).run(capabilities, state: &__axoloty_application_state)
+                    return EmbeddedApplicationEntryAdapter.status(for: result)
+            """
 
         return [
             DeclSyntax(stringLiteral:
@@ -56,11 +92,36 @@ public struct EmbeddedApplicationMacro: PeerMacro, ExtensionMacro {
                     guard EmbeddedApplicationEntryAdapter.claimEntry() else {
                         return EmbeddedApplicationEntryAdapter.alreadyEnteredStatus
                     }
-                    let result = \(appName).run(capabilities, state: &__axoloty_application_state)
-                    return EmbeddedApplicationEntryAdapter.status(for: result)
+                \(traceEntry)
                 }
                 """)
         ]
+    }
+
+    private static func traceArgument(
+        _ node: AttributeSyntax,
+        context: some MacroExpansionContext
+    ) -> Bool? {
+        guard let arguments = node.arguments?.as(LabeledExprListSyntax.self) else { return false }
+        var found = false
+        var enabled = false
+        for argument in arguments {
+            guard argument.label?.text == "traceFirstInitialization" else {
+                diagnose("@EmbeddedApplication supports only traceFirstInitialization: Bool", at: argument, in: context)
+                return nil
+            }
+            guard !found else {
+                diagnose("@EmbeddedApplication argument traceFirstInitialization may appear only once", at: argument, in: context)
+                return nil
+            }
+            found = true
+            guard let literal = argument.expression.as(BooleanLiteralExprSyntax.self) else {
+                diagnose("traceFirstInitialization must be a literal true or false", at: argument.expression, in: context)
+                return nil
+            }
+            enabled = literal.literal.text == "true"
+        }
+        return enabled
     }
 
     private static func supportedNamespaceName(_ declaration: some DeclSyntaxProtocol) -> String? {
@@ -72,6 +133,7 @@ public struct EmbeddedApplicationMacro: PeerMacro, ExtensionMacro {
     private static func validateShape(
         _ declaration: some DeclSyntaxProtocol,
         attribute: AttributeSyntax,
+        traceEnabled: Bool,
         context: some MacroExpansionContext
     ) -> Bool {
         guard let members = namespaceMembers(declaration) else { return false }
@@ -97,8 +159,7 @@ public struct EmbeddedApplicationMacro: PeerMacro, ExtensionMacro {
             valid = false
         }
         for function in runFunctions {
-            let isStatic = function.modifiers.contains { $0.name.text == "static" }
-            if !isStatic {
+            if !function.modifiers.contains(where: { $0.name.text == "static" }) {
                 diagnose("application run must be static", at: attribute, in: context)
                 valid = false
             }
@@ -107,7 +168,30 @@ public struct EmbeddedApplicationMacro: PeerMacro, ExtensionMacro {
                 valid = false
             }
         }
+
+        if traceEnabled {
+            let hooks = members.compactMap { $0.decl.as(FunctionDeclSyntax.self) }
+                .filter { $0.name.text == "initializeStaticState" }
+            if hooks.count != 1 {
+                diagnose("traceFirstInitialization requires exactly one static initializeStaticState() hook", at: attribute, in: context)
+                valid = false
+            }
+            for hook in hooks where !validInitializationHook(hook) {
+                diagnose("initializeStaticState must be static, synchronous, nonthrowing, parameterless, and return Void", at: attribute, in: context)
+                valid = false
+            }
+        }
         return valid
+    }
+
+    private static func validInitializationHook(_ function: FunctionDeclSyntax) -> Bool {
+        let isStatic = function.modifiers.contains { $0.name.text == "static" }
+        let hasNoParameters = function.signature.parameterClause.parameters.isEmpty
+        let effect = function.signature.effectSpecifiers
+        let isSynchronous = effect?.asyncSpecifier == nil
+        let isNonthrowing = effect?.throwsClause == nil
+        let returnType = function.signature.returnClause?.type.trimmedDescription ?? "Void"
+        return isStatic && hasNoParameters && isSynchronous && isNonthrowing && (returnType == "Void" || returnType == "()")
     }
 
     private static func namespaceMembers(_ declaration: some DeclSyntaxProtocol) -> MemberBlockItemListSyntax? {
@@ -140,9 +224,7 @@ public struct EmbeddedApplicationMacro: PeerMacro, ExtensionMacro {
         conformingTo protocols: [TypeSyntax],
         in context: some MacroExpansionContext
     ) throws(EmbeddedApplicationMacroError) -> [ExtensionDeclSyntax] {
-        guard supportedNamespaceName(declaration) != nil else {
-            return []
-        }
+        guard supportedNamespaceName(declaration) != nil else { return [] }
         do {
             return [try ExtensionDeclSyntax("extension \(type): EmbeddedApplicationDefinition {}")]
         } catch {

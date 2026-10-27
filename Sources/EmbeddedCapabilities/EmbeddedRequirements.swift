@@ -1,5 +1,11 @@
 // Copyright (c) 2026 Atakan DULKER. Licensed under the MIT License.
 
+/// Marker emitted by composition only when heap diagnostics provide both trace operations.
+///
+/// Trace-enabled application entries use this constraint to make a missing
+/// manifest trace contract a compile-time error.
+public protocol EmbeddedHeapTraceInitializationRequirements {}
+
 /// Fixed requirements generated from the selected application's `app.json`.
 public struct EmbeddedRequirements {
     /// Required platform capability bits from the v1 platform ABI.

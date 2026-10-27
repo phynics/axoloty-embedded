@@ -33,6 +33,24 @@ application failure, and `-101` means the shared boundary rejected the ABI
 tables. `-103` means a valid entry was already claimed. No Swift error or
 app-selected integer status crosses C.
 
+An application can opt in to tracing its first state initialization with
+`@EmbeddedApplication(traceFirstInitialization: true)`. It must implement a
+static, synchronous, nonthrowing `initializeStaticState()` hook. The hook runs
+after entry claim and before the generated state global is first addressed.
+The entry stops tracing while that state remains borrowed, and calls `run`
+only when the trace reports a successful zero allocation count. Statuses `-104`
+through `-108` report missing trace requirements, trace start failure, trace
+stop failure, trace overflow, and observed allocations. The requirements
+generator emits the `EmbeddedHeapTraceInitializationRequirements` conformance
+only when `diagnostics.heap` supplies both trace operations, so an opted-in
+app with a mismatched manifest fails compilation. The runtime mask check stays
+as a second guard.
+
+The `build:macro-first-init` verification check builds the macro plugin from
+the locked SwiftSyntax dependency and runs host ordering and status fixtures.
+CI requires this check. It uses a private SwiftPM scratch and does not need a
+prepared Core checkout, Docker, a firmware SDK, or the Embedded Swift target.
+
 The generated entry stores one concrete `State = .init()` value in ordinary
 Swift global storage. It compares the selected target's `MemoryLayout<State>.stride`
 with `applicationStateBytes` as a `UInt64` before it accesses that global or
@@ -44,10 +62,11 @@ An empty state is checked using the target's actual stride, including any
 nonzero stride Swift assigns to a zero-sized type.
 
 This check is a runtime entry rejection, not a build-time or final-image size
-gate. It does not claim that initialization is allocation-free, that all
-storage placement has been verified in a final linked image, or that entry is
-safe for concurrent or repeated calls. The generated global uses Swift's
-supported initializer; no raw-zero representation is assumed.
+gate. The optional trace proves only the selected first-initialization
+interval with the platform trace implementation. It does not prove allocator
+coverage, all mutable-global ownership, final-image storage placement, or stack
+bounds. The generated global uses Swift's supported initializer; no raw-zero
+representation is assumed.
 
 After state-budget and ABI validation succeed, the generated entry calls the
 shared C `axoloty_application_entry_claim_v1` helper. That helper owns one

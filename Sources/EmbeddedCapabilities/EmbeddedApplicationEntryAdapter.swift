@@ -2,6 +2,41 @@
 
 /// Maps bounded Swift app outcomes to the stable C entry status values.
 public enum EmbeddedApplicationEntryAdapter {
+    /// Applies the compile-time requirement for an app's first-initialization trace.
+    ///
+    /// `EmbeddedApplicationRequirements` conforms only when the selected app
+    /// manifest provides both heap trace operations. A failed constraint names
+    /// ``EmbeddedHeapTraceInitializationRequirements`` in the compiler error.
+    public static func requireHeapTraceInitialization<Requirements: EmbeddedHeapTraceInitializationRequirements>(
+        _ requirements: Requirements.Type
+    ) {}
+
+    /// Returns whether the selected manifest includes both heap trace operations.
+    public static func hasHeapTraceRequirements(_ requirements: EmbeddedRequirements) -> Bool {
+        requirements.requiresPlatformFunction(4) && requirements.requiresPlatformFunction(5)
+    }
+
+    /// Maps a typed trace failure to the stable application entry status.
+    public static func traceStatus(for error: EmbeddedHeapTraceError) -> Int32 {
+        switch error {
+        case .capabilityUnavailable:
+            return AXOLOTY_APPLICATION_STATUS_TRACE_REQUIREMENTS_MISMATCH
+        case .invalidABI:
+            return AXOLOTY_APPLICATION_STATUS_INVALID_ABI
+        case .startFailed:
+            return AXOLOTY_APPLICATION_STATUS_TRACE_START_FAILED
+        case .stopFailed:
+            return AXOLOTY_APPLICATION_STATUS_TRACE_STOP_FAILED
+        case .overflow:
+            return AXOLOTY_APPLICATION_STATUS_TRACE_OVERFLOW
+        }
+    }
+
+    /// Returns the status used when first initialization allocated any heap memory.
+    public static var traceAllocationsObservedStatus: Int32 {
+        AXOLOTY_APPLICATION_STATUS_TRACE_ALLOCATIONS_OBSERVED
+    }
+
     /// Constructs capabilities using the selected app's single generated requirement record.
     public static func capabilities(
         validatingPlatform platform: UnsafePointer<axoloty_platform_v1>?,

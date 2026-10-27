@@ -227,6 +227,12 @@ if wanted build; then
     check_script host-smoke \
         'swiftc, a host C compiler, or the prepared Core is not available for the host smoke check' \
         Tests/embedded/run-host-smoke-test.sh
+    # This host-only macro fixture builds the pinned SwiftSyntax plugin from
+    # its Package.resolved lock and exercises entry ordering without Core,
+    # Docker, an SDK, or the RISC-V Embedded Swift target.
+    check_script macro-first-init \
+        'swift, swiftc, clang, python3, or the locked macro dependencies are unavailable' \
+        Tools/EmbeddedApplicationMacros/check-first-init-unit.sh
 
     available_profiles="$(profiles)"
     if [ -z "$available_profiles" ]; then

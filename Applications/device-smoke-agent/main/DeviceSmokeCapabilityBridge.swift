@@ -10,6 +10,11 @@
 /// The capabilities the generated entry validated for this image.
 nonisolated(unsafe) private var installedCapabilities: EmbeddedCapabilities?
 
+/// Reads the installed-capabilities slot without installing or copying a value.
+func touchInstalledCapabilities() {
+    _ = installedCapabilities
+}
+
 /// Runs the device smoke application through the stable application ABI.
 ///
 /// - Parameter capabilities: Validated platform and carrier operations.
