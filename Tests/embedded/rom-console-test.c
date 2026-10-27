@@ -97,8 +97,11 @@ void vTaskDelay(TickType_t ticks) { (void)ticks; }
 uint32_t axoloty_main_stack_high_water(void) { return 0; }
 uint32_t axoloty_main_stack_size(void) { return 0; }
 uint32_t axoloty_reset_reason(void) { return 0; }
-int axoloty_heap_trace_begin(void) { return 0; }
-uint32_t axoloty_heap_trace_end(void) { return 0; }
+int32_t axoloty_heap_trace_begin(void) { return AXOLOTY_ABI_STATUS_FAILED; }
+int32_t axoloty_heap_trace_end(uint32_t *out_allocations) {
+    (void)out_allocations;
+    return AXOLOTY_ABI_STATUS_FAILED;
+}
 int axoloty_device_display_name(uint8_t *buffer, int capacity) { (void)buffer; (void)capacity; return 0; }
 int axoloty_network_configured(void) { return 0; }
 uint32_t axoloty_network_role(void) { return 0; }

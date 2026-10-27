@@ -92,10 +92,10 @@ public struct DeviceSmokeSeam {
     var mainStackSize: @convention(c) () -> UInt32
     /// Reset reason code.
     var resetReason: @convention(c) () -> UInt32
-    /// Starts the standalone heap trace. Non-zero on success.
+    /// Starts the standalone heap trace. Zero indicates success.
     var heapTraceBegin: @convention(c) () -> Int32
-    /// Stops the heap trace and returns the recorded allocation count.
-    var heapTraceEnd: @convention(c) () -> UInt32
+    /// Stops the trace and writes the complete allocation count on success.
+    var heapTraceEnd: @convention(c) (UnsafeMutablePointer<UInt32>) -> Int32
 
     /// Non-zero when an operator supplied network and broker configuration.
     var networkConfigured: @convention(c) () -> Int32
@@ -150,7 +150,7 @@ public struct DeviceSmokeSeam {
         mainStackSize: @escaping @convention(c) () -> UInt32,
         resetReason: @escaping @convention(c) () -> UInt32,
         heapTraceBegin: @escaping @convention(c) () -> Int32,
-        heapTraceEnd: @escaping @convention(c) () -> UInt32,
+        heapTraceEnd: @escaping @convention(c) (UnsafeMutablePointer<UInt32>) -> Int32,
         networkConfigured: @escaping @convention(c) () -> Int32,
         networkRole: @escaping @convention(c) () -> UInt32,
         networkScenario: @escaping @convention(c) () -> UInt32,

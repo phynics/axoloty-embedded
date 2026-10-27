@@ -27,6 +27,7 @@ fi
     -I "$repo_root/Interop" \
     -I "$repo_root/Platforms/esp32c6-idf/main" \
     "$repo_root/Platforms/esp32c6-idf/main/axoloty_platform_v1.c" \
+    "$repo_root/Platforms/esp32c6-idf/main/heap_trace_platform_adapter.c" \
     "$script_dir/rom-console-test.c" \
     -o "$tmp/rom-console-test"
 "$tmp/rom-console-test"

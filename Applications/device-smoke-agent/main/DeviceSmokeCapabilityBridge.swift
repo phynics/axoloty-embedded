@@ -94,12 +94,24 @@ private func nowMicroseconds() -> Int64 {
 
 @inline(__always)
 private func beginHeapTrace() -> Int32 {
-    (try? activeCapabilities().platform.beginHeapTrace()) == nil ? 0 : 1
+    do {
+        try activeCapabilities().platform.beginHeapTrace()
+        return AXOLOTY_ABI_STATUS_OK
+    } catch {
+        return AXOLOTY_ABI_STATUS_FAILED
+    }
 }
 
 @inline(__always)
-private func endHeapTrace() -> UInt32 {
-    (try? activeCapabilities().platform.endHeapTrace()) ?? 0
+private func endHeapTrace(_ output: UnsafeMutablePointer<UInt32>) -> Int32 {
+    do {
+        output.pointee = try activeCapabilities().platform.endHeapTrace()
+        return AXOLOTY_ABI_STATUS_OK
+    } catch EmbeddedHeapTraceError.overflow {
+        return AXOLOTY_ABI_STATUS_TRACE_OVERFLOW
+    } catch {
+        return AXOLOTY_ABI_STATUS_FAILED
+    }
 }
 
 @inline(__always)

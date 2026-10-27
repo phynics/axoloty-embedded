@@ -65,8 +65,8 @@ unsigned int axoloty_largest_internal_block(void);
 unsigned int axoloty_main_stack_high_water(void);
 unsigned int axoloty_main_stack_size(void);
 unsigned int axoloty_reset_reason(void);
-int axoloty_heap_trace_begin(void);
-unsigned int axoloty_heap_trace_end(void);
+int32_t axoloty_heap_trace_begin(void);
+int32_t axoloty_heap_trace_end(uint32_t *out_allocations);
 
 // Platform-owned Wi-Fi, network deadline, and device configuration operations.
 #include "network_bootstrap.h"

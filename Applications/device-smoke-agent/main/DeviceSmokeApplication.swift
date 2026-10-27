@@ -676,9 +676,13 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     #if HOST_AGENT_EXCHANGE
     let benchmarkMetrics = BenchmarkMetrics.zero
     #else
-    if seam.heapTraceBegin() != 0 {
+    if seam.heapTraceBegin() == AXOLOTY_ABI_STATUS_OK {
         runGeneratedCorpus { _, _ in }
-        hotPathAllocations = seam.heapTraceEnd()
+        var allocations: UInt32 = 0
+        let traceStatus = withUnsafeMutablePointer(to: &allocations) { seam.heapTraceEnd($0) }
+        // This legacy benchmark-only field has no status channel. Preserve a
+        // visible failure value; first-init proof consumes the typed API.
+        hotPathAllocations = traceStatus == AXOLOTY_ABI_STATUS_OK ? allocations : UInt32.max
     }
     let generatedMetrics = benchmarkGeneratedCorpus()
     let benchmarkMetrics = BenchmarkMetrics(
