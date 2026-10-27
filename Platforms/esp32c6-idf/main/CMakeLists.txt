@@ -205,6 +205,7 @@ set(AXOLOTY_SWIFT_SOURCES
 # so the normal image keeps `Esp32c6AppMain.c`.
 set(AXOLOTY_PLATFORM_C_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/axoloty_platform_v1.c"
+    "${CMAKE_CURRENT_LIST_DIR}/heap_trace_platform_adapter.c"
     "${AXOLOTY_INTEROP_DIR}/axoloty_application_entry_v1.c"
 )
 if(NOT AXOLOTY_QUALIFICATION_CARRIER_SCENARIO)

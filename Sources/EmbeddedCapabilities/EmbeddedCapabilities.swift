@@ -16,6 +16,20 @@ public enum EmbeddedCapabilityError: Error {
     case capabilityUnavailable
 }
 
+/// Failure while starting or completing a platform heap trace.
+public enum EmbeddedHeapTraceError: Error, Equatable {
+    /// The application did not declare heap tracing as a capability.
+    case capabilityUnavailable
+    /// The validated platform table is missing the required function.
+    case invalidABI
+    /// The platform could not initialize or start heap tracing.
+    case startFailed
+    /// The platform could not stop tracing or produce a valid summary.
+    case stopFailed
+    /// The trace buffer overflowed, so its allocation count is incomplete.
+    case overflow
+}
+
 /// Typed access to the immutable platform and carrier tables supplied at entry.
 ///
 /// The tables and their contexts must remain alive for the synchronous
@@ -94,19 +108,22 @@ public struct EmbeddedPlatformCapabilities {
     }
 
     /// Starts a bounded platform heap trace.
-    public func beginHeapTrace() throws(EmbeddedCapabilityError) {
+    public func beginHeapTrace() throws(EmbeddedHeapTraceError) {
         guard requirements.requiresPlatformFunction(4) else { throw .capabilityUnavailable }
         guard let call = table.pointee.heap_trace_begin else { throw .invalidABI }
-        try checked(call(table.pointee.context))
+        guard call(table.pointee.context) == AXOLOTY_ABI_STATUS_OK else { throw .startFailed }
     }
 
-    /// Ends the active heap trace and writes the allocation count.
-    public func endHeapTrace() throws(EmbeddedCapabilityError) -> UInt32 {
+    /// Ends the active heap trace and returns a complete allocation count.
+    public func endHeapTrace() throws(EmbeddedHeapTraceError) -> UInt32 {
         guard requirements.requiresPlatformFunction(5) else { throw .capabilityUnavailable }
         var count: UInt32 = 0
         guard let call = table.pointee.heap_trace_end else { throw .invalidABI }
-        try checked(call(table.pointee.context, &count))
-        return count
+        switch call(table.pointee.context, &count) {
+        case AXOLOTY_ABI_STATUS_OK: return count
+        case AXOLOTY_ABI_STATUS_TRACE_OVERFLOW: throw .overflow
+        default: throw .stopFailed
+        }
     }
 
     /// Returns whether operator network configuration is present.

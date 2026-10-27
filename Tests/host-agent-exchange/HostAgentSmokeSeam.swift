@@ -545,7 +545,10 @@ private func hostRestart() {
 @inline(__always) private func hostMainStackSize() -> UInt32 { 131_072 }
 @inline(__always) private func hostResetReason() -> UInt32 { 0 }
 @inline(__always) private func hostHeapTraceBegin() -> Int32 { 1 }
-@inline(__always) private func hostHeapTraceEnd() -> UInt32 { 0 }
+@inline(__always) private func hostHeapTraceEnd(_ output: UnsafeMutablePointer<UInt32>) -> Int32 {
+    output.pointee = 0
+    return AXOLOTY_ABI_STATUS_OK
+}
 
 private func hostDeviceDisplayName(_ buffer: UnsafeMutablePointer<UInt8>, _ capacity: Int32) -> Int32 {
     let value = Array("Host Smoke".utf8)

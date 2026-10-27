@@ -13,6 +13,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
+#include "axoloty_abi_status_v1.h"
 
 void axoloty_print(const char *msg) {
     esp_rom_printf("%s", msg);
@@ -48,12 +49,26 @@ unsigned int axoloty_reset_reason(void) {
 
 static heap_trace_record_t axoloty_heap_records[128];
 
-int axoloty_heap_trace_begin(void) {
-    if (heap_trace_init_standalone(axoloty_heap_records, 128) != ESP_OK) return 0;
-    return heap_trace_start(HEAP_TRACE_ALL) == ESP_OK;
+int32_t axoloty_heap_trace_begin(void) {
+    if (heap_trace_init_standalone(axoloty_heap_records, 128) != ESP_OK) {
+        return AXOLOTY_ABI_STATUS_FAILED;
+    }
+    return heap_trace_start(HEAP_TRACE_ALL) == ESP_OK
+        ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED;
 }
 
-unsigned int axoloty_heap_trace_end(void) {
-    if (heap_trace_stop() != ESP_OK) return UINT32_MAX;
-    return (unsigned int)heap_trace_get_count();
+int32_t axoloty_heap_trace_end(uint32_t *out_allocations) {
+    if (out_allocations == NULL) return AXOLOTY_ABI_STATUS_INVALID_ARGUMENT;
+    if (heap_trace_stop() != ESP_OK) return AXOLOTY_ABI_STATUS_FAILED;
+
+    heap_trace_summary_t summary;
+    if (heap_trace_summary(&summary) != ESP_OK) return AXOLOTY_ABI_STATUS_FAILED;
+    if (summary.mode != HEAP_TRACE_ALL) return AXOLOTY_ABI_STATUS_FAILED;
+    if (summary.has_overflowed != 0) return AXOLOTY_ABI_STATUS_TRACE_OVERFLOW;
+#if SIZE_MAX > UINT32_MAX
+    if (summary.total_allocations > UINT32_MAX) return AXOLOTY_ABI_STATUS_FAILED;
+#endif
+
+    *out_allocations = (uint32_t)summary.total_allocations;
+    return AXOLOTY_ABI_STATUS_OK;
 }

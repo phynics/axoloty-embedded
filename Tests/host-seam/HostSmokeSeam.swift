@@ -89,7 +89,10 @@ private func hostResetReason() -> UInt32 { 0 }
 @inline(__always)
 private func hostHeapTraceBegin() -> Int32 { 1 }
 @inline(__always)
-private func hostHeapTraceEnd() -> UInt32 { 0 }
+private func hostHeapTraceEnd(_ output: UnsafeMutablePointer<UInt32>) -> Int32 {
+    output.pointee = 0
+    return AXOLOTY_ABI_STATUS_OK
+}
 
 @inline(__always)
 private func hostNetworkConfigured() -> Int32 { HostSmokeConfiguration.networkConfigured }

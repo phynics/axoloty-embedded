@@ -149,6 +149,18 @@ internal heap, largest internal block, main stack high-water mark, main stack
 size, reset reason, and heap-trace allocation count. It is a platform-defined
 snapshot, not an allocation proof for the application entry.
 
+`diagnostics.heap` start reports initialization/start failure as
+`AXOLOTY_ABI_STATUS_FAILED`. End stops tracing and reads the SDK summary. It
+writes the caller's `uint32_t` count only when the summary reports
+`HEAP_TRACE_ALL`, no overflow, and a total allocation count that fits the ABI.
+It uses `total_allocations`, not the buffered record count. Stop or summary
+failure, a wrong summary mode, or a too-wide count returns
+`AXOLOTY_ABI_STATUS_FAILED`; overflow returns
+`AXOLOTY_ABI_STATUS_TRACE_OVERFLOW` (`-3`). Every failure leaves the output
+unchanged. Swift exposes start, stop, and overflow as distinct typed trace
+errors. A complete count does not by itself prove that every allocator path
+was traced.
+
 ### Carrier capability table
 
 The `capabilities` field contains the `AXOLOTY_CARRIER_CAP_*` bits. The

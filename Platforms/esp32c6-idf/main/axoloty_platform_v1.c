@@ -15,8 +15,8 @@
 extern uint32_t axoloty_main_stack_high_water(void);
 extern uint32_t axoloty_main_stack_size(void);
 extern uint32_t axoloty_reset_reason(void);
-extern int axoloty_heap_trace_begin(void);
-extern uint32_t axoloty_heap_trace_end(void);
+extern int32_t axoloty_platform_heap_trace_begin(void *context);
+extern int32_t axoloty_platform_heap_trace_end(void *context, uint32_t *out_allocations);
 extern int axoloty_device_display_name(uint8_t *buffer, int capacity);
 
 static int32_t platform_clock(void *context, uint64_t *out_value) {
@@ -59,18 +59,6 @@ static int32_t platform_metrics(void *context, axoloty_platform_metrics_v1 *out_
     out_metrics->main_stack_size = axoloty_main_stack_size();
     out_metrics->reset_reason = axoloty_reset_reason();
     out_metrics->heap_trace_allocations = 0;
-    return AXOLOTY_ABI_STATUS_OK;
-}
-
-static int32_t platform_heap_trace_begin(void *context) {
-    (void)context;
-    return axoloty_heap_trace_begin() != 0 ? AXOLOTY_ABI_STATUS_OK : AXOLOTY_ABI_STATUS_FAILED;
-}
-
-static int32_t platform_heap_trace_end(void *context, uint32_t *out_allocations) {
-    (void)context;
-    if (out_allocations == NULL) return AXOLOTY_ABI_STATUS_INVALID_ARGUMENT;
-    *out_allocations = axoloty_heap_trace_end();
     return AXOLOTY_ABI_STATUS_OK;
 }
 
@@ -139,8 +127,8 @@ static const axoloty_platform_v1 platform_table = {
     .restart = platform_restart,
     .write_log = platform_log,
     .read_metrics = platform_metrics,
-    .heap_trace_begin = platform_heap_trace_begin,
-    .heap_trace_end = platform_heap_trace_end,
+    .heap_trace_begin = axoloty_platform_heap_trace_begin,
+    .heap_trace_end = axoloty_platform_heap_trace_end,
     .network_configured = platform_network_configured,
     .network_role = platform_network_role,
     .network_scenario = platform_network_scenario,
