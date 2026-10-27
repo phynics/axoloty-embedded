@@ -101,6 +101,8 @@ if wanted repo; then
     bash Tools/check-smoke-coverage.sh || repo_failed=1
     Tests/embedded/check-profile-composition.sh || repo_failed=1
     Tests/embedded/check-application-boundary-invariants.sh || repo_failed=1
+    printf '\n== repo: linked-storage audit fixtures\n'
+    python3 Tools/EmbeddedApplicationMacros/linked_storage_audit.py --selftest || repo_failed=1
     if [ "$repo_failed" -eq 0 ]; then
         record PASS repo 'invariants hold and the smoke case set matches its baseline'
     else

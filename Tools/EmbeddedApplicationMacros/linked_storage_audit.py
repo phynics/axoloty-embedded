@@ -1,0 +1,458 @@
+# Copyright (c) 2026 Atakan DULKER. Licensed under the MIT License.
+"""Read-only final ELF and linker-map storage measurement for Embedded62 Unit 1."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import struct
+import sys
+from pathlib import Path
+
+VERSION = "embedded62-linked-storage-audit/1"
+ALLOC = 0x2
+WRITE = 0x1
+
+
+class AuditError(Exception):
+    """An input cannot support the requested measurement."""
+
+
+def sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def cstring(table: bytes, offset: int) -> str:
+    if offset < 0 or offset >= len(table):
+        raise AuditError("invalid ELF string-table offset")
+    end = table.find(b"\0", offset)
+    if end < 0:
+        raise AuditError("unterminated ELF string")
+    return table[offset:end].decode("utf-8", "replace")
+
+
+def parse_elf(data: bytes) -> dict:
+    if len(data) < 52 or data[:4] != b"\x7fELF":
+        raise AuditError("malformed ELF header")
+    elf_class, encoding = data[4], data[5]
+    if elf_class not in (1, 2) or encoding not in (1, 2):
+        raise AuditError("unsupported ELF class or byte order")
+    endian = "<" if encoding == 1 else ">"
+    if elf_class == 1:
+        fmt = endian + "HHIIIIIHHHHHH"
+        header = struct.unpack_from(fmt, data, 16)
+        machine, shoff, shentsize, shnum, shstrndx = header[1], header[5], header[10], header[11], header[12]
+        section_fmt = endian + "IIIIIIIIII"
+        symbol_fmt = endian + "IIIBBH"
+    else:
+        if len(data) < 64:
+            raise AuditError("truncated ELF64 header")
+        header = struct.unpack_from(endian + "HHIQQQIHHHHHH", data, 16)
+        machine, shoff, shentsize, shnum, shstrndx = header[1], header[5], header[10], header[11], header[12]
+        section_fmt = endian + "IIQQQQIIQQ"
+        symbol_fmt = endian + "IBBHQQ"
+    if machine != 243:
+        raise AuditError(f"unsupported ELF architecture machine={machine}")
+    if shnum == 0 or shstrndx >= shnum or shentsize < struct.calcsize(section_fmt):
+        raise AuditError("unsupported extended or malformed ELF section table")
+    if shoff + shentsize * shnum > len(data):
+        raise AuditError("ELF section table is outside the file")
+    raw_sections = [struct.unpack_from(section_fmt, data, shoff + i * shentsize) for i in range(shnum)]
+    string_sec = raw_sections[shstrndx]
+    shstr = data[string_sec[4]:string_sec[4] + string_sec[5]]
+    sections = []
+    for index, row in enumerate(raw_sections):
+        name = cstring(shstr, row[0])
+        section = {"index": index, "name": name, "type": row[1], "flags": row[2], "address": row[3],
+                   "offset": row[4], "size": row[5], "link": row[6], "info": row[7], "alignment": row[8],
+                   "entry_size": row[9]}
+        if section["type"] != 8 and section["offset"] + section["size"] > len(data):
+            raise AuditError(f"ELF section {name} is outside the file")
+        sections.append(section)
+    symbols = []
+    for section in sections:
+        if section["type"] not in (2, 11):
+            continue
+        if section["link"] >= len(sections):
+            raise AuditError("symbol table has invalid string-table link")
+        strings = sections[section["link"]]
+        strtab = data[strings["offset"]:strings["offset"] + strings["size"]]
+        ent_size = section["entry_size"] or struct.calcsize(symbol_fmt)
+        if ent_size < struct.calcsize(symbol_fmt) or section["size"] % ent_size:
+            raise AuditError("malformed ELF symbol table")
+        for pos in range(section["offset"], section["offset"] + section["size"], ent_size):
+            row = struct.unpack_from(symbol_fmt, data, pos)
+            if elf_class == 1:
+                name_off, value, size, info, other, shndx = row
+            else:
+                name_off, info, other, shndx, value, size = row
+            name = cstring(strtab, name_off) if name_off else ""
+            if not name or not size or shndx >= len(sections):
+                continue
+            target = sections[shndx]
+            if target["flags"] & (ALLOC | WRITE) != (ALLOC | WRITE):
+                continue
+            if value < target["address"] or value + size > target["address"] + target["size"]:
+                raise AuditError(f"writable symbol range outside section: {name}")
+            symbols.append({"name": name, "address": value, "size": size, "section": target["name"],
+                            "section_index": shndx, "kind": "OBJECT" if (info & 0xF) == 1 else "other"})
+    if not sections:
+        raise AuditError("ELF has no sections")
+    return {"class": 32 if elf_class == 1 else 64, "endianness": "little" if encoding == 1 else "big",
+            "architecture": "RISC-V", "sections": sections, "symbols": symbols}
+
+
+OUT_SECTION = re.compile(r"^([^\s].*?)\s+0x([0-9a-fA-F]+)\s+0x([0-9a-fA-F]+)\s*$")
+OUT_NAME_ONLY = re.compile(r"^(\.[^\s]+)\s*$")
+OUT_CONTINUATION = re.compile(r"^\s+0x([0-9a-fA-F]+)\s+0x([0-9a-fA-F]+)\s*$")
+INPUT = re.compile(r"^\s+(\.[^\s]+)\s+0x([0-9a-fA-F]+)\s+0x([0-9a-fA-F]+)\s+(.+?)\s*$")
+INPUT_NAME_ONLY = re.compile(r"^\s+(\.[^\s]+)\s*$")
+INPUT_CONTINUATION = re.compile(r"^\s+0x([0-9a-fA-F]+)\s+0x([0-9a-fA-F]+)\s+(.+?)\s*$")
+FILL = re.compile(r"^\s+\*fill\*\s+0x([0-9a-fA-F]+)\s+0x([0-9a-fA-F]+)\s*$")
+
+
+def parse_map(text: str, object_identity: str) -> dict:
+    lines = text.splitlines()
+    contributions = []
+    current = None
+    found_identity = False
+    pending_input = None
+    pending_output = None
+    for line_number, line in enumerate(lines, 1):
+        header = OUT_SECTION.match(line)
+        if header:
+            if pending_input is not None:
+                raise AuditError(f"incomplete multiline map input record before line {line_number}")
+            current = {"name": header.group(1), "address": int(header.group(2), 16), "size": int(header.group(3), 16), "inputs": []}
+            contributions.append(current)
+            continue
+        if pending_output is not None:
+            continuation = OUT_CONTINUATION.match(line)
+            if continuation:
+                address, size = continuation.groups()
+                current = {"name": pending_output, "address": int(address, 16), "size": int(size, 16), "inputs": []}
+                contributions.append(current)
+                pending_output = None
+                continue
+            # GNU ld also prints non-allocated debug output names without a
+            # range. Ignore those; any required writable ELF section will
+            # fail the exact name/address/size coverage check in measure().
+            pending_output = None
+            current = None
+        name_only = OUT_NAME_ONLY.match(line)
+        if name_only:
+            pending_output = name_only.group(1)
+            current = None
+            continue
+        if current is None or not current["name"].startswith("."):
+            continue
+        if pending_input is not None:
+            continuation = INPUT_CONTINUATION.match(line)
+            if continuation:
+                address, size, owner = continuation.groups()
+                item = {"input_section": pending_input, "address": int(address, 16), "size": int(size, 16), "owner": owner}
+                current["inputs"].append(item)
+                if owner == object_identity:
+                    found_identity = True
+                pending_input = None
+                continue
+            # GNU ld emits a section name on one line and its address, size,
+            # and object on the next. Do not silently discard that record.
+            raise AuditError(f"unsupported or incomplete multiline map input at line {line_number}")
+        row = INPUT.match(line)
+        fill = FILL.match(line)
+        if row:
+            name, address, size, owner = row.groups()
+            item = {"input_section": name, "address": int(address, 16), "size": int(size, 16), "owner": owner}
+            current["inputs"].append(item)
+            if owner == object_identity:
+                found_identity = True
+        elif INPUT_NAME_ONLY.match(line):
+            pending_input = INPUT_NAME_ONLY.match(line).group(1)
+        elif fill:
+            address, size = fill.groups()
+            current["inputs"].append({"input_section": "*fill*", "address": int(address, 16), "size": int(size, 16), "owner": "linker padding"})
+    if pending_input is not None:
+        raise AuditError("incomplete multiline map input at end of file")
+    if pending_output is not None:
+        raise AuditError("incomplete multiline output section at end of file")
+    if not found_identity:
+        raise AuditError(f"combined object not found in writable map contributions: {object_identity}")
+    return {"writable_outputs": contributions}
+
+
+def merged_bytes(ranges: list[tuple[int, int]]) -> int:
+    total = 0
+    end = None
+    for start, stop in sorted(ranges):
+        if end is None or start > end:
+            total += stop - start
+            end = stop
+        elif stop > end:
+            total += stop - end
+            end = stop
+    return total
+
+
+def writable_section_class(name: str) -> str:
+    lowered = name.lower()
+    if "bss" in lowered:
+        return "bss"
+    if "data" in lowered and "rodata" not in lowered:
+        return "data"
+    if name in {".noinit", ".rtc_reserved", ".iram0.text_end", ".flash_rodata_dummy", ".dram0.heap_start"}:
+        return "reserved-or-runtime-boundary"
+    if "rodata" in lowered:
+        return "read-only-content-with-writable-ELF-flag"
+    raise AuditError(f"unsupported allocated writable ELF section category: {name}")
+
+
+def conflicting_overlaps(symbols: list[dict]) -> list[dict]:
+    conflicts = []
+    by_section = {}
+    for symbol in symbols:
+        by_section.setdefault(symbol["section_index"], []).append(symbol)
+    for group in by_section.values():
+        group.sort(key=lambda s: (s["address"], s["address"] + s["size"], s["name"]))
+        active = []
+        for symbol in group:
+            active = [item for item in active if item["address"] + item["size"] > symbol["address"]]
+            for prior in active:
+                if (prior["address"], prior["size"]) != (symbol["address"], symbol["size"]):
+                    conflicts.append({"left": prior["name"], "right": symbol["name"]})
+            active.append(symbol)
+    return conflicts
+
+
+def measure(elf_bytes: bytes, map_bytes: bytes, object_identity: str, profile: str,
+            firmware_source_sha: str | None = None, core_sha: str | None = None) -> dict:
+    elf = parse_elf(elf_bytes)
+    linker_map = parse_map(map_bytes.decode("utf-8", "replace"), object_identity)
+    alloc_write = [s for s in elf["sections"] if s["flags"] & (ALLOC | WRITE) == (ALLOC | WRITE)]
+    for section in alloc_write:
+        section["accounting_class"] = writable_section_class(section["name"])
+    data_sections = [s for s in alloc_write if s["accounting_class"] == "data"]
+    bss_sections = [s for s in alloc_write if s["accounting_class"] == "bss"]
+    symbols = sorted(elf["symbols"], key=lambda s: (s["address"], s["size"], s["name"]))
+    alias_groups = {}
+    for symbol in symbols:
+        key = (symbol["address"], symbol["size"], symbol["section"])
+        alias_groups.setdefault(key, []).append(symbol["name"])
+    overlaps = conflicting_overlaps(symbols)
+    if overlaps:
+        raise AuditError("conflicting writable symbol ranges: " + json.dumps(overlaps, sort_keys=True))
+    object_sections = []
+    map_outputs = {}
+    for item in linker_map["writable_outputs"]:
+        if item["name"] in map_outputs:
+            raise AuditError(f"ambiguous duplicate linker map output section {item['name']}")
+        map_outputs[item["name"]] = item
+    measured_sections = [s for s in alloc_write if s["size"]]
+    for section in measured_sections:
+        mapped = map_outputs.get(section["name"])
+        if mapped is None or mapped["address"] != section["address"] or mapped["size"] != section["size"]:
+            raise AuditError(f"linker map does not completely cover writable ELF section {section['name']}")
+        end = mapped["address"] + mapped["size"]
+        ranges = []
+        for item in mapped["inputs"]:
+            if item["address"] < mapped["address"] or item["address"] + item["size"] > end:
+                raise AuditError(f"map input range outside output section {section['name']}")
+            if item["size"]:
+                ranges.append((item["address"], item["address"] + item["size"], item))
+        ranges.sort(key=lambda value: (value[0], value[1]))
+        cursor = mapped["address"]
+        for start, stop, item in ranges:
+            if start > cursor:
+                raise AuditError(f"incomplete map input coverage in {section['name']} at 0x{cursor:x}")
+            cursor = max(cursor, stop)
+        if cursor != end:
+            raise AuditError(f"incomplete map input coverage in {section['name']} at 0x{cursor:x}")
+    for output in linker_map["writable_outputs"]:
+        if output["name"] not in {s["name"] for s in alloc_write}:
+            continue
+        matching = [item for item in output["inputs"] if item["owner"] == object_identity and item["size"]]
+        if matching:
+            selected = list(matching)
+            selected_ids = {id(item) for item in selected}
+            # Linker *fill* rows touching a combined object's input contribution
+            # are alignment debit. They are included once, not also charged as
+            # symbol bytes.
+            changed = True
+            while changed:
+                changed = False
+                ranges = [(item["address"], item["address"] + item["size"]) for item in selected]
+                for item in output["inputs"]:
+                    if item["input_section"] != "*fill*" or id(item) in selected_ids:
+                        continue
+                    start, stop = item["address"], item["address"] + item["size"]
+                    if any(stop == left or start == right for left, right in ranges):
+                        selected.append(item)
+                        selected_ids.add(id(item))
+                        changed = True
+            object_sections.extend({**item, "output_section": output["name"]} for item in selected)
+    if not object_sections:
+        raise AuditError("combined object has no sized writable input-section contribution")
+    object_ranges = [(x["address"], x["address"] + x["size"]) for x in object_sections]
+    report_symbols = []
+    for symbol in symbols:
+        aliases = sorted(alias_groups[(symbol["address"], symbol["size"], symbol["section"])])
+        generated = "__axoloty_application_state" in symbol["name"]
+        phase = "phase4AgentA" if "phase4AgentA" in symbol["name"] else "phase4AgentB" if "phase4AgentB" in symbol["name"] else None
+        report_symbols.append({**symbol, "aliases": aliases, "range_bytes_union": symbol["size"] if aliases[0] == symbol["name"] else 0,
+                              "recognized_identity": "generated-state" if generated else phase,
+                              "ownership": "unresolved source ownership; raw ELF identity only"})
+    combined_bytes = merged_bytes([(x["address"], x["address"] + x["size"]) for x in object_sections])
+    report = {
+        "schema": "axoloty.linked-storage-measurement.v1", "tool": {"version": VERSION}, "profile": profile,
+        "measurement_only": True,
+        "artifact_attribution": {"firmware_source_sha": firmware_source_sha, "core_sha": core_sha,
+                                 "integrated_revision": False},
+        "input": {"elf_sha256": sha256(elf_bytes), "map_sha256": sha256(map_bytes), "combined_object_identity": object_identity},
+        "elf": {"architecture": elf["architecture"], "class_bits": elf["class"], "endianness": elf["endianness"]},
+        "writable_allocated_sections": [{"name": s["name"], "address": s["address"], "size": s["size"], "alignment": s["alignment"], "type": s["type"], "accounting_class": s["accounting_class"]} for s in alloc_write],
+        "whole_image": {"data_bytes": sum(s["size"] for s in data_sections), "data_sections": [s["name"] for s in data_sections],
+                        "bss_bytes": sum(s["size"] for s in bss_sections), "bss_sections": [s["name"] for s in bss_sections]},
+        "writable_symbols": report_symbols,
+        "exact_symbol_union_bytes": merged_bytes([(s["address"], s["address"] + s["size"]) for s in symbols]),
+        "exact_symbol_range_count": len(symbols),
+        "identified_symbols": [s for s in report_symbols if s["recognized_identity"]],
+        "combined_object": {"accounting": "conservative upper bound; whole writable input contributions replace symbol charges",
+                            "writable_contributions": object_sections, "conservative_debit_bytes": combined_bytes,
+                            "symbol_ranges_inside_contributions": merged_bytes([(max(a, c), min(b, d)) for a, b in [(s["address"], s["address"] + s["size"]) for s in symbols] for c, d in object_ranges if max(a, c) < min(b, d)])},
+        "aggregate_charged_static_bytes": combined_bytes,
+        "attribution": {"complete": False, "reason": "map object membership is not source ownership; this unit intentionally reports a conservative combined-object debit"},
+        "pending": ["storage-budget acceptance", "source-ownership completeness", "first-init trace", "initialization stack proof", "whole-image heap behavior"],
+    }
+    return report
+
+
+def selftest() -> None:
+    assert merged_bytes([(0, 8), (0, 8), (4, 12), (20, 24)]) == 16
+    # A miniature ELF/map model exercises nonzero .data, zero-backed .bss,
+    # input padding, full-object debit, and missing/malformed input rejection.
+    def elf_fixture(data_name: bytes = b".data") -> bytes:
+        # Construct an ELF32 RISC-V image with .data (8 bytes), .bss (16 bytes),
+        # and two same-range aliases plus a distinct symbol.
+        names = b"\0.shstrtab\0.strtab\0.symtab\0" + data_name + b"\0.bss\0"
+        strs = b"\0state\0state_alias\0tail\0"
+        names_off = 52
+        str_off = names_off + len(names)
+        sym_off = str_off + len(strs)
+        data_off = sym_off + 4 * 16
+        bss_off = data_off + 8
+        shoff = bss_off
+        sections = [
+            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            (names.index(b".shstrtab"), 3, 0, 0, names_off, len(names), 0, 0, 1, 0),
+            (names.index(b".strtab"), 3, 0, 0, str_off, len(strs), 0, 0, 1, 0),
+            (names.index(b".symtab"), 2, 0, 0, sym_off, 64, 2, 1, 4, 16),
+            (names.index(data_name), 1, 3, 0x1000, data_off, 8, 0, 0, 4, 0),
+            (names.index(b".bss"), 8, 3, 0x2000, bss_off, 16, 0, 0, 4, 0),
+        ]
+        out = bytearray(b"\0" * 52)
+        out.extend(names); out.extend(strs)
+        out.extend(b"\0" * 16)
+        for name, value, size in ((1, 0x1000, 4), (7, 0x1000, 4), (19, 0x2000, 8)):
+            out.extend(struct.pack("<IIIBBH", name, value, size, 0x11, 0, 4 if value == 0x1000 else 5))
+        out.extend(b"12345678")
+        shoff = len(out)
+        for row in sections:
+            out.extend(struct.pack("<IIIIIIIIII", *row))
+        header = struct.pack("<HHIIIIIHHHHHH", 2, 243, 1, 0, 0, shoff, 0, 52, 32, 0, 40, 6, 1)
+        out[:16] = b"\x7fELF\x01\x01\x01" + b"\0" * 9
+        out[16:52] = header
+        return bytes(out)
+    fake_map = (".data 0x1000 0x8\n .data 0x1000 0x8 combined.o\n"
+                ".bss 0x2000 0x10\n .bss 0x2000 0x8 combined.o\n *fill* 0x2008 0x8\n")
+    result = measure(elf_fixture(), fake_map.encode(), "combined.o", "fixture")
+    assert result["whole_image"]["data_bytes"] == 8 and result["whole_image"]["bss_bytes"] == 16
+    assert result["exact_symbol_union_bytes"] == 12
+    assert result["combined_object"]["conservative_debit_bytes"] == 24
+    assert result["combined_object"]["symbol_ranges_inside_contributions"] == 12
+    # This is the parent finding: the output section still matches the ELF,
+    # but deleting the combined object's nonzero .bss row must fail closed.
+    omitted_bss = fake_map.replace(" .bss 0x2000 0x8 combined.o\n", "")
+    try:
+        measure(elf_fixture(), omitted_bss.encode(), "combined.o", "fixture")
+    except AuditError as error:
+        assert "incomplete map input coverage" in str(error)
+    else:
+        raise AssertionError("map with omitted combined-object .bss row accepted")
+    # GNU ld multiline records are accepted, but incomplete and ambiguous
+    # ranges are rejected by the same production measure path.
+    multiline_map = (".data 0x1000 0x8\n .data\n  0x1000 0x8 combined.o\n"
+                    ".bss 0x2000 0x10\n .bss\n  0x2000 0x8 combined.o\n *fill* 0x2008 0x8\n")
+    assert measure(elf_fixture(), multiline_map.encode(), "combined.o", "fixture")["combined_object"]["conservative_debit_bytes"] == 24
+    for invalid_map, expected in (
+        (fake_map.replace(" *fill* 0x2008 0x8\n", ""), "incomplete map input coverage"),
+        (fake_map.replace(" *fill* 0x2008 0x8\n", " .other 0x3000 0x8 other.o\n"), "outside output section"),
+        (fake_map.replace("combined.o", "combined.o.extra"), "combined object not found"),
+        (fake_map.replace(" .bss 0x2000 0x8 combined.o\n", " .bss\n"), "incomplete multiline map input"),
+        (fake_map + ".data 0x1000 0x8\n .data 0x1000 0x8 combined.o\n", "ambiguous duplicate linker map output"),
+    ):
+        try:
+            measure(elf_fixture(), invalid_map.encode(), "combined.o", "fixture")
+        except AuditError as error:
+            assert expected in str(error), (expected, str(error))
+        else:
+            raise AssertionError(f"invalid map accepted; expected {expected}")
+    unknown_map = fake_map.replace(".data", ".writableXX")
+    try:
+        measure(elf_fixture(b".writableXX"), unknown_map.encode(), "combined.o", "fixture")
+    except AuditError as error:
+        assert "unsupported allocated writable ELF section category" in str(error)
+    else:
+        raise AssertionError("unknown writable ELF section category accepted")
+    assert not conflicting_overlaps([{"section_index": 1, "address": 0, "size": 8, "name": "outer"},
+                                     {"section_index": 1, "address": 0, "size": 8, "name": "alias"}])
+    assert conflicting_overlaps([{"section_index": 1, "address": 0, "size": 12, "name": "outer"},
+                                 {"section_index": 1, "address": 4, "size": 2, "name": "nested"}])
+    try:
+        measure(elf_fixture(), fake_map.encode(), "missing.o", "fixture")
+    except AuditError:
+        pass
+    else:
+        raise AssertionError("missing object accepted")
+    try:
+        parse_elf(b"bad")
+    except AuditError:
+        pass
+    else:
+        raise AssertionError("malformed ELF accepted")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--elf", type=Path)
+    parser.add_argument("--map", dest="map_path", type=Path)
+    parser.add_argument("--combined-object", help="exact object identity as it appears in linker map rows")
+    parser.add_argument("--profile", default="unspecified")
+    parser.add_argument("--firmware-source-sha")
+    parser.add_argument("--core-sha")
+    parser.add_argument("--output", type=Path, help="write JSON to this file; stdout otherwise")
+    parser.add_argument("--selftest", action="store_true")
+    args = parser.parse_args(argv)
+    try:
+        if args.selftest:
+            selftest()
+            print("PASS linked-storage audit fixtures")
+            return 0
+        if not args.elf or not args.map_path or not args.combined_object:
+            parser.error("--elf, --map, and --combined-object are required")
+        report = measure(args.elf.read_bytes(), args.map_path.read_bytes(), args.combined_object, args.profile,
+                         args.firmware_source_sha, args.core_sha)
+        output = json.dumps(report, sort_keys=True, indent=2) + "\n"
+        if args.output:
+            args.output.write_text(output, encoding="utf-8")
+        else:
+            sys.stdout.write(output)
+        return 0
+    except (AuditError, OSError, UnicodeError) as error:
+        print(f"linked-storage audit: {error}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
