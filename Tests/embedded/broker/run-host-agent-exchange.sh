@@ -161,6 +161,7 @@ if ! wait "$peer_pid"; then
 fi
 peer_pid=''
 
+AXOLOTY_CORPUS_MANIFEST="$repo_root/Applications/device-smoke-agent/fixtures/manifest.json" \
 AGENT_VALIDATOR="$repo_root/Tests/embedded/agent-validator.mjs" \
 PEER_OUTPUT="$peer_output" \
 HOST_OUTPUT="$host_output" \

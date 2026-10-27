@@ -49,11 +49,6 @@ static inline unsigned int axoloty_scheduler_hz(void) {
 #include "carrier_diagnostics.h"
 #endif
 
-// The selected application owns its C-callable device-agent seam.
-#if __has_include("static_device_agent.h")
-#include "static_device_agent.h"
-#endif
-
 // ESP-IDF calls app_main; the optional linker probe is rooted by the platform.
 void app_main(void);
 #include "../../../Interop/swift_c_interop.h"

@@ -2,7 +2,6 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const schemaVersion = 2;
@@ -47,18 +46,13 @@ export const expectedVectorTests = new Set([
   "agent:callbackResolve", "agent:callbackRejectDuplicateResolve",
 ]);
 
-const firmwareToolsDirectory = path.dirname(fileURLToPath(import.meta.url));
-// The corpus manifest belongs to the selected application. The profile
-// supplies its absolute path; the fallback resolves the reference application
-// through the repository root so a manual invocation still works.
+// The corpus manifest belongs to the selected application. Callers must pass
+// the selected corpus explicitly so validation never guesses an application.
 function resolveCorpusManifest() {
   if (process.env.AXOLOTY_CORPUS_MANIFEST) return process.env.AXOLOTY_CORPUS_MANIFEST;
   const applicationDirectory = process.env.AXOLOTY_APPLICATION_DIR;
   if (applicationDirectory) return path.join(applicationDirectory, "fixtures/manifest.json");
-  const repositoryRoot = execFileSync("git", ["-C", firmwareToolsDirectory, "rev-parse", "--show-toplevel"], {
-    encoding: "utf8",
-  }).trim();
-  return path.join(repositoryRoot, "Applications/device-smoke-agent/fixtures/manifest.json");
+  throw new Error("validate-smoke: set AXOLOTY_CORPUS_MANIFEST or AXOLOTY_APPLICATION_DIR for the selected application");
 }
 const fixtureManifest = JSON.parse(fs.readFileSync(resolveCorpusManifest(), "utf8"));
 if (!Array.isArray(fixtureManifest.cases)) {

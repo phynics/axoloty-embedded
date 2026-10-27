@@ -151,7 +151,8 @@ while [ "$run_number" -lt "$runs" ]; do
     if AXOLOTY_PROOF_RUN_ID="$proof_run_id-run$run_number" \
         SERIAL_TOOLS="$script_dir/serial-tools.mjs" \
         ESPTOOL_TOOLS="$script_dir/esptool-tools.mjs" \
-        AGENT_VALIDATOR="$script_dir/agent-validator.mjs" \
+        AXOLOTY_CORPUS_MANIFEST="$repo_root/Applications/device-smoke-agent/fixtures/manifest.json" \
+AGENT_VALIDATOR="$script_dir/agent-validator.mjs" \
         EVIDENCE_WRITER="$script_dir/write-device-evidence.mjs" \
         ESPTOOL="$esptool" \
         PROFILE_NAME="$profile" \

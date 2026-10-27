@@ -38,7 +38,9 @@ skip() {
 # Tracked files only. An untracked scratch file is not a repository claim, and
 # .axoloty/ holds the fetched Core checkout, which is never ours to judge.
 tracked() {
-    git ls-files -- "$@" 2>/dev/null | grep -v '^\.axoloty/' || true
+    git ls-files -- "$@" 2>/dev/null | grep -v '^\.axoloty/' | while IFS= read -r file; do
+        [ -e "$file" ] && printf '%s\n' "$file"
+    done
 }
 
 # Source files under an axis directory, excluding documentation.
@@ -219,6 +221,7 @@ fi
 # MQTT, the application x platform x transport axes stop being separable and
 # the second board becomes a rewrite.
 
+boundary_violation_start=$violations
 app_tokens='esp32|esp-idf|esp_idf|idf_component|freertos|nvs_flash|esp_wifi|sdkconfig|partitions\.csv|mqtt|zenoh|zenoh_pico|zenoh-pico'
 app_sources="$(axis_sources 'Applications/*')"
 app_bad=0
@@ -247,6 +250,40 @@ if [ -z "$app_sources" ]; then
     skip application-neutral 'Applications/ holds no source yet'
 elif [ "$app_bad" -eq 0 ]; then
     pass application-neutral 'no application names a board, SDK, or broker'
+fi
+
+# Applications are Swift-only. This is a repository boundary, so inspect all
+# tracked application paths (including files axis_sources does not classify).
+app_native_bad=0
+for file in $(tracked 'Applications/*'); do
+    case "$file" in
+        *.c|*.h|*.cc|*.cpp|*.cxx|*.hpp|*.hxx|*.m|*.mm|*.modulemap)
+            fail application-pure-swift "$file is a C-family, Objective-C, header, or module-map application artifact"
+            app_native_bad=1
+            ;;
+    esac
+done
+if [ "$app_native_bad" -eq 0 ]; then
+    pass application-pure-swift 'no C-family, Objective-C, header, or module-map application artifacts'
+fi
+
+# The platform consumes selected application inputs through generic paths. It
+# must not import a named application module or probe an Applications layout.
+platform_application_tokens='Applications/|device-smoke-agent|StaticDeviceAgentInterop|static_device_agent|axoloty_static_agent_'
+platform_application_bad=0
+for file in $(tracked 'Platforms/*'); do
+    hits="$(grep -nE "$platform_application_tokens" "$file" 2>/dev/null | head -1 || true)"
+    if [ -n "$hits" ]; then
+        fail platform-generic-application "$file contains a platform reference to an application path or name: $(echo "$hits" | cut -c1-120)"
+        platform_application_bad=1
+    fi
+done
+[ "$platform_application_bad" -eq 0 ] && pass platform-generic-application 'platform code has no named application path, import, or probe'
+
+if [ "${1:-}" = '--application-boundary-only' ]; then
+    boundary_violations=$((violations - boundary_violation_start))
+    printf '\ncheck-invariants: application-boundary-only: %d violation(s)\n' "$boundary_violations"
+    [ "$boundary_violations" -eq 0 ] && exit 0 || exit 1
 fi
 
 # ---------------------------------------------------------------------------

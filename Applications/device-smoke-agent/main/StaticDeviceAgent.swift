@@ -2,9 +2,6 @@
 
 import AxolotyWire
 import AxolotyProtocol
-#if canImport(StaticDeviceAgentInterop)
-import StaticDeviceAgentInterop
-#endif
 
 @inline(__always)
 private func staticDeviceAgentNoop(
@@ -377,11 +374,6 @@ private func phase4Encode<T: WireEncodable>(
     )
 }
 
-@c @implementation public func axoloty_static_agent_expire(_ role: Int32) -> Int32 {
-    guard let role = StaticAgentRole(rawValue: role) else { return 0 }
-    return expireStaticAgentRequest(role: role) ? 1 : 0
-}
-
 /// Copies the active actor route for the selected static endpoint profile.
 /// The carrier adapter invokes this only to subscribe or re-subscribe; route
 /// bytes never escape into asynchronous Swift state.
@@ -395,14 +387,6 @@ func copyStaticAgentActorRoute(
         ? phase4AgentA.copyActorRoute(to: output, capacity: capacity)
         : phase4AgentB.copyActorRoute(to: output, capacity: capacity)
     return length
-}
-
-@c @implementation public func axoloty_static_agent_copy_actor_route(
-    _ role: Int32, _ output: UnsafeMutablePointer<UInt8>, _ capacity: Int32
-) -> Int32 {
-    guard let role = StaticAgentRole(rawValue: role) else { return -1 }
-    let length = copyStaticAgentActorRoute(role: role, to: output, capacity: Int(capacity))
-    return Int32(length ?? -1)
 }
 
 /// Builds the role-A advertised object JSON with the operator-configured
@@ -573,26 +557,6 @@ func prepareStaticAgentMessage(
     )
 }
 
-@c @implementation public func axoloty_static_agent_prepare(
-    _ role: Int32,
-    _ kind: Int32,
-    _ topicBuffer: UnsafeMutablePointer<UInt8>,
-    _ topicCapacity: Int32,
-    _ payloadBuffer: UnsafeMutablePointer<UInt8>,
-    _ payloadCapacity: Int32,
-    _ topicLength: UnsafeMutablePointer<Int32>,
-    _ payloadLength: UnsafeMutablePointer<Int32>
-) -> Int32 {
-    guard let role = StaticAgentRole(rawValue: role),
-          let kind = StaticAgentMessageKind(rawValue: kind) else { return 0 }
-    return prepareStaticAgentMessage(
-        role: role, kind: kind,
-        topicBuffer: topicBuffer, topicCapacity: topicCapacity,
-        payloadBuffer: payloadBuffer, payloadCapacity: payloadCapacity,
-        topicLength: topicLength, payloadLength: payloadLength
-    ) ? 1 : 0
-}
-
 func receiveStaticAgentMessage(
     role: StaticAgentRole,
     _ topicBytes: UnsafePointer<UInt8>,
@@ -662,28 +626,4 @@ func receiveStaticAgentMessage(
         return result == .ioValueDelivered ? .ioValueDelivered : .rejected
     }
     return .ignored
-}
-
-@c @implementation public func axoloty_static_agent_receive(
-    _ role: Int32,
-    _ topicBytes: UnsafePointer<UInt8>,
-    _ topicLength: Int32,
-    _ payloadBytes: UnsafePointer<UInt8>,
-    _ payloadLength: Int32,
-    _ outputTopic: UnsafeMutablePointer<UInt8>,
-    _ outputTopicCapacity: Int32,
-    _ outputPayload: UnsafeMutablePointer<UInt8>,
-    _ outputPayloadCapacity: Int32,
-    _ outputTopicLength: UnsafeMutablePointer<Int32>,
-    _ outputPayloadLength: UnsafeMutablePointer<Int32>
-) -> Int32 {
-    guard let role = StaticAgentRole(rawValue: role) else { return StaticAgentAction.rejected.rawValue }
-    return receiveStaticAgentMessage(
-        role: role,
-        topicBytes, topicLength,
-        payloadBytes, payloadLength,
-        outputTopic, outputTopicCapacity,
-        outputPayload, outputPayloadCapacity,
-        outputTopicLength, outputPayloadLength
-    ).rawValue
 }

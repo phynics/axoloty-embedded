@@ -3,11 +3,27 @@
 // Focused hardware-free checks for the smoke validator's unsupported status.
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { checksum } from "../../Platforms/esp32c6-idf/tools/validate-smoke.mjs";
+import { createEmbeddedAgentValidator } from "./agent-validator.mjs";
 import {
   createEmbeddedZenohNetworkValidator,
   expectedZenohNetworkTests,
 } from "./network-validator.mjs";
+
+const unconfiguredImport = spawnSync(process.execPath, ["--input-type=module", "-e",
+  'await import("./Platforms/esp32c6-idf/tools/validate-smoke.mjs")'], {
+  cwd: fileURLToPath(new URL("../..", import.meta.url)),
+  env: Object.fromEntries(Object.entries(process.env)
+    .filter(([name]) => name !== "AXOLOTY_CORPUS_MANIFEST" && name !== "AXOLOTY_APPLICATION_DIR")),
+  encoding: "utf8",
+});
+assert.notEqual(unconfiguredImport.status, 0, "validator import rejects missing explicit corpus selection");
+assert.match(unconfiguredImport.stderr, /set AXOLOTY_CORPUS_MANIFEST or AXOLOTY_APPLICATION_DIR/);
+
+assert.equal(typeof createEmbeddedAgentValidator().observe, "function",
+  "configured agent validator imports and constructs with the explicitly selected corpus");
 
 const unsupportedCases = new Set([
   "network:lastWillUnsupported",
