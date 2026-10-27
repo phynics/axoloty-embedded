@@ -226,6 +226,11 @@ extension DeviceSmokeSeam {
 /// concurrent context.
 nonisolated(unsafe) private var installedDeviceSmokeSeam: DeviceSmokeSeam?
 
+/// Reads the profile seam slot without installing or copying a value.
+func touchInstalledDeviceSmokeSeam() {
+    _ = installedDeviceSmokeSeam
+}
+
 /// Returns the installed seam. The application is only reachable after the
 /// profile has installed one.
 @inline(__always)

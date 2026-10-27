@@ -44,6 +44,10 @@ plugin="$plugin_bin/EmbeddedApplicationMacroImplementation"
 test -x "$plugin"
 sha256sum "$plugin" >"$scratch/artifacts/plugin.sha256"
 
+bash Tools/EmbeddedApplicationMacros/run-first-init-unit.sh \
+    "$scratch/first-init" "$plugin" --embedded-target \
+    >"$scratch/logs/first-init-unit.log" 2>&1
+
 clang -I Interop -c Interop/axoloty_application_entry_v1.c \
     -o "$scratch/host/application-entry-helper.o" \
     >"$scratch/logs/host-helper-compile.txt" 2>&1

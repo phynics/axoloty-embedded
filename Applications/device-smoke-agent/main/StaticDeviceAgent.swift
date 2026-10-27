@@ -329,6 +329,12 @@ nonisolated(unsafe) private var phase4AgentB = StaticDeviceAgent(
     deviceObjectId: StaticDeviceAgent.objectBId
 )
 
+/// Materializes both lazy static agent values without copying or retaining them.
+func touchStaticDeviceAgents() {
+    withUnsafeMutablePointer(to: &phase4AgentA) { _ in }
+    withUnsafeMutablePointer(to: &phase4AgentB) { _ in }
+}
+
 /// Resets both static device agents before the live carrier exchange runs.
 ///
 /// The exchange is a separate scenario from the offline vectors that preceded

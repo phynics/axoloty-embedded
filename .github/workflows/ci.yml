@@ -117,6 +117,7 @@ jobs:
           --require build:zenoh-report-contract
           --require build:cmake-escape
           --require build:host-smoke
+          --require build:macro-first-init
 
       # The broker tier self-provisions an ephemeral in-process broker when no
       # operator broker is configured. It needs no board or container broker.
