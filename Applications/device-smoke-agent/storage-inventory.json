@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "app": "device-smoke-agent",
+  "expectedMapMember": "AgentExchange.swift.obj",
+  "coverage": {
+    "complete": false,
+    "method": "explicit-source-identities",
+    "reason": "This inventory covers the selected app globals identified for this proof unit. It does not claim source-wide ownership completeness or detect globals by regex."
+  },
+  "entries": [
+    {
+      "owner": "DeviceSmoke.State",
+      "category": "app-state",
+      "sourcePath": "main/EmbeddedApplication.swift",
+      "sourceKind": "swift-source",
+      "sourceName": "State",
+      "expectedSymbols": [
+        { "rawName": "$e10__idf_main27__axoloty_application_state33_4CF6B0B6BD9B429341FE38B7F9177D1BLLAA11DeviceSmokeO5StateVvp", "role": "generated-state-backing" }
+      ]
+    },
+    {
+      "owner": "phase4AgentA",
+      "category": "app-global",
+      "sourcePath": "main/StaticDeviceAgent.swift",
+      "sourceKind": "swift-source",
+      "sourceName": "phase4AgentA",
+      "expectedSymbols": [
+        { "rawName": "$e10__idf_main12phase4AgentA33_3CF6D9E05AE332D49CC9194D33B9B714LLAA012StaticDeviceD0Vvp", "role": "global-backing" },
+        { "rawName": "$e10__idf_main12phase4AgentA33_3CF6D9E05AE332D49CC9194D33B9B714LL_Wz", "role": "lazy-initialization-control-candidate" }
+      ]
+    },
+    {
+      "owner": "phase4AgentB",
+      "category": "app-global",
+      "sourcePath": "main/StaticDeviceAgent.swift",
+      "sourceKind": "swift-source",
+      "sourceName": "phase4AgentB",
+      "expectedSymbols": [
+        { "rawName": "$e10__idf_main12phase4AgentB33_3CF6D9E05AE332D49CC9194D33B9B714LLAA012StaticDeviceD0Vvp", "role": "global-backing" },
+        { "rawName": "$e10__idf_main12phase4AgentB33_3CF6D9E05AE332D49CC9194D33B9B714LL_Wz", "role": "lazy-initialization-control-candidate" }
+      ]
+    },
+    {
+      "owner": "routerDispatchObserved",
+      "category": "app-global",
+      "sourcePath": "main/DeviceSmokeApplication.swift",
+      "sourceKind": "swift-source",
+      "sourceName": "routerDispatchObserved",
+      "expectedSymbols": [
+        { "rawName": "$e10__idf_main22routerDispatchObserved33_2BE172342241B326FED68145D55000F3LLSbvp", "role": "global-backing" }
+      ]
+    },
+    {
+      "owner": "installedCapabilities",
+      "category": "app-global",
+      "sourcePath": "main/DeviceSmokeCapabilityBridge.swift",
+      "sourceKind": "swift-source",
+      "sourceName": "installedCapabilities",
+      "expectedSymbols": [
+        { "rawName": "$e10__idf_main21installedCapabilities33_EEBB9A1D16F753D6CFD7F7947E1C9502LLAA08EmbeddedD0VSgvp", "role": "global-backing" }
+      ]
+    },
+    {
+      "owner": "installedDeviceSmokeSeam",
+      "category": "app-global",
+      "sourcePath": "main/DeviceSmokeSeam.swift",
+      "sourceKind": "swift-source",
+      "sourceName": "installedDeviceSmokeSeam",
+      "expectedSymbols": [
+        { "rawName": "$e10__idf_main24installedDeviceSmokeSeam33_656DF0FB1C24906D61C8D0F5BBC148F3LLAA0deF0VSgvp", "role": "global-backing" }
+      ]
+    },
+    {
+      "owner": "embeddedCorpusParserWorkspace",
+      "category": "app-global",
+      "sourcePath": "fixtures/generate-embedded-corpus.mjs",
+      "sourceKind": "generator-source",
+      "sourceName": "embeddedCorpusParserWorkspace",
+      "expectedSymbols": [
+        { "rawName": "$e10__idf_main29embeddedCorpusParserWorkspace33_15D6783FB2EBBDF0764AB52311B16FCCLL11AxolotyWire06InlineneF0Vy$2055_Gvp", "role": "global-backing" },
+        { "rawName": "$e10__idf_main29embeddedCorpusParserWorkspace33_15D6783FB2EBBDF0764AB52311B16FCCLL_Wz", "role": "lazy-initialization-control-candidate" }
+      ]
+    },
+    {
+      "owner": "embeddedCorpusEncodeBuffer",
+      "category": "app-global",
+      "sourcePath": "fixtures/generate-embedded-corpus.mjs",
+      "sourceKind": "generator-source",
+      "sourceName": "embeddedCorpusEncodeBuffer",
+      "expectedSymbols": [
+        { "rawName": "$e10__idf_main26embeddedCorpusEncodeBuffer33_15D6783FB2EBBDF0764AB52311B16FCCLLs11InlineArrayVy$2047_s5UInt8VGvp", "role": "global-backing" }
+      ]
+    }
+  ]
+}
