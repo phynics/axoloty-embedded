@@ -12,6 +12,8 @@ enum DeviceSmoke {
         touchRouterDispatchObservation()
         touchInstalledCapabilities()
         touchInstalledDeviceSmokeSeam()
+        initializeEmbeddedGeneratedCorpusStaticState()
+        initializeEmbeddedConstructedSchemaStaticState()
     }
 
     static func run(

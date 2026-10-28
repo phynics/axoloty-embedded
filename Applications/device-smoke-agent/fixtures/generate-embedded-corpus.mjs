@@ -131,6 +131,21 @@ private var embeddedBenchmarkSink: UInt32 = 0
 private var embeddedCorpusParserWorkspace = EmbeddedWireParserWorkspace()
 private var embeddedCorpusEncodeBuffer = InlineArray<2_048, UInt8>(repeating: 0)
 
+/// Borrows the parser workspace through its public storage API and checks its
+/// defined zeroed storage without changing it or constructing a reader.
+/// The encode buffer explicitly repeats zero, so its first declared UInt8
+/// element is checked directly. embeddedBenchmarkSink is zero-backed BSS and
+/// needs no dynamic first touch.
+func initializeEmbeddedGeneratedCorpusStaticState() {
+    let parserWorkspaceStartsZero = embeddedCorpusParserWorkspace.withStorage { bytes in
+        bytes.count == 2_056 && bytes[0] == 0
+    }
+    let encodeBufferStartsZero = withUnsafePointer(to: &embeddedCorpusEncodeBuffer) {
+        $0.pointee[0] == 0
+    }
+    precondition(parserWorkspaceStartsZero && encodeBufferStartsZero)
+}
+
 @inline(__always)
 private func corpusReader(_ payload: StaticString) -> WireReader {
     WireReader(

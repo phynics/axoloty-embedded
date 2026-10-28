@@ -20,6 +20,11 @@ private struct EmbeddedConstructedSchema: ObjectSchema {
     init() {}
 }
 
+/// Forces the schema's bounded first initialization and checks its empty shape.
+func initializeEmbeddedConstructedSchemaStaticState() {
+    precondition(EmbeddedConstructedSchema.schema.fieldCount == 0)
+}
+
 @inline(never)
 func axoloty_object_model_embedded_link_probe() -> Bool {
     let idBytes: StaticString = "33333333-3333-4333-8333-333333333333"
