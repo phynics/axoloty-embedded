@@ -165,6 +165,9 @@ check_script() {
 }
 
 if wanted build; then
+    check_script generated-corpus-first-touch \
+        'Node, Swift 6.4, or a supported RISC-V object/symbol dumper is unavailable for the generated corpus first-touch fixture' \
+        node Tests/embedded/test-generated-corpus-first-touch.mjs
     check_script core-cmake-helper \
         'CMake, Python, make, or a host C compiler is unavailable' \
         Tests/embedded/check-core-cmake-helper.sh

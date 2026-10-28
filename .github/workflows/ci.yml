@@ -79,7 +79,7 @@ jobs:
       - name: Install host test dependencies
         run: |
           apt-get update -qq
-          apt-get install -y -qq build-essential clang cmake ca-certificates curl
+          apt-get install -y -qq build-essential clang cmake ca-certificates curl llvm
           curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
           apt-get install -y -qq nodejs
 
@@ -118,6 +118,7 @@ jobs:
           --require build:cmake-escape
           --require build:host-smoke
           --require build:macro-first-init
+          --require build:generated-corpus-first-touch
 
       # The broker tier self-provisions an ephemeral in-process broker when no
       # operator broker is configured. It needs no board or container broker.
