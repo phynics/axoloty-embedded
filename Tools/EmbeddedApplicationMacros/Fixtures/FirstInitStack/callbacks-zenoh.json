@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "elfSha256": "ec0e28f326fd847150d7d7c8b00c29197203167ebf340e404746d20f7dfa80da",
+  "evidence": "first-touch-eb24e1f-linked-evidence/zenoh-disassembly.txt; hook call operands are materialized immediately before each swift_once call",
+  "sites": [
+    {"caller": "$e10__idf_main11DeviceSmokeO21initializeStaticStateyyFZ", "callPc": "0x42036e12", "evidencePc": "0x42036e0e", "callback": {"address": "0x420398ce", "symbol": "$e10__idf_main12phase4AgentA33_3CF6D9E05AE332D49CC9194D33B9B714LL_WZ"}},
+    {"caller": "$e10__idf_main11DeviceSmokeO21initializeStaticStateyyFZ", "callPc": "0x42036e22", "evidencePc": "0x42036e1e", "callback": {"address": "0x4203a2b6", "symbol": "$e10__idf_main12phase4AgentB33_3CF6D9E05AE332D49CC9194D33B9B714LL_WZ"}},
+    {"caller": "$e10__idf_main11DeviceSmokeO21initializeStaticStateyyFZ", "callPc": "0x42036e82", "evidencePc": "0x42036e7e", "callback": {"address": "0x42036e9a", "symbol": "$e10__idf_main25EmbeddedConstructedSchema33_64BD40D0799200ACF4FC1D00E1D1883FLLV6schema_WZ"}}
+  ]
+}

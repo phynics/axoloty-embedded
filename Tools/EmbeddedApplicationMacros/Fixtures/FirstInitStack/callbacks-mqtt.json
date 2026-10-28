@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "elfSha256": "7e1d4fc5a9a5544149e1bf32fd73afc20e8a76ae42e86f5579a8b9dc27f4a92d",
+  "evidence": "first-touch-eb24e1f-linked-evidence/mqtt-disassembly.txt; hook call operands are materialized immediately before each swift_once call",
+  "sites": [
+    {"caller": "$e10__idf_main11DeviceSmokeO21initializeStaticStateyyFZ", "callPc": "0x42037492", "evidencePc": "0x4203748e", "callback": {"address": "0x42039f4e", "symbol": "$e10__idf_main12phase4AgentA33_3CF6D9E05AE332D49CC9194D33B9B714LL_WZ"}},
+    {"caller": "$e10__idf_main11DeviceSmokeO21initializeStaticStateyyFZ", "callPc": "0x420374a2", "evidencePc": "0x4203749e", "callback": {"address": "0x4203a936", "symbol": "$e10__idf_main12phase4AgentB33_3CF6D9E05AE332D49CC9194D33B9B714LL_WZ"}},
+    {"caller": "$e10__idf_main11DeviceSmokeO21initializeStaticStateyyFZ", "callPc": "0x42037500", "evidencePc": "0x420374fa", "callback": {"address": "0x42037518", "symbol": "$e10__idf_main25EmbeddedConstructedSchema33_64BD40D0799200ACF4FC1D00E1D1883FLLV6schema_WZ"}}
+  ]
+}
