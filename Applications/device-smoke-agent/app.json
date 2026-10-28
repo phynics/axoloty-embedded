@@ -41,6 +41,7 @@
   "capacities": {
     "maxTopicLength": 256,
     "maxPayloadSize": 2048,
-    "applicationStateBytes": 8
+    "applicationStateBytes": 8,
+    "applicationStaticStorageBytes": 73728
   }
 }

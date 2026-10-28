@@ -33,6 +33,12 @@ if(AXOLOTY_QUALIFICATION_CARRIER_SCENARIO)
 else()
     set(AXOLOTY_QUALIFICATION_CARRIER_SCENARIO OFF)
 endif()
+# Persist the normalized configuration so the shared post-link launcher can
+# classify the image from the configured build, not from a caller environment
+# variable that may be stale or unrelated to this build directory.
+set(AXOLOTY_QUALIFICATION_CARRIER_SCENARIO
+    "${AXOLOTY_QUALIFICATION_CARRIER_SCENARIO}" CACHE BOOL
+    "Build the C-only carrier qualification scenario" FORCE)
 
 # ESP-IDF expands component requirements in a separate CMake sub-invocation
 # that does not inherit -D cache variables, and this file is included during

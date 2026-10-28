@@ -103,6 +103,8 @@ if wanted repo; then
     Tests/embedded/check-application-boundary-invariants.sh || repo_failed=1
     printf '\n== repo: linked-storage audit fixtures\n'
     python3 Tools/EmbeddedApplicationMacros/linked_storage_audit.py --selftest || repo_failed=1
+    printf '\n== repo: optional app static-storage capacity validation\n'
+    python3 Tools/test-application-static-storage-capacity.py || repo_failed=1
     if [ "$repo_failed" -eq 0 ]; then
         record PASS repo 'invariants hold and the smoke case set matches its baseline'
     else

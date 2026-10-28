@@ -94,7 +94,9 @@ mkdir -p "$build_dir" "$evidence_dir" "$proof_root"
 # generated ESP-IDF project. Clearing them prevents a failed retry from being
 # mistaken for a successful build.
 rm -f "$evidence_dir/build-provenance.json" "$evidence_dir/axoloty-swift.bin" \
-    "$evidence_dir/release-manifest.json"
+    "$evidence_dir/release-manifest.json" \
+    "$evidence_dir/linked-static-storage-budget.json" \
+    "$evidence_dir/static-storage-policy.json"
 rm -rf "$build_project_dir"
 mkdir -p "$build_project_dir"
 rm -f "$build_dir/flash_args" "$build_dir/axoloty-swift.bin"
@@ -175,6 +177,16 @@ fi
 export AXOLOTY_EMBEDDED_MACRO_PLUGIN
 export AXOLOTY_PROFILE_DIR AXOLOTY_REPOSITORY_ROOT
 
+# The scenario is an environment input for the component-requirements
+# sub-invocation and a cache input for the normal configure. Pass both so a
+# reused build directory cannot retain the opposite image mode.
+qualification_scenario=${AXOLOTY_QUALIFICATION_CARRIER_SCENARIO:-0}
+case "$qualification_scenario" in
+    1|ON|on|TRUE|true) qualification_scenario=ON ;;
+    0|OFF|off|FALSE|false) qualification_scenario=OFF ;;
+    *) echo "error: AXOLOTY_QUALIFICATION_CARRIER_SCENARIO must be a boolean" >&2; exit 64 ;;
+esac
+
 
 : > "$evidence_dir/build.log"
 cd "$build_project_dir"
@@ -183,6 +195,7 @@ if [ ! -f "$build_dir/CMakeCache.txt" ] ||
     idf.py -B "$build_dir" -D SDKCONFIG="$sdkconfig" \
         -D AXOLOTY_REPOSITORY_ROOT="$AXOLOTY_REPOSITORY_ROOT" \
         -D AXOLOTY_PROFILE_DIR="$AXOLOTY_PROFILE_DIR" \
+        -D AXOLOTY_QUALIFICATION_CARRIER_SCENARIO="$qualification_scenario" \
         -D AXOLOTY_EMBEDDED_MACRO_PLUGIN="$AXOLOTY_EMBEDDED_MACRO_PLUGIN" \
         -D AXOLOTY_REPOSITORY_ROOT="$AXOLOTY_REPOSITORY_ROOT" \
         -D AXOLOTY_PROFILE_DIR="$AXOLOTY_PROFILE_DIR" \
@@ -201,6 +214,7 @@ set +e
 idf.py -B "$build_dir" -D SDKCONFIG="$sdkconfig" \
     -D AXOLOTY_REPOSITORY_ROOT="$AXOLOTY_REPOSITORY_ROOT" \
     -D AXOLOTY_PROFILE_DIR="$AXOLOTY_PROFILE_DIR" \
+    -D AXOLOTY_QUALIFICATION_CARRIER_SCENARIO="$qualification_scenario" \
     -D AXOLOTY_EMBEDDED_MACRO_PLUGIN="$AXOLOTY_EMBEDDED_MACRO_PLUGIN" \
     -D AXOLOTY_REPOSITORY_ROOT="$AXOLOTY_REPOSITORY_ROOT" \
     -D AXOLOTY_PROFILE_DIR="$AXOLOTY_PROFILE_DIR" \
@@ -221,6 +235,14 @@ if [ ! -f "$artifact" ]; then
     echo "error: ESP-IDF did not produce $artifact" >&2
     exit 1
 fi
+
+# Classify the configured image from its normalized CMake cache and enforce a
+# configured app policy against this selected inventory before any artifact,
+# provenance, or release manifest is published. Missing policy is explicit and
+# receives no fabricated budget pass. C-only qualification records not-applicable.
+"$repo_root/Tools/EmbeddedApplicationMacros/static-storage-build-gate.sh" \
+    "$repo_root" "$AXOLOTY_APPLICATION_DIR" "$(basename -- "$AXOLOTY_PROFILE_DIR")" \
+    "$build_dir" "$evidence_dir" 'esp-idf/main/libmain.a'
 
 cp "$artifact" "$evidence_dir/axoloty-swift.bin"
 

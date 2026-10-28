@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
+import io
 import json
 import re
 import struct
@@ -14,6 +16,7 @@ from pathlib import Path
 
 VERSION = "embedded62-linked-storage-audit/1"
 INVENTORY_VERSION = "axoloty.app-storage-inventory-join.v1"
+STATIC_BUDGET_VERSION = "axoloty.app-static-storage-budget.v1"
 ALLOC = 0x2
 WRITE = 0x1
 
@@ -342,6 +345,47 @@ def measure(elf_bytes: bytes, map_bytes: bytes, object_identity: str, profile: s
     return report
 
 
+def enforce_static_storage_budget(report: dict, manifest_bytes: bytes, manifest_path: Path) -> dict:
+    """Compare the conservative aggregate debit with an explicit app policy."""
+    def unique_object(pairs: list[tuple[str, object]]) -> dict:
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise AuditError(f"duplicate JSON key in application manifest: {key}")
+            value[key] = item
+        return value
+
+    try:
+        manifest = json.loads(manifest_bytes, object_pairs_hook=unique_object)
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise AuditError(f"cannot parse application manifest {manifest_path}: {error}") from error
+    if not isinstance(manifest, dict):
+        raise AuditError("application manifest root must be an object")
+    capacities = manifest.get("capacities")
+    if not isinstance(capacities, dict):
+        raise AuditError("application manifest capacities must be an object")
+    ceiling = capacities.get("applicationStaticStorageBytes")
+    if (not isinstance(ceiling, int) or isinstance(ceiling, bool)
+            or ceiling <= 0 or ceiling > 0xFFFFFFFF):
+        raise AuditError("capacities.applicationStaticStorageBytes must be a positive UInt32")
+    actual = report.get("combined_object", {}).get("conservative_debit_bytes")
+    aggregate = report.get("aggregate_charged_static_bytes")
+    if not isinstance(actual, int) or isinstance(actual, bool) or actual < 0:
+        raise AuditError("measurement report has no valid aggregate conservative debit")
+    if aggregate != actual:
+        raise AuditError("aggregate static charge does not equal the conservative combined-object debit")
+    comparison = {
+        "schema": STATIC_BUDGET_VERSION,
+        "policy_source": str(manifest_path.resolve()),
+        "accounting_measure": "conservative-combined-object-debit",
+        "actual_bytes": actual,
+        "ceiling_bytes": ceiling,
+        "headroom_bytes": ceiling - actual,
+        "passed": actual <= ceiling,
+    }
+    return comparison
+
+
 def join_inventory(inventory: dict, symbols: list[dict], map_outputs: list[dict],
                    source_root: Path, inventory_sha256: str, expected_map_owner: str,
                    section_types: dict[str, int] | None = None) -> dict:
@@ -537,6 +581,34 @@ def selftest() -> None:
     assert result["exact_symbol_union_bytes"] == 12
     assert result["combined_object"]["conservative_debit_bytes"] == 24
     assert result["combined_object"]["symbol_ranges_inside_contributions"] == 12
+    assert result["aggregate_charged_static_bytes"] == result["combined_object"]["conservative_debit_bytes"]
+    exact_budget = json.dumps({"capacities": {"applicationStaticStorageBytes": 24}}).encode()
+    comparison = enforce_static_storage_budget(result, exact_budget, Path("fixture-app.json"))
+    assert comparison["actual_bytes"] == 24 and comparison["headroom_bytes"] == 0 and comparison["passed"]
+    over_budget = json.dumps({"capacities": {"applicationStaticStorageBytes": 23}}).encode()
+    comparison = enforce_static_storage_budget(result, over_budget, Path("fixture-app.json"))
+    assert comparison["actual_bytes"] == 24 and comparison["headroom_bytes"] == -1 and not comparison["passed"]
+    for invalid_capacity in (None, True, False, 1.5, 0, -1, 0x100000000, "24"):
+        invalid_manifest = json.dumps({"capacities": {"applicationStaticStorageBytes": invalid_capacity}}).encode()
+        try:
+            enforce_static_storage_budget(result, invalid_manifest, Path("fixture-app.json"))
+        except AuditError as error:
+            assert "positive UInt32" in str(error)
+        else:
+            raise AssertionError(f"invalid static-storage policy accepted: {invalid_capacity!r}")
+    try:
+        enforce_static_storage_budget(result, b'{"capacities":{}}', Path("fixture-app.json"))
+    except AuditError as error:
+        assert "positive UInt32" in str(error)
+    else:
+        raise AssertionError("missing static-storage policy accepted")
+    for malformed_manifest in (b"{", b'{"capacities":{"applicationStaticStorageBytes":1,"applicationStaticStorageBytes":2}}'):
+        try:
+            enforce_static_storage_budget(result, malformed_manifest, Path("fixture-app.json"))
+        except AuditError as error:
+            assert "cannot parse" in str(error) or "duplicate JSON key" in str(error)
+        else:
+            raise AssertionError("malformed or duplicate-key app manifest accepted")
     # This is the parent finding: the output section still matches the ELF,
     # but deleting the combined object's nonzero .bss row must fail closed.
     omitted_bss = fake_map.replace(" .bss 0x2000 0x8 combined.o\n", "")
@@ -686,6 +758,31 @@ def selftest() -> None:
         pass
     else:
         raise AssertionError("missing object accepted")
+
+    # Exercise the complete CLI path with a low policy ceiling. The report is
+    # retained even though enforcement returns failure, so callers can inspect
+    # actual bytes, ceiling, headroom, and the exact conservative accounting.
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        elf_path, map_path = root / "fixture.elf", root / "fixture.map"
+        manifest_path, report_path = root / "app.json", root / "report.json"
+        elf_path.write_bytes(elf_fixture())
+        map_path.write_text(fake_map, encoding="utf-8")
+        manifest_path.write_text(json.dumps({"capacities": {"applicationStaticStorageBytes": 23}}), encoding="utf-8")
+        with contextlib.redirect_stderr(io.StringIO()):
+            status = main(["--elf", str(elf_path), "--map", str(map_path), "--combined-object", "combined.o",
+                           "--profile", "fixture", "--app-manifest", str(manifest_path),
+                           "--enforce-static-storage-budget", "--output", str(report_path)])
+        cli_report = json.loads(report_path.read_text(encoding="utf-8"))
+        assert status == 2
+        assert cli_report["static_storage_budget"] == {
+            "schema": STATIC_BUDGET_VERSION, "policy_source": str(manifest_path.resolve()),
+            "accounting_measure": "conservative-combined-object-debit", "actual_bytes": 24,
+            "ceiling_bytes": 23, "headroom_bytes": -1, "passed": False}
+        with contextlib.redirect_stderr(io.StringIO()):
+            missing_manifest_status = main(["--elf", str(elf_path), "--map", str(map_path),
+                                            "--combined-object", "combined.o", "--enforce-static-storage-budget"])
+        assert missing_manifest_status == 2
     try:
         parse_elf(b"bad")
     except AuditError:
@@ -703,9 +800,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--firmware-source-sha")
     parser.add_argument("--core-sha")
     parser.add_argument("--inventory", type=Path, help="opt-in app-owned explicit storage inventory JSON")
+    parser.add_argument("--enforce-static-storage-budget", action="store_true",
+                        help="require the app manifest capacity and enforce the conservative aggregate debit")
+    parser.add_argument("--app-manifest", type=Path,
+                        help="explicit selected application manifest for static-storage enforcement")
     parser.add_argument("--output", type=Path, help="write JSON to this file; stdout otherwise")
     parser.add_argument("--selftest", action="store_true")
     args = parser.parse_args(argv)
+    if args.app_manifest is not None and not args.enforce_static_storage_budget:
+        parser.error("--app-manifest requires --enforce-static-storage-budget")
     try:
         if args.selftest:
             selftest()
@@ -715,6 +818,13 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--elf, --map, and --combined-object are required")
         report = measure(args.elf.read_bytes(), args.map_path.read_bytes(), args.combined_object, args.profile,
                          args.firmware_source_sha, args.core_sha)
+        if args.enforce_static_storage_budget:
+            if args.app_manifest is None:
+                raise AuditError("--app-manifest is required with --enforce-static-storage-budget")
+            manifest_bytes = args.app_manifest.read_bytes()
+            report["static_storage_budget"] = enforce_static_storage_budget(
+                report, manifest_bytes, args.app_manifest
+            )
         if args.inventory:
             inventory_bytes = args.inventory.read_bytes()
             inventory = json.loads(inventory_bytes)
@@ -730,6 +840,11 @@ def main(argv: list[str] | None = None) -> int:
             args.output.write_text(output, encoding="utf-8")
         else:
             sys.stdout.write(output)
+        if args.enforce_static_storage_budget and not report["static_storage_budget"]["passed"]:
+            print("linked-storage audit: static-storage budget exceeded: "
+                  f"{report['static_storage_budget']['actual_bytes']} > "
+                  f"{report['static_storage_budget']['ceiling_bytes']}", file=sys.stderr)
+            return 2
         return 0
     except (AuditError, OSError, UnicodeError, ValueError) as error:
         print(f"linked-storage audit: {error}", file=sys.stderr)
