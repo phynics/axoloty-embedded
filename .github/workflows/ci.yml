@@ -106,6 +106,7 @@ jobs:
           --require build:core-cmake-helper
           --require build:network-config-cache
           --require build:heap-trace-status
+          --require build:heap-trace-calibration
           --require build:rom-console
           --require build:runtime-identity
           --require build:shared-flags
