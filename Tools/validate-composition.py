@@ -57,6 +57,12 @@ def app_requirements(manifest: dict[str, Any], manifest_path: Path) -> tuple[set
         value = capacities.get(name)
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0 or value > 0xFFFFFFFF:
             raise CompositionError(f"{manifest_path} capacities.{name} must be a positive UInt32")
+    if "applicationStaticStorageBytes" in capacities:
+        value = capacities["applicationStaticStorageBytes"]
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0 or value > 0xFFFFFFFF:
+            raise CompositionError(
+                f"{manifest_path} capacities.applicationStaticStorageBytes must be a positive UInt32"
+            )
     return platform_required, carrier_required, capacities
 
 

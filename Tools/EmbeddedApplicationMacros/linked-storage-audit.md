@@ -83,6 +83,42 @@ This opt-in join adds no budget ceiling and establishes no complete ownership,
 heap behavior, or stack bounds. The default CLI and `--selftest` remain
 unchanged.
 
+The shared ESP-IDF post-link gate classifies the configured image from the
+normalized `AXOLOTY_QUALIFICATION_CARRIER_SCENARIO` value in `CMakeCache.txt`.
+A C-only carrier qualification writes a `not-applicable` policy receipt and
+does not claim a budget pass. A normal Swift image with no capacity writes a
+`not-configured` receipt; minimal apps remain valid. A supplied capacity must
+be a positive UInt32. When configured, the gate requires the selected app's
+storage inventory and derives the map member from its SDK-neutral
+`expectedMapMember`, then enforces the policy before image, provenance, or
+release-manifest publication. The full archive owner remains
+platform/composition-owned.
+
+The CLI requires `--app-manifest` to be paired with
+`--enforce-static-storage-budget`; passing the manifest alone is an error.
+For a configured policy, the audit command is:
+
+```sh
+python3 Tools/EmbeddedApplicationMacros/linked_storage_audit.py \
+  --elf /path/to/axoloty-swift.elf \
+  --map /path/to/axoloty-swift.map \
+  --combined-object 'esp-idf/main/libmain.a(<selected-inventory-member>)' \
+  --profile firmware-mqtt \
+  --app-manifest Applications/device-smoke-agent/app.json \
+  --enforce-static-storage-budget \
+  --output linked-storage-budget.json
+```
+
+Enforcement compares the manifest ceiling only with
+`aggregate_charged_static_bytes`, which is exactly the conservative
+combined-object debit, including its map-recorded padding. It does not sum the
+11-symbol inventory union or use whole-image `.bss` alone. The report records
+actual bytes, ceiling, signed headroom, and pass status. The manifest field is
+optional for other minimal app manifests but, when present, must be a positive
+UInt32. Direct enforcement mode requires it and fails closed when it is
+missing, malformed, or exceeded. This SDK-neutral app policy does not alter
+`applicationStateBytes` or the generated C ABI.
+
 Run focused synthetic cases with:
 
 ```sh
