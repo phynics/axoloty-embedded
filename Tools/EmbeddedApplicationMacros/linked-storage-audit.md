@@ -36,12 +36,52 @@ overlaps fail.
 
 The combined-object debit is the sum of its writable input contributions,
 including map-recorded padding when present. It replaces the symbol-range
-charges for aggregate accounting. Raw symbol names are retained; generated
-state and phase4AgentA/B are identified only by their emitted ELF names. No
-demangling or source-level ownership inference is performed. A report always
+charges for aggregate accounting. Raw symbol names are retained; the default
+measurement does not perform source-level ownership inference. A report always
 marks source attribution incomplete and leaves storage-budget acceptance,
 first-init trace, and stack proof pending. It does not claim that the image
 does not allocate.
+
+An app may opt into an explicit inventory join by passing `--inventory`:
+
+```sh
+python3 Tools/EmbeddedApplicationMacros/linked_storage_audit.py \
+  --elf /path/to/axoloty-swift.elf \
+  --map /path/to/axoloty-swift.map \
+  --combined-object 'esp-idf/main/libmain.a(AgentExchange.swift.obj)' \
+  --inventory Applications/device-smoke-agent/storage-inventory.json \
+  --output linked-storage-with-inventory.json
+```
+
+The inventory lists logical owners, source references, exact expected raw ELF
+names, and an SDK-neutral `expectedMapMember` basename (for example,
+`AgentExchange.swift.obj`). The CLI's `--combined-object` retains the full
+linker identity. The auditor accepts only explicit archive-member syntax such
+as `path/libmain.a(AgentExchange.swift.obj)` or plain object syntax such as
+`path/AgentExchange.swift.obj`, then requires both the inventory member and
+the unique containing map input's full owner to match. A different archive
+containing the same member fails the full-owner check. The report keeps the
+logical inventory owner separate from the linker row's `linker_owner`. This
+check verifies map containment and object identity; it does not prove source
+ownership of bytes in the combined object.
+
+Each source reference declares `sourceKind` as `swift-source` or
+`generator-source`. The auditor checks whether the configured name occurs as
+bytes in the configured file and reports that as `lexical-source-reference-only`
+evidence. It does not parse Swift syntax, establish a declaration or scope, or
+prove that the named file produced the ELF symbol. In particular, a generator
+file is not a Swift compilation unit. Source coverage is always reported as
+`complete: false` and `verified: false`; an inventory-supplied completeness
+claim is retained only as an untrusted claim indicator.
+
+The join reports symbol size, section, address range, map input, aliases, and
+lazy-control candidates as separate exact identities. Missing, ambiguous, or
+wrong-object identities fail the command with structured details. The
+inventory is explicit and does not claim that source scanning found every
+mutable app global. The conservative combined-object debit remains in force.
+This opt-in join adds no budget ceiling and establishes no complete ownership,
+heap behavior, or stack bounds. The default CLI and `--selftest` remain
+unchanged.
 
 Run focused synthetic cases with:
 

@@ -9,9 +9,11 @@ import json
 import re
 import struct
 import sys
+import tempfile
 from pathlib import Path
 
 VERSION = "embedded62-linked-storage-audit/1"
+INVENTORY_VERSION = "axoloty.app-storage-inventory-join.v1"
 ALLOC = 0x2
 WRITE = 0x1
 
@@ -111,6 +113,18 @@ INPUT = re.compile(r"^\s+(\.[^\s]+)\s+0x([0-9a-fA-F]+)\s+0x([0-9a-fA-F]+)\s+(.+?
 INPUT_NAME_ONLY = re.compile(r"^\s+(\.[^\s]+)\s*$")
 INPUT_CONTINUATION = re.compile(r"^\s+0x([0-9a-fA-F]+)\s+0x([0-9a-fA-F]+)\s+(.+?)\s*$")
 FILL = re.compile(r"^\s+\*fill\*\s+0x([0-9a-fA-F]+)\s+0x([0-9a-fA-F]+)\s*$")
+ARCHIVE_MEMBER_IDENTITY = re.compile(r"^(?:[^()/\s]+/)*[^()/\s]+\.a\(([^()/\s]+\.(?:o|obj))\)$")
+PLAIN_OBJECT_IDENTITY = re.compile(r"^(?:[^()/\s]+/)*[^()/\s]+\.(?:o|obj)$")
+
+
+def object_member(identity: str) -> str | None:
+    """Return a validated archive member or plain object basename."""
+    archive_member = ARCHIVE_MEMBER_IDENTITY.fullmatch(identity)
+    if archive_member:
+        return archive_member.group(1)
+    if PLAIN_OBJECT_IDENTITY.fullmatch(identity):
+        return identity.rsplit("/", 1)[-1]
+    return None
 
 
 def parse_map(text: str, object_identity: str) -> dict:
@@ -328,7 +342,159 @@ def measure(elf_bytes: bytes, map_bytes: bytes, object_identity: str, profile: s
     return report
 
 
+def join_inventory(inventory: dict, symbols: list[dict], map_outputs: list[dict],
+                   source_root: Path, inventory_sha256: str, expected_map_owner: str,
+                   section_types: dict[str, int] | None = None) -> dict:
+    """Join explicit source identities to exact writable ELF symbol names."""
+    if not isinstance(inventory, dict):
+        raise AuditError("inventory root must be an object")
+    if inventory.get("schemaVersion") != 1 or not isinstance(inventory.get("entries"), list):
+        raise AuditError("inventory must use schemaVersion 1 and contain entries")
+    inventory_map_member = inventory.get("expectedMapMember")
+    if not isinstance(inventory_map_member, str) or object_member(inventory_map_member) != inventory_map_member:
+        raise AuditError("inventory must declare expectedMapMember as an exact .o or .obj basename")
+    expected_member = object_member(expected_map_owner)
+    if expected_member is None:
+        raise AuditError("--combined-object must use archive-member or plain-object linker identity syntax")
+    if inventory_map_member != expected_member:
+        raise AuditError("inventory expectedMapMember does not match --combined-object member: "
+                         f"{inventory_map_member!r} != {expected_member!r}")
+    owners = set()
+    expected_names = set()
+    joined = []
+    unmatched = []
+    ambiguous = []
+    charged_ranges = set()
+    for entry in inventory["entries"]:
+        if not isinstance(entry, dict):
+            raise AuditError("inventory entries must be objects")
+        owner = entry.get("owner")
+        if not isinstance(owner, str) or not owner or owner in owners:
+            raise AuditError(f"inventory has missing or duplicate logical owner: {owner!r}")
+        owners.add(owner)
+        if entry.get("category") not in {"app-state", "app-global", "initialization-control"}:
+            raise AuditError(f"inventory entry {owner} has unsupported category")
+        source_path = entry.get("sourcePath")
+        source_name = entry.get("sourceName")
+        source_kind = entry.get("sourceKind")
+        if (not isinstance(source_path, str) or not isinstance(source_name, str)
+                or source_kind not in {"swift-source", "generator-source"}):
+            raise AuditError(f"inventory entry {owner} lacks source identity")
+        if ((source_path.endswith(".swift")) != (source_kind == "swift-source")):
+            raise AuditError(f"inventory sourceKind does not match source path kind for {owner}: {source_path}")
+        source_file = (source_root / source_path).resolve()
+        try:
+            source_file.relative_to(source_root.resolve())
+            source_bytes = source_file.read_bytes()
+        except (ValueError, OSError) as error:
+            raise AuditError(f"inventory source path unavailable for {owner}: {source_path}") from error
+        if source_name.encode() not in source_bytes:
+            raise AuditError(f"source identity {source_name!r} not found in {source_path}")
+        expected = entry.get("expectedSymbols")
+        if not isinstance(expected, list) or not expected:
+            raise AuditError(f"inventory entry {owner} has no expected ELF symbols")
+        for identity in expected:
+            raw_name = identity.get("rawName") if isinstance(identity, dict) else None
+            role = identity.get("role") if isinstance(identity, dict) else None
+            if not isinstance(raw_name, str) or not isinstance(role, str):
+                raise AuditError(f"inventory entry {owner} has malformed symbol identity")
+            if raw_name in expected_names:
+                raise AuditError(f"ELF symbol assigned to multiple inventory entries: {raw_name}")
+            expected_names.add(raw_name)
+            matches = [symbol for symbol in symbols if symbol["name"] == raw_name]
+            if not matches:
+                unmatched.append({"owner": owner, "raw_name": raw_name, "reason": "expected-symbol-missing"})
+                continue
+            if len(matches) != 1:
+                ambiguous.append({"owner": owner, "raw_name": raw_name, "reason": "multiple-exact-symbol-identities",
+                                  "match_count": len(matches)})
+                continue
+            symbol = matches[0]
+            section_class = writable_section_class(symbol["section"])
+            if section_class not in {"data", "bss"}:
+                raise AuditError(f"inventory symbol is outside .data/.bss: {raw_name} ({symbol['section']})")
+            section_type = (section_types or {}).get(symbol["section"])
+            if section_type == 8:
+                initialization_category = "zero-backed"
+                initialization_evidence = "ELF SHT_NOBITS section"
+            elif section_type == 1:
+                initialization_category = "file-backed-writable-bytes"
+                initialization_evidence = "ELF SHT_PROGBITS section; initializer value is not inferred"
+            else:
+                raise AuditError(f"inventory symbol has unsupported or unknown ELF section type: {raw_name}")
+            stop = symbol["address"] + symbol["size"]
+            map_matches = []
+            for output in map_outputs:
+                if output["name"] != symbol["section"]:
+                    continue
+                for item in output["inputs"]:
+                    if item["size"] and item["address"] <= symbol["address"] and stop <= item["address"] + item["size"]:
+                        map_matches.append({"output_section": output["name"], "input_section": item["input_section"],
+                                            "linker_owner": item["owner"], "address": item["address"], "size": item["size"]})
+            if len(map_matches) != 1:
+                ambiguous.append({"owner": owner, "raw_name": raw_name,
+                                  "reason": "map-input-range-not-unique", "matches": map_matches})
+                continue
+            actual_map_owner = map_matches[0]["linker_owner"]
+            actual_member = object_member(actual_map_owner)
+            if actual_member is None:
+                raise AuditError("containing map input has unsupported archive-member or plain-object syntax: "
+                                 f"{actual_map_owner!r}")
+            if actual_map_owner != expected_map_owner or actual_member != inventory_map_member:
+                unmatched.append({"owner": owner, "raw_name": raw_name,
+                                  "reason": "map-owner-contract-mismatch",
+                                  "expected_map_owner": expected_map_owner,
+                                  "expected_map_member": inventory_map_member,
+                                  "actual_map_owner": actual_map_owner,
+                                  "actual_map_member": actual_member})
+                continue
+            aliases = sorted(other["name"] for other in symbols
+                             if other["address"] == symbol["address"] and other["size"] == symbol["size"]
+                             and other["section"] == symbol["section"] and other["name"] != raw_name)
+            range_key = (symbol["section"], symbol["address"], symbol["size"])
+            range_charge = 0 if range_key in charged_ranges else symbol["size"]
+            charged_ranges.add(range_key)
+            joined.append({"owner": owner, "category": entry.get("category"), "source_reference_evidence": {
+                               "path": source_path, "name": source_name, "sha256": sha256(source_bytes),
+                               "source_kind": source_kind, "match": "byte-substring",
+                               "evidence_scope": "lexical-source-reference-only",
+                               "does_not_prove": ["AST declaration or scope", "compiled origin of the ELF symbol"]},
+                           "raw_name": raw_name, "symbol_role": role,
+                           "address": symbol["address"], "size": symbol["size"],
+                           "section": symbol["section"], "range": {"start": symbol["address"], "end_exclusive": stop},
+                           "initialization_category": initialization_category,
+                           "initialization_evidence": initialization_evidence,
+                           "map_input": map_matches[0], "aliases": aliases,
+                           "range_bytes_charged": range_charge})
+    if unmatched or ambiguous:
+        raise AuditError("inventory join failed: " + json.dumps({"unmatched": unmatched, "ambiguous": ambiguous}, sort_keys=True))
+    by_owner = {}
+    for symbol in joined:
+        by_owner.setdefault(symbol["owner"], []).append(symbol)
+    section_ranges = {}
+    for item in joined:
+        section_ranges.setdefault(item["section"], []).append((item["address"], item["address"] + item["size"]))
+    joined_union = sum(merged_bytes(ranges) for ranges in section_ranges.values())
+    coverage = inventory.get("coverage")
+    return {"schema": INVENTORY_VERSION, "inventory": {"path": str((source_root / inventory.get("path", "")).resolve()),
+            "sha256": inventory_sha256, "app": inventory.get("app"),
+            "expected_map_member": inventory_map_member, "combined_object_identity": expected_map_owner},
+        "join_status": "matched", "recognized_logical_owners": sorted(by_owner), "symbols": joined,
+        "joined_symbol_union_bytes": joined_union,
+        "unmatched": unmatched, "ambiguous": ambiguous, "optimized_away_or_unemitted": [],
+        "candidate_scope": "exact expected identities in this explicit inventory only",
+        "source_coverage": {"complete": False, "verified": False,
+            "inventory_claimed_complete": isinstance(coverage, dict) and coverage.get("complete") is True,
+            "reason": "the auditor performs no source-wide declaration or ownership analysis; inventory claims cannot establish completeness"},
+        "merged_attribution": {"status": "conservative-combined-object-debit-retained",
+            "note": "ELF symbols identify listed ranges; map object membership does not prove source ownership of neighboring bytes."}}
+
+
 def selftest() -> None:
+    assert object_member("esp-idf/main/libmain.a(AgentExchange.swift.obj)") == "AgentExchange.swift.obj"
+    assert object_member("Objects/AgentExchange.swift.obj") == "AgentExchange.swift.obj"
+    assert object_member("libmain.a(path/AgentExchange.swift.obj)") is None
+    assert object_member("AgentExchange.swift.obj.backup") is None
     assert merged_bytes([(0, 8), (0, 8), (4, 12), (20, 24)]) == 16
     # A miniature ELF/map model exercises nonzero .data, zero-backed .bss,
     # input padding, full-object debit, and missing/malformed input rejection.
@@ -409,6 +575,111 @@ def selftest() -> None:
                                      {"section_index": 1, "address": 0, "size": 8, "name": "alias"}])
     assert conflicting_overlaps([{"section_index": 1, "address": 0, "size": 12, "name": "outer"},
                                  {"section_index": 1, "address": 4, "size": 2, "name": "nested"}])
+    # The opt-in inventory join uses exact raw identities, separates a lazy
+    # control word from its similarly named backing, accepts .data/.bss, and
+    # reports same-range aliases without charging them twice.
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        (root / "State.swift").write_text("struct State {}\n", encoding="utf-8")
+        (root / "Agents.swift").write_text("var phase4AgentA = 0\n", encoding="utf-8")
+        (root / "Generate.mjs").write_text("const generatedWorkspace = 0;\n", encoding="utf-8")
+        fixture_symbols = [
+            {"name": "stateBacking", "address": 0x1000, "size": 4, "section": ".data", "section_index": 1},
+            {"name": "stateAlias", "address": 0x1000, "size": 4, "section": ".data", "section_index": 1},
+            {"name": "phase4AgentABacking", "address": 0x2000, "size": 8, "section": ".bss", "section_index": 2},
+            {"name": "phase4AgentAControl", "address": 0x2010, "size": 4, "section": ".bss", "section_index": 2},
+            {"name": "generatedWorkspace", "address": 0x2018, "size": 4, "section": ".bss", "section_index": 2},
+        ]
+        fixture_outputs = [
+            {"name": ".data", "inputs": [{"input_section": ".data", "address": 0x1000, "size": 8, "owner": "combined.o"}]},
+            {"name": ".bss", "inputs": [{"input_section": ".bss", "address": 0x2000, "size": 0x20, "owner": "combined.o"}]},
+        ]
+        inventory = {"schemaVersion": 1, "app": "fixture", "expectedMapMember": "combined.o", "entries": [
+            {"owner": "State", "category": "app-state", "sourcePath": "State.swift", "sourceKind": "swift-source", "sourceName": "State",
+             "expectedSymbols": [{"rawName": "stateBacking", "role": "backing"},
+                                 {"rawName": "stateAlias", "role": "alias"}]},
+            {"owner": "phase4AgentA", "category": "app-global", "sourcePath": "Agents.swift", "sourceKind": "swift-source", "sourceName": "phase4AgentA",
+             "expectedSymbols": [{"rawName": "phase4AgentABacking", "role": "backing"},
+                                 {"rawName": "phase4AgentAControl", "role": "lazy-control"}]},
+            {"owner": "generatedWorkspace", "category": "app-global", "sourcePath": "Generate.mjs", "sourceKind": "generator-source", "sourceName": "generatedWorkspace",
+             "expectedSymbols": [{"rawName": "generatedWorkspace", "role": "backing"}]},
+        ]}
+        joined = join_inventory(inventory, fixture_symbols, fixture_outputs, root, "fixture-inventory-hash", "combined.o",
+                                {".data": 1, ".bss": 8})
+        assert joined["join_status"] == "matched"
+        assert joined["joined_symbol_union_bytes"] == 20
+        assert joined["source_coverage"]["complete"] is False
+        assert joined["source_coverage"]["verified"] is False
+        assert joined["symbols"][0]["source_reference_evidence"]["evidence_scope"] == "lexical-source-reference-only"
+        state_result = next(item for item in joined["symbols"] if item["raw_name"] == "stateBacking")
+        assert state_result["section"] == ".data" and state_result["aliases"] == ["stateAlias"]
+        assert state_result["initialization_category"] == "file-backed-writable-bytes"
+        assert state_result["range_bytes_charged"] == 4
+        alias_result = next(item for item in joined["symbols"] if item["raw_name"] == "stateAlias")
+        assert alias_result["aliases"] == ["stateBacking"] and alias_result["range_bytes_charged"] == 0
+        assert sum(item["range_bytes_charged"] for item in joined["symbols"]) == 20
+        generated = next(item for item in joined["symbols"] if item["raw_name"] == "generatedWorkspace")
+        assert generated["source_reference_evidence"]["source_kind"] == "generator-source"
+        assert generated["source_reference_evidence"]["evidence_scope"] == "lexical-source-reference-only"
+        agent = [item for item in joined["symbols"] if item["owner"] == "phase4AgentA"]
+        assert {item["symbol_role"]: item["size"] for item in agent} == {"backing": 8, "lazy-control": 4}
+        assert all(item["section"] == ".bss" for item in agent)
+        assert all(item["initialization_category"] == "zero-backed" for item in agent)
+        missing = [dict(item) for item in fixture_symbols if item["name"] != "phase4AgentAControl"]
+        try:
+            join_inventory(inventory, missing, fixture_outputs, root, "fixture", "combined.o", {".data": 1, ".bss": 8})
+        except AuditError as error:
+            assert "expected-symbol-missing" in str(error)
+        else:
+            raise AssertionError("missing expected inventory symbol accepted")
+        ambiguous = fixture_symbols + [dict(fixture_symbols[-1])]
+        try:
+            join_inventory(inventory, ambiguous, fixture_outputs, root, "fixture", "combined.o", {".data": 1, ".bss": 8})
+        except AuditError as error:
+            assert "multiple-exact-symbol-identities" in str(error)
+        else:
+            raise AssertionError("ambiguous exact inventory symbol accepted")
+        asserted_coverage = {**inventory, "coverage": {"complete": True, "method": "untrusted"}}
+        forced_incomplete = join_inventory(asserted_coverage, fixture_symbols, fixture_outputs, root, "fixture",
+                                           "combined.o", {".data": 1, ".bss": 8})
+        assert forced_incomplete["source_coverage"] == {
+            "complete": False, "verified": False, "inventory_claimed_complete": True,
+            "reason": "the auditor performs no source-wide declaration or ownership analysis; inventory claims cannot establish completeness"}
+        unrelated_outputs = [dict(output, inputs=[dict(item, owner="other/libforeign.a(combined.o)") for item in output["inputs"]])
+                             for output in fixture_outputs]
+        try:
+            join_inventory(inventory, fixture_symbols, unrelated_outputs, root, "fixture", "combined.o",
+                           {".data": 1, ".bss": 8})
+        except AuditError as error:
+            assert "map-owner-contract-mismatch" in str(error)
+            assert "other/libforeign.a(combined.o)" in str(error)
+        else:
+            raise AssertionError("unique map containment from an unrelated object was accepted")
+        for missing_member in ({key: value for key, value in inventory.items() if key != "expectedMapMember"},
+                               {**inventory, "expectedMapMember": ""}):
+            try:
+                join_inventory(missing_member, fixture_symbols, fixture_outputs, root, "fixture", "combined.o",
+                               {".data": 1, ".bss": 8})
+            except AuditError as error:
+                assert "expectedMapMember" in str(error)
+            else:
+                raise AssertionError("missing or empty expected map member accepted")
+        for wrong_member in ("other.obj", "prefix-combined.o", "path/combined.o"):
+            try:
+                join_inventory({**inventory, "expectedMapMember": wrong_member}, fixture_symbols,
+                               fixture_outputs, root, "fixture", "combined.o", {".data": 1, ".bss": 8})
+            except AuditError as error:
+                assert "expectedMapMember" in str(error) or "does not match --combined-object member" in str(error)
+            else:
+                raise AssertionError(f"mismatched or lookalike expected map member accepted: {wrong_member}")
+        for invalid_identity in ("libbad.a(path/combined.o)", "bad archive.a(combined.o)", "combined.o(suffix)"):
+            try:
+                join_inventory(inventory, fixture_symbols, fixture_outputs, root, "fixture", invalid_identity,
+                               {".data": 1, ".bss": 8})
+            except AuditError as error:
+                assert "linker identity syntax" in str(error)
+            else:
+                raise AssertionError(f"malformed --combined-object identity accepted: {invalid_identity}")
     try:
         measure(elf_fixture(), fake_map.encode(), "missing.o", "fixture")
     except AuditError:
@@ -431,6 +702,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--profile", default="unspecified")
     parser.add_argument("--firmware-source-sha")
     parser.add_argument("--core-sha")
+    parser.add_argument("--inventory", type=Path, help="opt-in app-owned explicit storage inventory JSON")
     parser.add_argument("--output", type=Path, help="write JSON to this file; stdout otherwise")
     parser.add_argument("--selftest", action="store_true")
     args = parser.parse_args(argv)
@@ -443,13 +715,23 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--elf, --map, and --combined-object are required")
         report = measure(args.elf.read_bytes(), args.map_path.read_bytes(), args.combined_object, args.profile,
                          args.firmware_source_sha, args.core_sha)
+        if args.inventory:
+            inventory_bytes = args.inventory.read_bytes()
+            inventory = json.loads(inventory_bytes)
+            inventory["path"] = str(args.inventory.resolve())
+            elf = parse_elf(args.elf.read_bytes())
+            linker_map = parse_map(args.map_path.read_bytes().decode("utf-8", "replace"), args.combined_object)
+            report["inventory_join"] = join_inventory(inventory, elf["symbols"],
+                linker_map["writable_outputs"], args.inventory.resolve().parent,
+                sha256(inventory_bytes), args.combined_object,
+                {section["name"]: section["type"] for section in elf["sections"]})
         output = json.dumps(report, sort_keys=True, indent=2) + "\n"
         if args.output:
             args.output.write_text(output, encoding="utf-8")
         else:
             sys.stdout.write(output)
         return 0
-    except (AuditError, OSError, UnicodeError) as error:
+    except (AuditError, OSError, UnicodeError, ValueError) as error:
         print(f"linked-storage audit: {error}", file=sys.stderr)
         return 2
 
