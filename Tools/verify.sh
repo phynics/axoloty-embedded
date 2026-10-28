@@ -184,6 +184,9 @@ if wanted build; then
     check_script heap-trace-status \
         'clang or swiftc is unavailable for the heap trace status fixtures' \
         Tests/embedded/run-heap-trace-status-test.sh
+    check_script heap-trace-calibration \
+        'clang, node, nm, or python3 is unavailable for the heap trace calibration controls' \
+        Tests/embedded/run-heap-trace-calibration-test.sh
     check_script runtime-identity \
         'no host C compiler is available for the runtime identity check' \
         Tests/embedded/run-runtime-identity-test.sh

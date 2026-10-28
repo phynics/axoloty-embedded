@@ -6,7 +6,7 @@
 #define ESP_OK 0
 #define ESP_FAIL 1
 typedef enum { HEAP_TRACE_ALL, HEAP_TRACE_LEAKS } heap_trace_mode_t;
-typedef struct { unsigned char unused; } heap_trace_record_t;
+typedef struct { void *address; } heap_trace_record_t;
 typedef struct {
     heap_trace_mode_t mode;
     size_t total_allocations;
@@ -20,4 +20,7 @@ int heap_trace_init_standalone(heap_trace_record_t *records, size_t count);
 int heap_trace_start(heap_trace_mode_t mode);
 int heap_trace_stop(void);
 int heap_trace_summary(heap_trace_summary_t *summary);
+size_t heap_trace_get_count(void);
+int heap_trace_get(size_t index, heap_trace_record_t *record);
+#define AXOLOTY_TEST_HEAP_TRACE_CAPACITY 128u
 #endif

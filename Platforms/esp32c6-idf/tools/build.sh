@@ -187,6 +187,20 @@ case "$qualification_scenario" in
     *) echo "error: AXOLOTY_QUALIFICATION_CARRIER_SCENARIO must be a boolean" >&2; exit 64 ;;
 esac
 
+heap_trace_calibration=${AXOLOTY_HEAP_TRACE_CALIBRATION:-0}
+case "$heap_trace_calibration" in
+    1|ON|on|TRUE|true) heap_trace_calibration=ON ;;
+    0|OFF|off|FALSE|false) heap_trace_calibration=OFF ;;
+    *) echo "error: AXOLOTY_HEAP_TRACE_CALIBRATION must be a boolean" >&2; exit 64 ;;
+esac
+if [ "$heap_trace_calibration" = ON ] && [ "$qualification_scenario" = ON ]; then
+    echo "error: AXOLOTY_HEAP_TRACE_CALIBRATION cannot be combined with AXOLOTY_QUALIFICATION_CARRIER_SCENARIO" >&2
+    exit 64
+fi
+export AXOLOTY_HEAP_TRACE_CALIBRATION="$heap_trace_calibration"
+node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({schema: 1, heapTraceCalibration: process.argv[2] === "ON", qualificationCarrierScenario: process.argv[3] === "ON"}, null, 2) + "\n");' \
+    "$evidence_dir/allocator-calibration-config.json" "$heap_trace_calibration" "$qualification_scenario"
+
 
 : > "$evidence_dir/build.log"
 cd "$build_project_dir"
@@ -196,6 +210,7 @@ if [ ! -f "$build_dir/CMakeCache.txt" ] ||
         -D AXOLOTY_REPOSITORY_ROOT="$AXOLOTY_REPOSITORY_ROOT" \
         -D AXOLOTY_PROFILE_DIR="$AXOLOTY_PROFILE_DIR" \
         -D AXOLOTY_QUALIFICATION_CARRIER_SCENARIO="$qualification_scenario" \
+        -D AXOLOTY_HEAP_TRACE_CALIBRATION="$heap_trace_calibration" \
         -D AXOLOTY_EMBEDDED_MACRO_PLUGIN="$AXOLOTY_EMBEDDED_MACRO_PLUGIN" \
         -D AXOLOTY_REPOSITORY_ROOT="$AXOLOTY_REPOSITORY_ROOT" \
         -D AXOLOTY_PROFILE_DIR="$AXOLOTY_PROFILE_DIR" \
@@ -215,6 +230,7 @@ idf.py -B "$build_dir" -D SDKCONFIG="$sdkconfig" \
     -D AXOLOTY_REPOSITORY_ROOT="$AXOLOTY_REPOSITORY_ROOT" \
     -D AXOLOTY_PROFILE_DIR="$AXOLOTY_PROFILE_DIR" \
     -D AXOLOTY_QUALIFICATION_CARRIER_SCENARIO="$qualification_scenario" \
+    -D AXOLOTY_HEAP_TRACE_CALIBRATION="$heap_trace_calibration" \
     -D AXOLOTY_EMBEDDED_MACRO_PLUGIN="$AXOLOTY_EMBEDDED_MACRO_PLUGIN" \
     -D AXOLOTY_REPOSITORY_ROOT="$AXOLOTY_REPOSITORY_ROOT" \
     -D AXOLOTY_PROFILE_DIR="$AXOLOTY_PROFILE_DIR" \

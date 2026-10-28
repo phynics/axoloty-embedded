@@ -40,6 +40,29 @@ set(AXOLOTY_QUALIFICATION_CARRIER_SCENARIO
     "${AXOLOTY_QUALIFICATION_CARRIER_SCENARIO}" CACHE BOOL
     "Build the C-only carrier qualification scenario" FORCE)
 
+# Allocator-observer calibration is a platform-local, opt-in pre-entry
+# control. Normalize both the normal configure and ESP-IDF's requirements
+# sub-invocation, and persist OFF explicitly so reused build directories cannot
+# inherit a previous calibration image.
+if(NOT DEFINED AXOLOTY_HEAP_TRACE_CALIBRATION OR
+   "${AXOLOTY_HEAP_TRACE_CALIBRATION}" STREQUAL "")
+    if(DEFINED ENV{AXOLOTY_HEAP_TRACE_CALIBRATION})
+        set(AXOLOTY_HEAP_TRACE_CALIBRATION "$ENV{AXOLOTY_HEAP_TRACE_CALIBRATION}")
+    endif()
+endif()
+if(AXOLOTY_HEAP_TRACE_CALIBRATION)
+    set(AXOLOTY_HEAP_TRACE_CALIBRATION ON)
+else()
+    set(AXOLOTY_HEAP_TRACE_CALIBRATION OFF)
+endif()
+set(AXOLOTY_HEAP_TRACE_CALIBRATION "${AXOLOTY_HEAP_TRACE_CALIBRATION}" CACHE BOOL
+    "Run bounded heap observer controls before the shared app entry" FORCE)
+if(AXOLOTY_HEAP_TRACE_CALIBRATION AND AXOLOTY_QUALIFICATION_CARRIER_SCENARIO)
+    message(FATAL_ERROR
+        "AXOLOTY_HEAP_TRACE_CALIBRATION cannot be combined with "
+        "AXOLOTY_QUALIFICATION_CARRIER_SCENARIO")
+endif()
+
 # ESP-IDF expands component requirements in a separate CMake sub-invocation
 # that does not inherit -D cache variables, and this file is included during
 # that pass. Fall back to the environment, exactly as axoloty-source.cmake
@@ -219,6 +242,11 @@ if(NOT AXOLOTY_QUALIFICATION_CARRIER_SCENARIO)
         "${CMAKE_CURRENT_LIST_DIR}/Esp32c6AppMain.c"
     )
 endif()
+if(AXOLOTY_HEAP_TRACE_CALIBRATION)
+    list(APPEND AXOLOTY_PLATFORM_C_SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/heap_trace_calibration.c"
+    )
+endif()
 
 set(AXOLOTY_CORPUS_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/GeneratedCorpus.swift")
 set(AXOLOTY_CORPUS_FIXTURE_DIR "${AXOLOTY_APPLICATION_DIR}/fixtures")
@@ -343,6 +371,11 @@ else()
     target_compile_definitions(${COMPONENT_LIB} PRIVATE
         AXOLOTY_QUALIFICATION_CARRIER_SCENARIO=0
     )
+endif()
+if(AXOLOTY_HEAP_TRACE_CALIBRATION)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE AXOLOTY_HEAP_TRACE_CALIBRATION=1)
+else()
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE AXOLOTY_HEAP_TRACE_CALIBRATION=0)
 endif()
 
 # `idf_component_register_swift` resets COMPILE_OPTIONS to its Embedded
