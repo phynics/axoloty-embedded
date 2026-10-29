@@ -107,6 +107,8 @@ if wanted repo; then
     python3 Tools/test-application-static-storage-capacity.py || repo_failed=1
     printf '\n== repo: first-initialization stack analyzer fixtures\n'
     python3 Tools/EmbeddedApplicationMacros/first_init_stack.py --self-test || repo_failed=1
+    printf '\n== repo: first-initialization proof receipt fixtures\n'
+    python3 Tools/EmbeddedApplicationMacros/final_init_proof.py --self-test || repo_failed=1
     if [ "$repo_failed" -eq 0 ]; then
         record PASS repo 'invariants hold and the smoke case set matches its baseline'
     else
