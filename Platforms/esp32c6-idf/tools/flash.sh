@@ -143,7 +143,7 @@ else
 fi
 set -e
 # The selected transport's wire profile decides the smoke protocol: v2 drives
-# the coaty/3 JSON vectors, v3 the axoloty/1 CBOR vectors.
+# the JSON vectors, v3 the CBOR vectors.
 wire_profile=
 if [ -n "${AXOLOTY_TRANSPORT_DIR:-}" ] && [ -f "$AXOLOTY_TRANSPORT_DIR/transport.json" ]; then
     wire_profile=$(node -e 'const t = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(typeof t.wireProfile === "string" ? t.wireProfile : "");' \

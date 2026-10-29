@@ -7,8 +7,8 @@
 // malformed-input rejection, a wire DTO that keeps its object bytes, and one
 // Advertise through the shared static runtime on the CBOR codec. Every vector
 // uses fixed stack storage and the production Core APIs. The identifiers form
-// the expected set of smoke protocol v3 in `Platforms/esp32c6-idf/tools/
-// validate-smoke.mjs`; keep the two in step.
+// the expected set of smoke protocol v3 in the platform's smoke validator;
+// keep the two in step.
 
 #if !canImport(_JSONCore)
 import AxolotyProtocol

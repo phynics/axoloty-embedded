@@ -22,8 +22,8 @@ export const expectedSmokeTests = new Set([
 /**
  * Smoke protocol v3 is the `axoloty/1` CBOR counterpart of v2. A build whose
  * transport carries CBOR links no JSON parser, so it cannot run the `coaty/3`
- * vectors; it emits the profile-neutral vectors below plus the CBOR vectors in
- * `Applications/device-smoke-agent/main/CBORSmokeVectors.swift`.
+ * vectors; it emits the profile-neutral vectors below plus the application's
+ * CBOR vectors.
  */
 export const expectedCborRunId = "embedded-swift-smoke-v3";
 export const expectedCborSmokeTests = new Set([
