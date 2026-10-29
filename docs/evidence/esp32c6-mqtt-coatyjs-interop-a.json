@@ -3,11 +3,7 @@
   "profile": "esp32c6-mqtt",
   "check": "coatyjs-interop",
   "tier": "device",
-  "status": "passed",
-  "recordedAt": "2026-10-26",
-  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
-  "firmwareSHA256": "d9b4d0b62bc067414e5716a251e79b6f449a9db7c0f06a2785d738a4058c5e99",
-  "coreRevision": "f8c201f717e843d7b838ba1d9ff56bd5be729522",
-  "protocol": "10 deterministic exchange cases against the pinned CoatyJS reference agent",
-  "result": "10/10 passed"
+  "status": "unexecuted",
+  "recordedAt": "2026-10-29",
+  "reason": "The lock moved from Core v0.9.0 (f8c201f717e8) to Core v0.10.0 (087bd9bb1bfb563d0347799245ea4dd43e509bc9); this check has not been rerun against the new lock. The previous passing record is in git history."
 }

@@ -3,11 +3,7 @@
   "profile": "esp32c6-mqtt",
   "check": "embedded-swift-smoke-v2",
   "tier": "device",
-  "status": "passed",
-  "recordedAt": "2026-10-26",
-  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
-  "firmwareSHA256": "6cc193a20e1de62d9e79c5cd27e2eb7da280b2b5903080916a2b35ff906ba03a",
-  "coreRevision": "f8c201f717e843d7b838ba1d9ff56bd5be729522",
-  "protocol": "312 deterministic cases over serial JSON Lines",
-  "result": "312/312 passed"
+  "status": "unexecuted",
+  "recordedAt": "2026-10-29",
+  "reason": "The lock moved from Core v0.9.0 (f8c201f717e8) to Core v0.10.0 (087bd9bb1bfb563d0347799245ea4dd43e509bc9); this check has not been rerun against the new lock. The previous passing record is in git history."
 }
