@@ -3,7 +3,15 @@
   "profile": "esp32c6-mqtt",
   "check": "firmware-build",
   "tier": "build",
-  "status": "unexecuted",
+  "status": "passed",
   "recordedAt": "2026-10-29",
-  "reason": "The lock moved from Core v0.9.0 (f8c201f717e8) to Core v0.10.0 (087bd9bb1bfb563d0347799245ea4dd43e509bc9); this check has not been rerun against the new lock. The previous passing record is in git history."
+  "result": "ESP32-C6 MQTT firmware compiled and linked from firmware source revision 2b96d25e77f3c9d6cdb07c40b04d126f6ca9db6b with Swift 6.4 against locked Core revision 087bd9bb1bfb563d0347799245ea4dd43e509bc9 (v0.10.0). Build provenance reports dirty=false and sourceCopied=false. Runtime heap and stack metrics are not part of this build record.",
+  "firmwareSHA256": "c3e1920645081c22f21fb50c4c36db8b1b66d948ee8fd7da62bf10f7013d2783",
+  "firmwareSizeBytes": 671616,
+  "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+  "toolchain": "axoloty-embedded-dev image sha256:9006ed8fa42927aa468ff206a8f4ad3149a2994cb327307ee7752e96ac2bbda2 \u2014 Swift version 6.4 (swift-6.4-RELEASE)\nTarget: x86_64-unknown-linux-gnu, ESP-IDF v5.4, target esp32c6",
+  "dockerfileSHA256": "34c2b624b658ca77e06444cc23025d387fd9c84f624928aa6b0ed7a7036469e4",
+  "coreContractSHA256": "8c94b7edf5dede29592121decc5aba2f2e66e68cd540195c327e78165bcd9014",
+  "provenanceRunId": "relock-mqtt-2",
+  "firmwareRevision": "2b96d25e77f3c9d6cdb07c40b04d126f6ca9db6b"
 }
