@@ -11,6 +11,7 @@
 // keep the two in step.
 
 #if !canImport(_JSONCore)
+import AxolotyObjectModel
 import AxolotyProtocol
 import AxolotyStaticRuntime
 import AxolotyWire
@@ -118,7 +119,7 @@ private func runObjectVectors(_ record: (StaticString, Bool) -> Void) {
     record("cbor:read:object", withCBORReader(objectBytes()) { reader in
         guard (try? reader.validate()) != nil, reader.readInt("n") == 7,
               let name = reader.readString("name") else { return false }
-        return name.equals(slice("cat"))
+        return name.equals("cat")
     })
     record("cbor:read:missing", withCBORReader(objectBytes()) { reader in
         reader.readInt("other") == nil && reader.readString("n") == nil
@@ -283,9 +284,12 @@ private func runAdvertiseVectors(_ record: (StaticString, Bool) -> Void) {
             if wrote {
                 let reader = cborCodec().reader(bytes: UnsafePointer(payloadBase), length: payloadLength)
                 if let data = try? AdvertiseWireData(from: reader) {
-                    preserved = data.object.length == objectLength && data.object.equals(
-                        ByteSlice(bytes: UnsafePointer(objectBase), length: objectLength)
-                    )
+                    preserved = data.object.length == objectLength
+                    var index = 0
+                    while preserved && index < objectLength {
+                        preserved = data.object.byte(at: index) == objectBase[index]
+                        index += 1
+                    }
                 }
             }
             record("cbor:dto:advertise", preserved)
