@@ -3,6 +3,7 @@
   "name": "device-smoke-agent",
   "sources": [
     "main/AgentExchange.swift",
+    "main/CBORSmokeVectors.swift",
     "main/CoatyModelsModuleConsumer.swift",
     "main/DeviceSmokeApplication.swift",
     "main/DeviceSmokeCapabilityBridge.swift",
