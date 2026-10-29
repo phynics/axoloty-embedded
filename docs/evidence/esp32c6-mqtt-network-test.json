@@ -4,10 +4,10 @@
   "check": "network-test",
   "tier": "device",
   "status": "passed",
-  "recordedAt": "2026-10-26",
+  "recordedAt": "2026-10-29",
   "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
-  "firmwareSHA256": "c941caa5c5275b395953eeca75ded836369a7406f8c4a3eb568a4fadf939c285",
-  "coreRevision": "f8c201f717e843d7b838ba1d9ff56bd5be729522",
+  "firmwareSHA256": "5246494cdacb8df86295342ee7bf5727a586b9a6684a9596f4bff96cdd079f32",
+  "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
   "protocol": "323 deterministic cases over serial JSON Lines",
   "result": "323/323 passed"
 }

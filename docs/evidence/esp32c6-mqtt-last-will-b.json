@@ -3,11 +3,7 @@
   "profile": "esp32c6-mqtt",
   "check": "last-will",
   "tier": "device",
-  "status": "passed",
-  "recordedAt": "2026-10-26",
-  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8",
-  "firmwareSHA256": "c45dec686bfb7739c58f2c208b209bd939c84f2e0da607f675ab6bbd2de3d401",
-  "coreRevision": "f8c201f717e843d7b838ba1d9ff56bd5be729522",
-  "protocol": "8 deterministic last-will cases over serial JSON Lines",
-  "result": "8/8 passed"
+  "status": "unexecuted",
+  "recordedAt": "2026-10-29",
+  "reason": "The lock moved from Core v0.9.0 (f8c201f717e8) to Core v0.10.0 (087bd9bb1bfb563d0347799245ea4dd43e509bc9); this check has not been rerun against the new lock. The previous passing record is in git history."
 }

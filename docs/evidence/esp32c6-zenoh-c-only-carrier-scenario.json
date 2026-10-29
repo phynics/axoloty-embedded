@@ -3,14 +3,7 @@
   "profile": "esp32c6-zenoh",
   "check": "c-only-carrier-scenario",
   "tier": "device",
-  "status": "passed",
-  "recordedAt": "2026-10-15",
-  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
-  "firmwareSHA256": "deb4293e88afbd2c5eb07706ceedc1b87eabe8cd7ca970f02be046ec05bfe76e",
-  "coreRevision": "f8c201f717e843d7b838ba1d9ff56bd5be729522",
-  "protocol": "13-step C-only carrier scenario over serial JSON Lines",
-  "result": "12 passed, 1 unavailable, 0 failed",
-  "unavailableSteps": [
-    "router_absent_then_present"
-  ]
+  "status": "unexecuted",
+  "recordedAt": "2026-10-29",
+  "reason": "The lock moved from Core v0.9.0 (f8c201f717e8) to Core v0.10.0 (087bd9bb1bfb563d0347799245ea4dd43e509bc9); this check has not been rerun against the new lock. The previous passing record is in git history."
 }
