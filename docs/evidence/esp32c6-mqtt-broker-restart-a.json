@@ -3,7 +3,11 @@
   "profile": "esp32c6-mqtt",
   "check": "broker-restart",
   "tier": "device",
-  "status": "unexecuted",
+  "status": "passed",
   "recordedAt": "2026-10-29",
-  "reason": "The lock moved from Core v0.9.0 (f8c201f717e8) to Core v0.10.0 (087bd9bb1bfb563d0347799245ea4dd43e509bc9); this check has not been rerun against the new lock. The previous passing record is in git history."
+  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
+  "firmwareSHA256": "344bdc1768997d067e4027b1ddcdb59b5085efd68ddbde9027b3b48043adf1ab",
+  "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+  "protocol": "11 deterministic broker-restart cases over serial JSON Lines",
+  "result": "11/11 passed"
 }
