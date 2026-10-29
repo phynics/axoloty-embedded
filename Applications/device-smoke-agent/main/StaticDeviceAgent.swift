@@ -425,6 +425,7 @@ private func phase4NamedObjectSource(
     return position
 }
 
+#if canImport(_JSONCore)
 /// Decodes one frozen wire source and encodes it through the static agent.
 @inline(__always)
 private func phase4EncodeSource(
@@ -480,6 +481,27 @@ private func phase4EncodeSource(
     payloadLength.pointee = Int32(result.payloadLength)
     return true
 }
+#else
+// The frozen exchange sources are `coaty/3` JSON text. A build without the
+// JSON parser has no source it can decode, so it reports none.
+@inline(__always)
+private func phase4EncodeSource(
+    role: Int32,
+    eventType: WireEventType,
+    correlationId: UUID16?,
+    sourceBytes: UnsafePointer<UInt8>,
+    sourceLength: Int,
+    topicBuffer: UnsafeMutablePointer<UInt8>,
+    topicCapacity: Int32,
+    payloadBuffer: UnsafeMutablePointer<UInt8>,
+    payloadCapacity: Int32,
+    topicLength: UnsafeMutablePointer<Int32>,
+    payloadLength: UnsafeMutablePointer<Int32>,
+    recordWithProcessor: Bool = true
+) -> Bool {
+    false
+}
+#endif
 
 @inline(__always)
 private func preparePhase4Message(
