@@ -3,7 +3,15 @@
   "profile": "esp32c6-zenoh",
   "check": "firmware-build",
   "tier": "build",
-  "status": "unexecuted",
+  "status": "passed",
   "recordedAt": "2026-10-29",
-  "reason": "The lock moved from Core v0.9.0 (f8c201f717e8) to Core v0.10.0 (087bd9bb1bfb563d0347799245ea4dd43e509bc9); this check has not been rerun against the new lock. The previous passing record is in git history."
+  "result": "ESP32-C6 Zenoh firmware compiled and linked CBOR-only (wire profile axoloty1CBOR) from firmware source revision 148a4964b3d50c5d393747c2ca878971a95e2091 with Swift 6.4 against locked Core revision 087bd9bb1bfb563d0347799245ea4dd43e509bc9 (v0.10.0). Core prepared no _JSONCore, the linker map carries no _JSONCore member, and provenance reports dirty=false and sourceCopied=false. This is a build record only: no device run, and the CBOR smoke protocol is not yet written.",
+  "firmwareSHA256": "ff5ebf0e2eb7d59f52a4e7b37b594c9ffcf73cb4c315d1b197e4020c8bbcfe31",
+  "firmwareSizeBytes": 584944,
+  "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+  "toolchain": "axoloty-embedded-dev image sha256:9006ed8fa42927aa468ff206a8f4ad3149a2994cb327307ee7752e96ac2bbda2 \u2014 Swift version 6.4 (swift-6.4-RELEASE)\nTarget: x86_64-unknown-linux-gnu, ESP-IDF v5.4, target esp32c6",
+  "dockerfileSHA256": "34c2b624b658ca77e06444cc23025d387fd9c84f624928aa6b0ed7a7036469e4",
+  "coreContractSHA256": "8c94b7edf5dede29592121decc5aba2f2e66e68cd540195c327e78165bcd9014",
+  "provenanceRunId": "zenoh-cbor-2",
+  "firmwareRevision": "148a4964b3d50c5d393747c2ca878971a95e2091"
 }
