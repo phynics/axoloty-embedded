@@ -129,9 +129,9 @@ struct EmbeddedHostPeer {
     }
 
     static func embeddedAgentDiscoversHost(_ environment: [String: String]) async throws(HostPeerError) {
-        let (runtime, discoverStream, _, _) = try makeRuntime(
+        let (runtime, discoverStream, deadvertiseStream, _) = try makeRuntime(
             environment: environment,
-            selectors: [.family(.discover)]
+            selectors: [.family(.discover), .family(.deadvertise)]
         )
         var advertiser: Task<Void, Never>?
         do throws(HostPeerError) {
@@ -165,6 +165,8 @@ struct EmbeddedHostPeer {
                 throw HostPeerError.mismatch("embedded Discover correlationID")
             }
             trace("embedded Discover received")
+            advertiser?.cancel()
+            await advertiser?.value
             let receipt = await runtime.respond(.resolve(
                 correlationID: correlationID,
                 payload: devicePayload
@@ -175,10 +177,19 @@ struct EmbeddedHostPeer {
             guard await runtime.publish(.deadvertise(deadvertisePayload)) == .accepted else {
                 throw HostPeerError.mismatch("host Deadvertise publish receipt")
             }
+            // Acceptance queues the operation. Wait for its broker echo before
+            // stop(), which discards pending outbound effects. The matching
+            // final frame also follows Resolve on the same MQTT connection.
+            guard let deadvertiseStream else { throw HostPeerError.missingStream("Deadvertise") }
+            let deadvertise = try await nextHostValue(
+                deadvertiseStream.makeAsyncIterator(), label: "host Deadvertise echo", runtime: runtime
+            )
+            guard deadvertise.context.sourceID == hostID else {
+                throw HostPeerError.mismatch("host Deadvertise echo sourceID")
+            }
+            try expectObjectIDs(deadvertise.value)
+            trace("host Deadvertise broker echo received")
             emitState("host-responder", sourceID: embeddedRequesterID)
-
-            advertiser?.cancel()
-            await advertiser?.value
             await runtime.stop()
         } catch {
             advertiser?.cancel()
