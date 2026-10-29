@@ -10,7 +10,7 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/empty_bridging_header.h "")
 
 idf_component_register(
     SRCS "component_anchor.c"
-    PRIV_REQUIRES idf_swift axoloty_wire axoloty_object_model json_core
+    PRIV_REQUIRES idf_swift axoloty_wire axoloty_object_model ${AXOLOTY_JSON_CORE_COMPONENTS}
 )
 
 idf_component_register_swift(
@@ -39,8 +39,10 @@ if(TARGET axoloty_object_model_module_alias)
     add_dependencies(${COMPONENT_LIB} axoloty_object_model_module_alias)
 endif()
 axoloty_append_swift_module_dependency(${AXOLOTY_PROTOCOL_SOURCES} "${OBJECT_MODEL_MODULE_ALIAS}")
-idf_component_get_property(JSON_CORE_COMPONENT_LIB json_core COMPONENT_LIB)
-add_dependencies(${COMPONENT_LIB} ${JSON_CORE_COMPONENT_LIB})
+if(AXOLOTY_JSON_CORE_ENABLED)
+    idf_component_get_property(JSON_CORE_COMPONENT_LIB json_core COMPONENT_LIB)
+    add_dependencies(${COMPONENT_LIB} ${JSON_CORE_COMPONENT_LIB})
+endif()
 
 set_property(TARGET ${COMPONENT_LIB} PROPERTY INTERFACE_COMPILE_OPTIONS "")
 target_compile_options(${COMPONENT_LIB} PRIVATE

@@ -12,7 +12,7 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/empty_bridging_header.h "")
 
 idf_component_register(
     SRCS "component_anchor.c"
-    PRIV_REQUIRES idf_swift json_core
+    PRIV_REQUIRES idf_swift ${AXOLOTY_JSON_CORE_COMPONENTS}
 )
 
 idf_component_register_swift(
@@ -25,11 +25,13 @@ idf_component_register_swift(
 # this Swift compile before json_core's importable `_JSONCore.swiftmodule`
 # alias has been published. Make that compile-time ordering explicit so clean
 # parallel builds cannot race the module copy.
-idf_component_get_property(JSON_CORE_COMPONENT_LIB json_core COMPONENT_LIB)
-if(TARGET json_core_module_alias)
-    add_dependencies(${COMPONENT_LIB} json_core_module_alias)
-else()
-    add_dependencies(${COMPONENT_LIB} ${JSON_CORE_COMPONENT_LIB})
+if(AXOLOTY_JSON_CORE_ENABLED)
+    idf_component_get_property(JSON_CORE_COMPONENT_LIB json_core COMPONENT_LIB)
+    if(TARGET json_core_module_alias)
+        add_dependencies(${COMPONENT_LIB} json_core_module_alias)
+    else()
+        add_dependencies(${COMPONENT_LIB} ${JSON_CORE_COMPONENT_LIB})
+    endif()
 endif()
 
 # idf_swift adds the component bridge header as a public compile option.

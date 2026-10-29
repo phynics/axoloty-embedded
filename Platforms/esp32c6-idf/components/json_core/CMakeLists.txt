@@ -6,6 +6,14 @@
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/axoloty-source.cmake")
 
+# A CBOR-only transport prepares no `_JSONCore`. ESP-IDF still evaluates every
+# component in the tree, so register an empty one that nothing requires and
+# never reaches the link.
+if(NOT AXOLOTY_JSON_CORE_ENABLED)
+    idf_component_register()
+    return()
+endif()
+
 set(JSON_CORE_ROOT "${AXOLOTY_JSON_CORE_SOURCE_DIR}")
 file(GLOB JSON_CORE_SOURCES
     "${JSON_CORE_ROOT}/*.swift"

@@ -291,19 +291,34 @@ if(NOT AXOLOTY_ZENOH_ABSENT)
     )
 endif()
 
-string(JSON AXOLOTY_JSON_CORE_SOURCE_DIR GET
-    "${AXOLOTY_PREPARATION_JSON}" jsonCore sourceDir
+# A CBOR-only wire profile carries no `_JSONCore` entry, and the components then
+# omit the json_core component and every dependency on it. `validate.sh` has
+# already checked this against the transport's declared wire profile.
+string(JSON AXOLOTY_JSON_CORE_ENTRY_TYPE ERROR_VARIABLE AXOLOTY_JSON_CORE_ENTRY_ERROR
+    TYPE "${AXOLOTY_PREPARATION_JSON}" jsonCore
 )
+if(AXOLOTY_JSON_CORE_ENTRY_ERROR)
+    set(AXOLOTY_JSON_CORE_ENABLED OFF)
+    set(AXOLOTY_JSON_CORE_SOURCE_DIR "")
+    set(AXOLOTY_JSON_CORE_COMPONENTS "")
+else()
+    set(AXOLOTY_JSON_CORE_ENABLED ON)
+    set(AXOLOTY_JSON_CORE_COMPONENTS json_core)
+    string(JSON AXOLOTY_JSON_CORE_SOURCE_DIR GET
+        "${AXOLOTY_PREPARATION_JSON}" jsonCore sourceDir
+    )
+endif()
 string(JSON AXOLOTY_STATIC_RUNTIME_MACRO_TOOL GET
     "${AXOLOTY_PREPARATION_JSON}" staticRuntimeMacro executable
 )
 string(JSON AXOLOTY_STATIC_RUNTIME_MACRO_SCRATCH_DIR GET
     "${AXOLOTY_PREPARATION_JSON}" staticRuntimeMacro scratchDir
 )
-foreach(AXOLOTY_SCRATCH_VALUE IN ITEMS
-    AXOLOTY_JSON_CORE_SOURCE_DIR
-    AXOLOTY_STATIC_RUNTIME_MACRO_SCRATCH_DIR
-)
+set(AXOLOTY_SCRATCH_VALUES AXOLOTY_STATIC_RUNTIME_MACRO_SCRATCH_DIR)
+if(AXOLOTY_JSON_CORE_ENABLED)
+    list(PREPEND AXOLOTY_SCRATCH_VALUES AXOLOTY_JSON_CORE_SOURCE_DIR)
+endif()
+foreach(AXOLOTY_SCRATCH_VALUE IN LISTS AXOLOTY_SCRATCH_VALUES)
     if(NOT IS_ABSOLUTE "${${AXOLOTY_SCRATCH_VALUE}}" OR
        NOT IS_DIRECTORY "${${AXOLOTY_SCRATCH_VALUE}}")
         message(FATAL_ERROR "${AXOLOTY_SCRATCH_VALUE} from the preparation report is not a directory")

@@ -15,7 +15,7 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/empty_bridging_header.h "")
 
 idf_component_register(
     SRCS "component_anchor.c"
-    PRIV_REQUIRES idf_swift axoloty_object_model axoloty_wire json_core
+    PRIV_REQUIRES idf_swift axoloty_object_model axoloty_wire ${AXOLOTY_JSON_CORE_COMPONENTS}
 )
 
 idf_component_register_swift(
@@ -54,13 +54,16 @@ axoloty_append_swift_module_dependency(${AXOLOTY_COATY_MODELS_SOURCES} "${WIRE_M
 # AxolotyWire imports the pinned `_JSONCore` module. Keep its published module
 # directory and build completion visible here as well; loading AxolotyWire
 # through AxolotyObjectModel otherwise fails in a clean embedded build.
-idf_component_get_property(JSON_CORE_COMPONENT_LIB json_core COMPONENT_LIB)
-get_target_property(JSON_CORE_COMPONENT_BINARY_DIR ${JSON_CORE_COMPONENT_LIB} BINARY_DIR)
-set(JSON_CORE_MODULE_ALIAS
-    "${JSON_CORE_COMPONENT_BINARY_DIR}/_JSONCore.swiftmodule"
-)
-add_dependencies(${COMPONENT_LIB} ${JSON_CORE_COMPONENT_LIB})
-axoloty_append_swift_module_dependency(${AXOLOTY_COATY_MODELS_SOURCES} "${JSON_CORE_MODULE_ALIAS}")
+set(JSON_CORE_COMPONENT_BINARY_DIR "")
+if(AXOLOTY_JSON_CORE_ENABLED)
+    idf_component_get_property(JSON_CORE_COMPONENT_LIB json_core COMPONENT_LIB)
+    get_target_property(JSON_CORE_COMPONENT_BINARY_DIR ${JSON_CORE_COMPONENT_LIB} BINARY_DIR)
+    set(JSON_CORE_MODULE_ALIAS
+        "${JSON_CORE_COMPONENT_BINARY_DIR}/_JSONCore.swiftmodule"
+    )
+    add_dependencies(${COMPONENT_LIB} ${JSON_CORE_COMPONENT_LIB})
+    axoloty_append_swift_module_dependency(${AXOLOTY_COATY_MODELS_SOURCES} "${JSON_CORE_MODULE_ALIAS}")
+endif()
 
 set_property(TARGET ${COMPONENT_LIB} PROPERTY INTERFACE_COMPILE_OPTIONS "")
 target_compile_options(${COMPONENT_LIB} PRIVATE
