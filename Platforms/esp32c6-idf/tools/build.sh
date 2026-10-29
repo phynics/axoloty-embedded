@@ -260,6 +260,22 @@ fi
     "$repo_root" "$AXOLOTY_APPLICATION_DIR" "$(basename -- "$AXOLOTY_PROFILE_DIR")" \
     "$build_dir" "$evidence_dir" 'esp-idf/main/libmain.a'
 
+# A CBOR-only transport must link no JSON parser. Preparation and the build
+# already omit `_JSONCore`; this proves the finished image carries none of it.
+wire_profile=$(node -e 'const t = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(typeof t.wireProfile === "string" ? t.wireProfile : "");' \
+    "$AXOLOTY_TRANSPORT_DIR/transport.json")
+if [ "$wire_profile" = axoloty1CBOR ]; then
+    if [ ! -f "$build_dir/axoloty-swift.map" ]; then
+        echo "error: the linker map is required to prove a CBOR-only image links no _JSONCore" >&2
+        exit 1
+    fi
+    if grep -qi 'jsoncore' "$build_dir/axoloty-swift.map"; then
+        echo "error: the CBOR-only image links _JSONCore; see $build_dir/axoloty-swift.map" >&2
+        exit 1
+    fi
+    echo "wire profile axoloty1CBOR: the linked image carries no _JSONCore"
+fi
+
 cp "$artifact" "$evidence_dir/axoloty-swift.bin"
 
 node "$script_dir/write-provenance.mjs" \
