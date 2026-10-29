@@ -54,6 +54,14 @@ if [ ! -f "$elf" ] || [ ! -f "$linker_map" ]; then
     echo "error: final Swift ELF/map are required for configured static-storage enforcement" >&2
     exit 1
 fi
+# The selected transport declares the build's wire profile. Inventory entries
+# scoped to another profile are not expected in this image.
+wire_profile_args=""
+if [ -n "${AXOLOTY_TRANSPORT_DIR:-}" ] && [ -f "$AXOLOTY_TRANSPORT_DIR/transport.json" ]; then
+    wire_profile=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("wireProfile",""))' \
+        "$AXOLOTY_TRANSPORT_DIR/transport.json")
+    [ -z "$wire_profile" ] || wire_profile_args="--wire-profile $wire_profile"
+fi
 # The archive owner comes from the platform launcher. The selected member
 # comes only from the app's SDK-neutral storage inventory.
 python3 "$auditor" \
@@ -61,6 +69,7 @@ python3 "$auditor" \
     --map "$linker_map" \
     --combined-object "$archive_owner($map_member)" \
     --profile "$profile" \
+    $wire_profile_args \
     --app-manifest "$manifest" \
     --enforce-static-storage-budget \
     --inventory "$inventory" \

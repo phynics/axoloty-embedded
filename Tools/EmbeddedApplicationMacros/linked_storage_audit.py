@@ -388,8 +388,15 @@ def enforce_static_storage_budget(report: dict, manifest_bytes: bytes, manifest_
 
 def join_inventory(inventory: dict, symbols: list[dict], map_outputs: list[dict],
                    source_root: Path, inventory_sha256: str, expected_map_owner: str,
-                   section_types: dict[str, int] | None = None) -> dict:
-    """Join explicit source identities to exact writable ELF symbol names."""
+                   section_types: dict[str, int] | None = None,
+                   wire_profile: str | None = None) -> dict:
+    """Join explicit source identities to exact writable ELF symbol names.
+
+    An entry may name the wire profiles it exists in (`wireProfiles`). When the
+    build's wire profile is known and not listed, the entry is not applicable:
+    its symbols are expected to be absent, so they are neither joined nor
+    reported missing. An entry without `wireProfiles` applies to every build.
+    """
     if not isinstance(inventory, dict):
         raise AuditError("inventory root must be an object")
     if inventory.get("schemaVersion") != 1 or not isinstance(inventory.get("entries"), list):
@@ -408,6 +415,7 @@ def join_inventory(inventory: dict, symbols: list[dict], map_outputs: list[dict]
     joined = []
     unmatched = []
     ambiguous = []
+    not_applicable = []
     charged_ranges = set()
     for entry in inventory["entries"]:
         if not isinstance(entry, dict):
@@ -437,6 +445,14 @@ def join_inventory(inventory: dict, symbols: list[dict], map_outputs: list[dict]
         expected = entry.get("expectedSymbols")
         if not isinstance(expected, list) or not expected:
             raise AuditError(f"inventory entry {owner} has no expected ELF symbols")
+        applies_to = entry.get("wireProfiles")
+        if applies_to is not None and (
+                not isinstance(applies_to, list) or not applies_to
+                or not all(isinstance(item, str) and item for item in applies_to)):
+            raise AuditError(f"inventory entry {owner} has malformed wireProfiles")
+        if wire_profile is not None and applies_to is not None and wire_profile not in applies_to:
+            not_applicable.append(owner)
+            continue
         for identity in expected:
             raw_name = identity.get("rawName") if isinstance(identity, dict) else None
             role = identity.get("role") if isinstance(identity, dict) else None
@@ -524,6 +540,7 @@ def join_inventory(inventory: dict, symbols: list[dict], map_outputs: list[dict]
             "sha256": inventory_sha256, "app": inventory.get("app"),
             "expected_map_member": inventory_map_member, "combined_object_identity": expected_map_owner},
         "join_status": "matched", "recognized_logical_owners": sorted(by_owner), "symbols": joined,
+        "wire_profile": wire_profile, "not_applicable_owners": sorted(not_applicable),
         "joined_symbol_union_bytes": joined_union,
         "unmatched": unmatched, "ambiguous": ambiguous, "optimized_away_or_unemitted": [],
         "candidate_scope": "exact expected identities in this explicit inventory only",
@@ -704,6 +721,19 @@ def selftest() -> None:
             assert "expected-symbol-missing" in str(error)
         else:
             raise AssertionError("missing expected inventory symbol accepted")
+        scoped = {**inventory, "entries": [
+            {**item, "wireProfiles": ["coaty3JSON"]} if item["owner"] == "phase4AgentA" else item
+            for item in inventory["entries"]]}
+        skipped = join_inventory(scoped, missing, fixture_outputs, root, "fixture", "combined.o",
+                                 {".data": 1, ".bss": 8}, "axoloty1CBOR")
+        assert skipped["join_status"] == "matched" and skipped["not_applicable_owners"] == ["phase4AgentA"]
+        try:
+            join_inventory(scoped, missing, fixture_outputs, root, "fixture", "combined.o",
+                           {".data": 1, ".bss": 8}, "coaty3JSON")
+        except AuditError as error:
+            assert "expected-symbol-missing" in str(error)
+        else:
+            raise AssertionError("a scoped entry missing in its own wire profile was accepted")
         ambiguous = fixture_symbols + [dict(fixture_symbols[-1])]
         try:
             join_inventory(inventory, ambiguous, fixture_outputs, root, "fixture", "combined.o", {".data": 1, ".bss": 8})
@@ -797,6 +827,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--map", dest="map_path", type=Path)
     parser.add_argument("--combined-object", help="exact object identity as it appears in linker map rows")
     parser.add_argument("--profile", default="unspecified")
+    parser.add_argument("--wire-profile", default=None,
+                        help="the build's wire profile; inventory entries scoped to other profiles are not applicable")
     parser.add_argument("--firmware-source-sha")
     parser.add_argument("--core-sha")
     parser.add_argument("--inventory", type=Path, help="opt-in app-owned explicit storage inventory JSON")
@@ -834,7 +866,8 @@ def main(argv: list[str] | None = None) -> int:
             report["inventory_join"] = join_inventory(inventory, elf["symbols"],
                 linker_map["writable_outputs"], args.inventory.resolve().parent,
                 sha256(inventory_bytes), args.combined_object,
-                {section["name"]: section["type"] for section in elf["sections"]})
+                {section["name"]: section["type"] for section in elf["sections"]},
+                args.wire_profile)
         output = json.dumps(report, sort_keys=True, indent=2) + "\n"
         if args.output:
             args.output.write_text(output, encoding="utf-8")
