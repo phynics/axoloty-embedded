@@ -3,7 +3,7 @@
 // The strict per-participant validator for the two-device agent exchange.
 // Imported from the pre-split Axoloty support tree during the embedded split.
 
-import { createEmbeddedSwiftSmokeValidator } from "../../Platforms/esp32c6-idf/tools/validate-smoke.mjs";
+import { createEmbeddedSwiftSmokeValidator, expectedCborRunId } from "../../Platforms/esp32c6-idf/tools/validate-smoke.mjs";
 
 export const expectedAgentTests = new Set([
   "exchange:wifi",
@@ -51,4 +51,13 @@ export const expectedBrokerRestartTests = new Set([
 /** Creates the strict validator for one participant in the two-device exchange. */
 export function createEmbeddedAgentValidator(expectedTests = expectedAgentTests) {
   return createEmbeddedSwiftSmokeValidator(expectedTests);
+}
+
+/**
+ * Creates the same validator for a CBOR-only image. A participant in role mode
+ * emits only its exchange records, so the case set is unchanged; the stream is
+ * smoke protocol v3, so the run id differs.
+ */
+export function createEmbeddedCborAgentValidator(expectedTests = expectedAgentTests) {
+  return createEmbeddedSwiftSmokeValidator(expectedTests, new Set(), expectedCborRunId);
 }

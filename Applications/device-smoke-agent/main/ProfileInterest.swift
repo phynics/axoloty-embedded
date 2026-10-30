@@ -7,6 +7,38 @@ struct ProfileInterestInstallationResult {
     let disconnected: Bool
 }
 
+/// The number of interest levels this image's profile installs.
+///
+/// The `coaty/3` set keeps the legacy hash-shaped filter, a wildcard in the
+/// key grammar that profile's carrier uses. The `axoloty/1` carrier's key
+/// grammar forbids `#`, and a router asked to declare it fails, so that set
+/// installs only the two forms Core's host binding installs.
+private func profileInterestLevels() -> Int {
+    #if canImport(_JSONCore)
+    return 3
+    #else
+    return 2
+    #endif
+}
+
+/// The key expression for one interest level under the image's wire profile.
+/// The route prefix is the profile's own: `coaty/3` for JSON and `axoloty/1`
+/// for CBOR, so a CBOR participant subscribes to the routes it publishes.
+private func profileInterestFilter(_ index: Int) -> StaticString {
+    #if canImport(_JSONCore)
+    switch index {
+    case 0: return "coaty/3/axoloty-embedded/#"
+    case 1: return "coaty/3/axoloty-embedded/*/*"
+    default: return "coaty/3/axoloty-embedded/*/*/*"
+    }
+    #else
+    switch index {
+    case 0: return "axoloty/1/axoloty-embedded/*/*"
+    default: return "axoloty/1/axoloty-embedded/*/*/*"
+    }
+    #endif
+}
+
 /// Installs the profile-interest key expressions required by the agent, and
 /// removes every earlier successful declaration if a later install fails.
 /// It then closes the carrier session so failed partial interest cannot leak.
@@ -20,23 +52,13 @@ func installDeviceAgentProfileInterest(
     remainingMS: () -> UInt32
 ) -> ProfileInterestInstallationResult {
     var installed = 0
-    for index in 0..<3 {
-        let filter: StaticString
-        switch index {
-        case 0: filter = "coaty/3/axoloty-embedded/#"
-        case 1: filter = "coaty/3/axoloty-embedded/*/*"
-        default: filter = "coaty/3/axoloty-embedded/*/*/*"
-        }
+    for index in 0..<profileInterestLevels() {
+        let filter = profileInterestFilter(index)
         let remaining = remainingMS()
         guard remaining > 0,
               subscribe(filter.utf8Start, Int32(filter.utf8CodeUnitCount), remaining) != 0 else {
             for prior in 0..<installed {
-                let priorFilter: StaticString
-                switch prior {
-                case 0: priorFilter = "coaty/3/axoloty-embedded/#"
-                case 1: priorFilter = "coaty/3/axoloty-embedded/*/*"
-                default: priorFilter = "coaty/3/axoloty-embedded/*/*/*"
-                }
+                let priorFilter = profileInterestFilter(prior)
                 _ = unsubscribe(priorFilter.utf8Start, Int32(priorFilter.utf8CodeUnitCount), remainingMS())
             }
             return ProfileInterestInstallationResult(installed: false, disconnected: disconnect() != 0)
