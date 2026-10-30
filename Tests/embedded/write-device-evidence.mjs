@@ -13,6 +13,9 @@ export function deviceEvidenceRecord(proof, device, { profile, check, cases }) {
   }
   const counts = proof.smoke.validation.counts ?? {};
   const passed = Number.isInteger(counts.passed) ? counts.passed : 0;
+  // Declared-unsupported capabilities are neither passes nor failures. Name
+  // them, so "N/N passed" never reads as full coverage of the expected set.
+  const unsupported = Number.isInteger(counts.unsupported) ? counts.unsupported : 0;
   const unit = device.chipDescription
     ? `${device.chipDescription}${device.mac ? `, MAC ${device.mac}` : ""}`
     : device.device;
@@ -27,7 +30,7 @@ export function deviceEvidenceRecord(proof, device, { profile, check, cases }) {
     firmwareSHA256: proof.firmwareSha256,
     coreRevision: proof.coreSha,
     protocol: `${passed} ${cases}`,
-    result: `${passed}/${passed} passed`,
+    result: `${passed}/${passed} passed` + (unsupported > 0 ? `, ${unsupported} declared unsupported` : ""),
   };
 }
 
