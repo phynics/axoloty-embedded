@@ -9,10 +9,10 @@ struct ProfileInterestInstallationResult {
 
 /// The number of interest levels this image's profile installs.
 ///
-/// The `coaty/3` set keeps the legacy hash-shaped filter. It is a wildcard to
-/// an MQTT broker. In Zenoh's key grammar `#` is a forbidden character, and a
-/// router that is asked to declare it panics, so the `axoloty/1` set installs
-/// only the two forms Core's host binding installs.
+/// The `coaty/3` set keeps the legacy hash-shaped filter, a wildcard in the
+/// key grammar that profile's carrier uses. The `axoloty/1` carrier's key
+/// grammar forbids `#`, and a router asked to declare it fails, so that set
+/// installs only the two forms Core's host binding installs.
 private func profileInterestLevels() -> Int {
     #if canImport(_JSONCore)
     return 3
