@@ -39,6 +39,7 @@ private struct UnsafeSendablePointer<Pointee>: @unchecked Sendable {
     let value: UnsafeMutablePointer<Pointee>
 }
 
+#if canImport(_JSONCore)
 /// Exercises the subscription registry without retaining its fixed protocol
 /// storage in the large smoke-test frame.
 @inline(never)
@@ -302,6 +303,12 @@ private func runAgentVectors(_ record: (StaticString, Bool) -> Void) {
     }
     runEncodingVectors()
 }
+#else
+// These vectors drive the `coaty/3` JSON agent; a build without the JSON parser
+// carries none of them.
+private func runRegistryVectors(_ record: (StaticString, Bool) -> Void) {}
+private func runAgentVectors(_ record: (StaticString, Bool) -> Void) {}
+#endif
 
 private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     let schemaVersion: UInt32 = 2
@@ -458,10 +465,12 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     // Vector checks deliberately use the production APIs and fixed storage.
     // The identifiers below are also the stable corpus consumed by the host
     // validator; keep additions deterministic and grouped by category.
+#if canImport(_JSONCore)
     @inline(__always)
     func reader(_ payload: StaticString) -> WireReader {
         WireReader(bytes: payload.utf8Start, length: payload.utf8CodeUnitCount)
     }
+#endif
 
     @inline(__always)
     func writeIntVector(_ id: StaticString, _ value: Int, _ expected: StaticString) {
@@ -541,6 +550,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     let tvFILT = TopicView(topicBytes: tFILT.utf8Start, length: tFILT.utf8CodeUnitCount)
     record("topicParse:filter", tvFILT.eventType == .advertise && tvFILT.eventTypeFilter != nil)
 
+#if canImport(_JSONCore)
     // === DTO decode tests ===
 
     let pADV: StaticString = #"{"object":{"objectId":"33333333-3333-4333-8333-333333333333","name":"test","objectType":"coaty.Identity","coreType":"Identity"}}"#
@@ -576,6 +586,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     let pBADUUID: StaticString = #"{"objectId":"not-a-uuid"}"#
     let rBADUUID = WireReader(bytes: pBADUUID.utf8Start, length: pBADUUID.utf8CodeUnitCount)
     record("malformed:invalidUUID", rBADUUID.readUUID("objectId") == nil)
+#endif
 
     // === UUID16 tests ===
 
@@ -623,6 +634,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     boundedVector("capacity:topic256", 256, 0, true)
     boundedVector("capacity:topic257", 257, 0, false)
 
+#if canImport(_JSONCore)
     record("malformed:truncation", reader(#"{"objectId":"33333333"#).readUUID("objectId") == nil)
     record("malformed:corruption", reader(#"{"objectId":@}"#).readUUID("objectId") == nil)
     withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 12) { bytes in
@@ -640,6 +652,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     record("malformed:reordered", reader(#"{"value":1,"name":"x"}"#).readString("name") != nil)
     record("malformed:trailing", reader(#"{"value":1}x"#).readInt("value") == nil)
     record("malformed:nesting", reader(#"{"value":{"x":[1,2]}}"#).readField("value") != nil)
+#endif
 
     runRegistryVectors(record)
 

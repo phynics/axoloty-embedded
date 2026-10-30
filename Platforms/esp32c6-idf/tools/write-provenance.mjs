@@ -71,6 +71,7 @@ const output = {
   preparationManifest: manifestPath,
   cleanRoomEvidence: cleanRoomPath,
   portablePackages: manifest.portablePackages,
+  selectedWireProfiles: manifest.selectedWireProfiles,
   jsonCore: manifest.jsonCore,
   staticRuntimeMacro: manifest.staticRuntimeMacro,
   toolchain: {

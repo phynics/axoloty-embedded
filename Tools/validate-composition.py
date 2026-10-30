@@ -15,6 +15,10 @@ from typing import Any
 from capability_catalog import CARRIER, PLATFORM
 
 
+# The wire profiles Core declares in its embedded consumer contract. A transport
+# carries exactly one; the platform prepares and links only that profile.
+WIRE_PROFILES = {"coaty3JSON", "axoloty1CBOR"}
+
 class CompositionError(Exception):
     """A profile or axis manifest violates the composition contract."""
 
@@ -95,6 +99,12 @@ def validate(repo_root: Path, profile_path: Path) -> tuple[set[str], set[str], d
         if manifest.get("name") != profile[axis]:
             raise CompositionError(f"{manifest_path} name does not match selected {axis} '{profile[axis]}'")
         manifests[axis] = manifest
+
+    wire_profile = manifests["transport"].get("wireProfile")
+    if wire_profile not in WIRE_PROFILES:
+        raise CompositionError(
+            f"transport.json must declare exactly one wireProfile, one of {sorted(WIRE_PROFILES)}: {wire_profile!r}"
+        )
 
     lock = read_json(repo_root / "axoloty-core.lock.json")
     locked_core = lock.get("core", lock)

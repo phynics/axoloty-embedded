@@ -52,11 +52,21 @@ fi
 
 mkdir -p "$evidence_dir"
 
+# The selected transport declares its wire profile. Core prepares only that
+# profile, so a CBOR-only transport never resolves or builds _JSONCore.
+wire_profile=
+if [ -n "${AXOLOTY_TRANSPORT_DIR:-}" ] && [ -f "$AXOLOTY_TRANSPORT_DIR/transport.json" ]; then
+    wire_profile=$(node -e 'const t = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); if (typeof t.wireProfile !== "string" || t.wireProfile.length === 0) { process.exit(1); } process.stdout.write(t.wireProfile);' \
+        "$AXOLOTY_TRANSPORT_DIR/transport.json") ||
+        { echo "error: $AXOLOTY_TRANSPORT_DIR/transport.json declares no wireProfile" >&2; exit 64; }
+fi
+
 # The single supported preparation entry point. It writes
 # <scratch>/core-preparation.json and prints the path.
 AXOLOTY_SOURCE_DIR=${AXOLOTY_SOURCE_DIR:-} AXOLOTY_SCRATCH="$scratch" \
     AXOLOTY_STRICT_CORE=${AXOLOTY_STRICT_CORE:-} \
     AXOLOTY_PREVIEW_CORE_REVISION=${AXOLOTY_PREVIEW_CORE_REVISION:-} \
+    AXOLOTY_WIRE_PROFILE="$wire_profile" \
     "$repo_root/Tools/prepare-core.sh" > "$evidence_dir/consumer-preparation.stdout"
 cp "$source_report" "$preparation"
 
@@ -88,9 +98,16 @@ const under = (root, candidate, label) => {
 for (const packageInfo of report.portablePackages) under(coreRoot, packageInfo.sourcePath, packageInfo.name);
 under(scratch, report.staticRuntimeMacro.scratchDir, "preparation scratch");
 under(report.staticRuntimeMacro.scratchDir, report.staticRuntimeMacro.executable, "macro executable");
-under(report.staticRuntimeMacro.scratchDir, report.jsonCore.sourceDir, "_JSONCore source");
-if (typeof report.jsonCore.revision !== "string" || !/^[0-9a-f]{40}$/.test(report.jsonCore.revision)) {
-  throw new Error("preparation report has an invalid _JSONCore revision");
+// A CBOR-only selection carries no _JSONCore entry; any other selection must.
+const needsJSONCore = !Array.isArray(report.selectedWireProfiles) || report.selectedWireProfiles.includes("coaty3JSON");
+if (needsJSONCore !== (report.jsonCore !== undefined)) {
+  throw new Error("preparation report jsonCore entry disagrees with its selected wire profiles");
+}
+if (needsJSONCore) {
+  under(report.staticRuntimeMacro.scratchDir, report.jsonCore.sourceDir, "_JSONCore source");
+  if (typeof report.jsonCore.revision !== "string" || !/^[0-9a-f]{40}$/.test(report.jsonCore.revision)) {
+    throw new Error("preparation report has an invalid _JSONCore revision");
+  }
 }
 console.log(`preparation report is valid for Core ${report.core.sha.slice(0, 12)}`);
 JS

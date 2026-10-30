@@ -73,10 +73,14 @@ manifest.portablePackages.forEach((entry, index) => {
   const source = canonical(entry.sourcePath, `${entry.name} source`);
   under(coreDir, source, `${entry.name} source`);
 });
-expect(manifest.jsonCore?.revision && /^[0-9a-f]{40}$/.test(manifest.jsonCore.revision), "_JSONCore revision is invalid");
-const jsonCoreSource = canonical(manifest.jsonCore.sourceDir, "_JSONCore source");
+const needsJSONCore = !Array.isArray(manifest.selectedWireProfiles) || manifest.selectedWireProfiles.includes("coaty3JSON");
+expect(needsJSONCore === (manifest.jsonCore !== undefined), "_JSONCore entry disagrees with the selected wire profiles");
+if (needsJSONCore) {
+  expect(manifest.jsonCore.revision && /^[0-9a-f]{40}$/.test(manifest.jsonCore.revision), "_JSONCore revision is invalid");
+}
+const jsonCoreSource = needsJSONCore ? canonical(manifest.jsonCore.sourceDir, "_JSONCore source") : null;
 const macroScratch = canonical(manifest.staticRuntimeMacro.scratchDir, "macro scratch");
-under(preparationScratch, jsonCoreSource, "_JSONCore source");
+if (jsonCoreSource !== null) under(preparationScratch, jsonCoreSource, "_JSONCore source");
 under(preparationScratch, canonical(manifest.staticRuntimeMacro.executable, "macro executable"), "macro executable");
 expect(macroScratch === preparationScratch && manifest.staticRuntimeMacro.pluginModule === "AxolotyStaticRuntimeMacrosImplementation",
   "macro preparation storage or module is invalid");

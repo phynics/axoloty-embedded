@@ -156,17 +156,24 @@ fi
 
 echo "prepare-core: preparing Axoloty $core_version through the supported consumer contract"
 fi
+# A transport declares exactly one wire profile. When the caller names it, Core
+# prepares only that profile, so a CBOR-only selection never fetches _JSONCore.
+profile_args=""
+if [ -n "${AXOLOTY_WIRE_PROFILE:-}" ]; then
+    profile_args="--profile ${AXOLOTY_WIRE_PROFILE}"
+fi
+# shellcheck disable=SC2086
 AXOLOTY_SOURCE_DIR="$core_dir" swift run \
     --package-path "$core_dir/Tools" \
     --scratch-path "$tooling_build" \
     axoloty-tool embedded consumer prepare \
     --scratch "$tools_scratch" \
-    --output "$report" >/dev/null
+    --output "$report" $profile_args >/dev/null
 
 [ -f "$report" ] || die "preparation report was not written: $report"
 
-python3 - "$report" "$expected_revision" "$strict" <<'PY'
-import json, sys
+AXOLOTY_WIRE_PROFILE="${AXOLOTY_WIRE_PROFILE:-}" python3 - "$report" "$expected_revision" "$strict" <<'PY'
+import json, os, sys
 report_path, expected_revision, strict = sys.argv[1], sys.argv[2], sys.argv[3]
 with open(report_path) as handle:
     report = json.load(handle)
@@ -180,6 +187,12 @@ if strict == "1":
         sys.exit("prepare-core: preparation reports %s, required revision is %s" % (core["sha"], expected_revision))
     if core["dirty"]:
         sys.exit("prepare-core: preparation reports a dirty Core checkout")
+wanted = os.environ.get("AXOLOTY_WIRE_PROFILE", "")
+if wanted:
+    if report.get("selectedWireProfiles") != [wanted]:
+        sys.exit("prepare-core: preparation selected %r, required [%r]" % (report.get("selectedWireProfiles"), wanted))
+    if (wanted == "axoloty1CBOR") == ("jsonCore" in report):
+        sys.exit("prepare-core: the %s report %s a jsonCore entry" % (wanted, "carries" if "jsonCore" in report else "lacks"))
 print("prepare-core: Core %s (dirty=%s), contract %s"
       % (core["sha"][:12], str(core["dirty"]).lower(), report["contractSHA256"][:12]))
 PY

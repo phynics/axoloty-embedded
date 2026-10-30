@@ -9,6 +9,7 @@ import AxolotyWire
 func axoloty_coaty_models_embedded_link_probe() -> Bool {
     guard IoSourceMetadata.schema.fieldCount == 5 else { return false }
 
+    #if canImport(_JSONCore)
     let filter: StaticString = "{\"conditions\":[\"value\",[7,1]]}"
     let filterBytes = ByteSlice(bytes: filter.utf8Start, length: filter.utf8CodeUnitCount)
     do throws(ProtocolError) {
@@ -45,4 +46,7 @@ func axoloty_coaty_models_embedded_link_probe() -> Bool {
     } catch {
         return false
     }
+    #else
+    return true
+    #endif
 }

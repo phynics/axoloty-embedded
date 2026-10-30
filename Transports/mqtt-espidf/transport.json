@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "name": "mqtt-espidf",
+  "wireProfile": "coaty3JSON",
   "capabilities": [
     "lastWill",
     "connect",

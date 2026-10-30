@@ -110,8 +110,6 @@ const source = `// Copyright (c) 2026 Atakan DULKER. Licensed under the MIT Lice
 
 import AxolotyWire
 
-${corpusConstants}
-
 struct EmbeddedBenchmarkMetrics {
     let topicParseP50ns: UInt32
     let topicParseP95ns: UInt32
@@ -126,6 +124,9 @@ struct EmbeddedBenchmarkMetrics {
     let borrowedP50ns: UInt32
     let borrowedP95ns: UInt32
 }
+
+#if canImport(_JSONCore)
+${corpusConstants}
 
 private var embeddedBenchmarkSink: UInt32 = 0
 private var embeddedCorpusParserWorkspace = EmbeddedWireParserWorkspace()
@@ -336,6 +337,21 @@ private func runCorpusCase<T: WireDecodable & WireEncodable>(
 func runGeneratedCorpus(_ record: (StaticString, Bool) -> Void) {
 ${invocations}
 }
+#else
+// The corpus is \`coaty/3\` JSON. A build without the JSON parser has no use
+// for it and carries none of its payload bytes.
+func initializeEmbeddedGeneratedCorpusStaticState() {}
+
+func benchmarkGeneratedCorpus() -> EmbeddedBenchmarkMetrics {
+    EmbeddedBenchmarkMetrics(
+        topicParseP50ns: 0, topicParseP95ns: 0, readerP50ns: 0, readerP95ns: 0,
+        dtoDecodeP50ns: 0, dtoDecodeP95ns: 0, dtoEncodeP50ns: 0, dtoEncodeP95ns: 0,
+        combinedP50ns: 0, combinedP95ns: 0, borrowedP50ns: 0, borrowedP95ns: 0
+    )
+}
+
+func runGeneratedCorpus(_ record: (StaticString, Bool) -> Void) {}
+#endif
 `;
 
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });

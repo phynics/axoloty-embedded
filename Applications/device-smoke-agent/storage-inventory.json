@@ -73,6 +73,7 @@
     {
       "owner": "embeddedCorpusParserWorkspace",
       "category": "app-global",
+      "wireProfiles": ["coaty3JSON"],
       "sourcePath": "fixtures/generate-embedded-corpus.mjs",
       "sourceKind": "generator-source",
       "sourceName": "embeddedCorpusParserWorkspace",
@@ -84,6 +85,7 @@
     {
       "owner": "embeddedCorpusEncodeBuffer",
       "category": "app-global",
+      "wireProfiles": ["coaty3JSON"],
       "sourcePath": "fixtures/generate-embedded-corpus.mjs",
       "sourceKind": "generator-source",
       "sourceName": "embeddedCorpusEncodeBuffer",
