@@ -3,7 +3,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { createEmbeddedSwiftTestValidator } from "./validate-smoke.mjs";
+import { createEmbeddedSwiftTestValidator, createEmbeddedSwiftCborTestValidator, expectedCborRunId, expectedRunId } from "./validate-smoke.mjs";
 
 const [evidenceDirInput, buildDirInput, coreDirInput, firmwareDirInput,
   expectedCoreSha, preparationScratchInput, device, proofRunId] = process.argv.slice(2);
@@ -122,7 +122,12 @@ expect(/ESP32-C6/i.test(fs.readFileSync(path.join(evidenceDir, "device-info-raw.
 const flashLog = fs.readFileSync(path.join(evidenceDir, "flash.log"), "utf8");
 expect(/Hash of data verified\./.test(flashLog), "flash.log does not prove an esptool write verification");
 
-const replayValidator = createEmbeddedSwiftTestValidator();
+// The smoke protocol follows the build's wire profile: v2 drives the JSON
+// vectors, v3 the CBOR vectors. The provenance names the selected profile.
+const cborBuild = provenance.selectedWireProfiles?.length === 1 &&
+  provenance.selectedWireProfiles[0] === "axoloty1CBOR";
+const smokeRunId = cborBuild ? expectedCborRunId : expectedRunId;
+const replayValidator = cborBuild ? createEmbeddedSwiftCborTestValidator() : createEmbeddedSwiftTestValidator();
 const smokeLog = fs.readFileSync(path.join(evidenceDir, "swift-smoke-log.txt"), "utf8");
 for (const rawLine of smokeLog.split(/\r?\n/)) {
   const start = rawLine.indexOf("{");
@@ -136,9 +141,9 @@ expect(replayedSmoke.passed === true,
 expect(JSON.stringify(smoke.validation) === JSON.stringify(replayedSmoke),
   "recorded smoke result differs from the independently replayed serial log");
 
-expect(smoke.schemaVersion === 2 && smoke.runId === "embedded-swift-smoke-v2" && smoke.device === device &&
+expect(smoke.schemaVersion === 2 && smoke.runId === smokeRunId && smoke.device === device &&
   Number.isInteger(smoke.linesCaptured) && smoke.linesCaptured > 0 && smoke.validation?.passed === true,
-  "smoke evidence does not report a passed embedded-swift-smoke-v2 run");
+  `smoke evidence does not report a passed ${smokeRunId} run`);
 
 expect(proof.schemaVersion === 1 && proof.result === "passed" &&
   proof.proof === "real-external-firmware-consumer" && proof.proofRunId === proofRunId,
@@ -158,9 +163,9 @@ expect(proof.preparationManifest === path.join(evidenceDir, "preparation.json") 
   proof.deviceManifest === path.join(evidenceDir, "device-manifest.json") &&
   proof.smokeEvidence === path.join(evidenceDir, "swift-smoke-result.json"),
   "GO proof evidence links are invalid");
-expect(proof.smoke?.runId === "embedded-swift-smoke-v2" && proof.smoke.device === device &&
+expect(proof.smoke?.runId === smokeRunId && proof.smoke.device === device &&
   proof.smoke.validation?.passed === true && proof.checks?.artifactFlashed === true &&
-  proof.checks?.smokeProtocol === "embedded-swift-smoke-v2",
+  proof.checks?.smokeProtocol === smokeRunId,
   "GO proof does not include a passed flash and smoke record");
 
 console.log(`proof evidence is complete for ${proofRunId}`);

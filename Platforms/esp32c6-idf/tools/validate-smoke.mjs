@@ -19,6 +19,39 @@ export const expectedSmokeTests = new Set([
   "config:payloadMax2048", "config:topicMax256",
 ]);
 
+/**
+ * Smoke protocol v3 is the `axoloty/1` CBOR counterpart of v2. A build whose
+ * transport carries CBOR links no JSON parser, so it cannot run the `coaty/3`
+ * vectors; it emits the profile-neutral vectors below plus the application's
+ * CBOR vectors.
+ */
+export const expectedCborRunId = "embedded-swift-smoke-v3";
+export const expectedCborSmokeTests = new Set([
+  // Profile-neutral route, UUID, configuration, and capacity vectors.
+  "topicParse:ADV", "topicParse:DAD", "topicParse:DSC", "topicParse:RSV",
+  "topicParse:CHN", "topicParse:ASC", "topicParse:IOV", "topicParse:raw",
+  "topicParse:filter", "uuid16:parseValid", "uuid16:parseInvalid", "uuid16:zero",
+  "config:payloadMax2048", "config:topicMax256",
+  "topic:exact", "topic:underCapacity", "topic:overflow",
+  "capacity:payload0", "capacity:payload1", "capacity:payload512",
+  "capacity:payload2047", "capacity:payload2048", "capacity:payload2049", "capacity:topic0",
+  "capacity:topic1", "capacity:topic256", "capacity:topic257",
+  // Deterministic encoding.
+  "cbor:writeInt:zero", "cbor:writeInt:one", "cbor:writeInt:minusOne",
+  "cbor:writeInt:23", "cbor:writeInt:24", "cbor:writeInt:255", "cbor:writeInt:256",
+  "cbor:writeInt:65536", "cbor:writeInt:minus25", "cbor:writeInt:max", "cbor:writeInt:min",
+  "cbor:write:object", "cbor:read:object", "cbor:read:missing",
+  // The UUID tag and its tolerated text form.
+  "cbor:uuid:encodeTag37", "cbor:uuid:decodeTag37", "cbor:uuid:decodeText",
+  "cbor:uuid:rejectWrongLength",
+  // Malformed input the reader must reject.
+  "cbor:malformed:indefinite", "cbor:malformed:nonMinimalInt", "cbor:malformed:duplicateKey",
+  "cbor:malformed:truncated", "cbor:malformed:trailing", "cbor:malformed:invalidUTF8",
+  "cbor:malformed:disallowedTag", "cbor:malformed:empty", "cbor:malformed:nesting",
+  // A wire DTO and the shared static runtime on the CBOR codec.
+  "cbor:dto:advertise", "cbor:static:advertise",
+]);
+
 const corpusOperations = [
   "topicParse", "dtoDecode", "dtoEncode", "combined", "borrowed", "topicBuild",
 ];
@@ -115,7 +148,7 @@ export function failureResult(stage, reason) {
 }
 
 /** Validates structured JSON Lines emitted by the Embedded Swift smoke firmware. */
-export function createEmbeddedSwiftSmokeValidator(expectedTests = expectedSmokeTests, unsupportedTestsAllowed = new Set()) {
+export function createEmbeddedSwiftSmokeValidator(expectedTests = expectedSmokeTests, unsupportedTestsAllowed = new Set(), runId = expectedRunId) {
   const seenTests = new Set();
   const unsupportedTests = new Set();
   let expectedSequence = 0;
@@ -133,7 +166,7 @@ export function createEmbeddedSwiftSmokeValidator(expectedTests = expectedSmokeT
 
   function commonFailure(record) {
     if (!record || typeof record !== "object" || Array.isArray(record)) return "malformed record";
-    if (record.schemaVersion !== schemaVersion || record.runId !== expectedRunId) return "invalid schema identity";
+    if (record.schemaVersion !== schemaVersion || record.runId !== runId) return "invalid schema identity";
     if (!Number.isInteger(record.sequence) || record.sequence !== expectedSequence) return "invalid sequence";
     if (typeof record.caseId !== "string" || typeof record.operation !== "string") return "invalid record identity";
     if (!recordStages.has(record.stage)) return "invalid stage";
@@ -213,6 +246,11 @@ export function createEmbeddedSwiftSmokeValidator(expectedTests = expectedSmokeT
   return { observe, result };
 }
 
+/** Creates the strict validator for a CBOR-only build: smoke protocol v3. */
+export function createEmbeddedSwiftCborTestValidator() {
+  return createEmbeddedSwiftSmokeValidator(expectedCborSmokeTests, new Set(), expectedCborRunId);
+}
+
 /** Creates the strict validator used by the firmware-owned proof runner. */
 export function createEmbeddedSwiftTestValidator() {
   return createEmbeddedSwiftSmokeValidator(expectedEmbeddedSwiftTests);
@@ -237,9 +275,13 @@ async function runCLI() {
       throw new Error(`validator module ${validatorPath} does not export ${factoryName}`);
     }
     validator = factory();
+  } else if (process.env.AXOLOTY_WIRE_PROFILE === "axoloty1CBOR") {
+    validator = createEmbeddedSwiftCborTestValidator();
   } else {
     validator = createEmbeddedSwiftTestValidator();
   }
+  const runId = process.env.AXOLOTY_WIRE_PROFILE === "axoloty1CBOR" && !validatorPath
+    ? expectedCborRunId : expectedRunId;
   const lines = fs.readFileSync(logPath, "utf8").split(/\r?\n/);
   for (const rawLine of lines) {
     const start = rawLine.indexOf("{");
@@ -252,7 +294,7 @@ async function runCLI() {
   const validation = validator.result();
   const output = {
     schemaVersion,
-    runId: expectedRunId,
+    runId,
     device,
     deadlineSeconds: Number(deadline),
     linesCaptured: lines.filter(line => line.length > 0).length,

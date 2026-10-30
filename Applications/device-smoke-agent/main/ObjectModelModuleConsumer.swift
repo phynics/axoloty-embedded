@@ -32,6 +32,14 @@ func axoloty_object_model_embedded_link_probe() -> Bool {
         bytes: idBytes.utf8Start,
         length: idBytes.utf8CodeUnitCount
     )), let name = BoundedEncodedText<16>("Embedded") else { return false }
+    // A typed object is built by encoding and re-validating it as `coaty/3`
+    // JSON. A build without the JSON parser links that code but would trap on
+    // first use, so it checks only the pieces that do not touch JSON.
+    #if !canImport(_JSONCore)
+    _ = objectID
+    _ = name
+    return ObjectType("com.example.EmbeddedConstructed") != nil
+    #else
     guard let envelope = try? ObjectEnvelope<16, 16>(
         objectID: objectID,
         objectType: ObjectType("com.example.EmbeddedConstructed")!,
@@ -45,4 +53,5 @@ func axoloty_object_model_embedded_link_probe() -> Bool {
     var hasBytes = false
     object.withEncodedBytes { bytes in hasBytes = bytes.length > 0 }
     return hasBytes
+    #endif
 }

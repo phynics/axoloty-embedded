@@ -142,8 +142,15 @@ else
     monitor_status=127
 fi
 set -e
+# The selected transport's wire profile decides the smoke protocol: v2 drives
+# the JSON vectors, v3 the CBOR vectors.
+wire_profile=
+if [ -n "${AXOLOTY_TRANSPORT_DIR:-}" ] && [ -f "$AXOLOTY_TRANSPORT_DIR/transport.json" ]; then
+    wire_profile=$(node -e 'const t = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(typeof t.wireProfile === "string" ? t.wireProfile : "");' \
+        "$AXOLOTY_TRANSPORT_DIR/transport.json")
+fi
 set +e
-AXOLOTY_CORPUS_MANIFEST="$corpus_manifest" \
+AXOLOTY_WIRE_PROFILE="$wire_profile" AXOLOTY_CORPUS_MANIFEST="$corpus_manifest" \
     node "$script_dir/validate-smoke.mjs" "$serial_log" "$smoke_result" "$device" "$deadline"
 validation_status=$?
 set -e

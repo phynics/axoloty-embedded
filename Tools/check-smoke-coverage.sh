@@ -71,6 +71,33 @@ case "$actual" in
     MISSING*) echo "check-smoke-coverage: validator no longer declares ${actual#MISSING }" >&2; exit 1 ;;
 esac
 
+# Smoke protocol v3 (axoloty/1 CBOR) has its own named set, pinned the same way.
+cbor_baseline='Tools/smoke-coverage-cbor.baseline'
+cbor_actual="$(python3 - "$validator" <<'PYEOF'
+import hashlib, re, sys
+text = open(sys.argv[1]).read()
+match = re.search(r'export const expectedCborSmokeTests = new Set\(\[(.*?)\]\);', text, re.S)
+if match is None:
+    print("MISSING expectedCborSmokeTests")
+    raise SystemExit(0)
+ids = sorted(set(re.findall(r'"([^"]+)"', match.group(1))))
+print("count=%d sha256=%s" % (len(ids), hashlib.sha256("\n".join(ids).encode()).hexdigest()))
+PYEOF
+)"
+case "$cbor_actual" in
+    MISSING*) echo "check-smoke-coverage: validator no longer declares ${cbor_actual#MISSING }" >&2; exit 1 ;;
+esac
+if [ ! -f "$cbor_baseline" ]; then
+    echo "check-smoke-coverage: no CBOR baseline; writing $cbor_baseline"
+    printf '%s\n' "$cbor_actual" > "$cbor_baseline"
+elif [ "$cbor_actual" != "$(cat "$cbor_baseline")" ]; then
+    echo "check-smoke-coverage: the expected CBOR smoke case set changed" >&2
+    echo "  baseline: $(cat "$cbor_baseline")" >&2
+    echo "  actual:   $cbor_actual" >&2
+    echo "Update $cbor_baseline in the same commit and explain the change." >&2
+    exit 1
+fi
+
 if [ ! -f "$baseline" ]; then
     echo "check-smoke-coverage: no baseline; writing $baseline"
     printf '%s\n' "$actual" > "$baseline"

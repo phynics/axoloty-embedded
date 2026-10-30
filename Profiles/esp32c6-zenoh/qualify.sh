@@ -83,7 +83,7 @@ EMBEDDED_PROOF_ROOT="$proof_root" EMBEDDED_BUILD_DIR="$build_dir" \
 
 proof="$evidence_dir/go-proof.json"
 device_manifest="$evidence_dir/device-manifest.json"
-evidence_out="$repo_root/docs/evidence/esp32c6-zenoh-embedded-zenoh-smoke.json"
+evidence_out="$repo_root/docs/evidence/esp32c6-zenoh-embedded-swift-smoke-v3.json"
 
 if [ ! -f "$proof" ]; then
     echo "error: the smoke proof was not written: $proof" >&2
@@ -91,7 +91,7 @@ if [ ! -f "$proof" ]; then
 fi
 
 EVIDENCE_OUT="$evidence_out" PROOF="$proof" DEVICE_MANIFEST="$device_manifest" \
-    PROFILE_NAME="esp32c6-zenoh" CHECK_NAME="embedded-zenoh-smoke" node --input-type=module <<'JS'
+    PROFILE_NAME="esp32c6-zenoh" CHECK_NAME="embedded-swift-smoke-v3" node --input-type=module <<'JS'
 import fs from "node:fs";
 
 const proof = JSON.parse(fs.readFileSync(process.env.PROOF, "utf8"));
@@ -114,7 +114,7 @@ const record = {
   device: unit,
   firmwareSHA256: proof.firmwareSha256,
   coreRevision: proof.coreSha,
-  protocol: `${passed} deterministic cases over serial JSON Lines`,
+  protocol: `${passed} deterministic axoloty/1 CBOR cases over serial JSON Lines`,
   result: `${passed}/${passed} passed`,
 };
 const temporary = `${process.env.EVIDENCE_OUT}.tmp-${process.pid}`;

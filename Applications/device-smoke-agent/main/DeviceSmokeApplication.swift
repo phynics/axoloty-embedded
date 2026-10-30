@@ -312,7 +312,13 @@ private func runAgentVectors(_ record: (StaticString, Bool) -> Void) {}
 
 private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     let schemaVersion: UInt32 = 2
+    // Smoke protocol v2 drives the `coaty/3` JSON vectors; v3 drives the
+    // `axoloty/1` CBOR vectors of a build that carries no JSON parser.
+    #if canImport(_JSONCore)
     let runId: StaticString = "embedded-swift-smoke-v2"
+    #else
+    let runId: StaticString = "embedded-swift-smoke-v3"
+    #endif
     var sequence: UInt32 = 0
     var rollingChecksum: UInt32 = 0
     var passed: UInt32 = 0
@@ -606,6 +612,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     record("config:topicMax256", WireBufferConfig.maxTopicLength == 256)
 
     // === Deterministic vector corpus ===
+    #if canImport(_JSONCore)
     writeIntVector("writer:zero", 0, "0")
     writeIntVector("writer:one", 1, "1")
     writeIntVector("writer:minusOne", -1, "-1")
@@ -619,6 +626,7 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
         writeIntVector("writer:max", Int.max, "9223372036854775807")
         writeIntVector("writer:min", Int.min, "-9223372036854775808")
     }
+    #endif
 
     topicVector("topic:exact", 51, "", true)
     topicVector("topic:underCapacity", 50, "", false)
@@ -657,6 +665,10 @@ private func runSmoke(_ seam: DeviceSmokeSeam) -> Int32 {
     runRegistryVectors(record)
 
     runAgentVectors(record)
+
+    #if !canImport(_JSONCore)
+    runCBORSmokeVectors(record)
+    #endif
 
     #if !HOST_AGENT_EXCHANGE
     runGeneratedCorpus(record)

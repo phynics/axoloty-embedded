@@ -18,10 +18,14 @@ if (provenance.status !== "passed" || smoke.validation?.passed !== true ||
     device.chip !== "esp32c6" || device.queried !== true) {
   throw new Error("cannot write a GO proof from failed provenance or smoke evidence");
 }
+// The smoke protocol follows the build's wire profile: v2 for JSON, v3 for CBOR.
+const smokeRunId = provenance.selectedWireProfiles?.length === 1 &&
+  provenance.selectedWireProfiles[0] === "axoloty1CBOR"
+  ? "embedded-swift-smoke-v3" : "embedded-swift-smoke-v2";
 if (typeof provenance.firmware?.revision !== "string" || !/^[0-9a-f]{40}$/.test(provenance.firmware.revision) ||
     provenance.artifact?.path !== artifact || provenance.artifact?.sha256 !== artifactHash ||
     provenance.firmwareSha256 !== artifactHash ||
-    smoke.runId !== "embedded-swift-smoke-v2") {
+    smoke.runId !== smokeRunId) {
   throw new Error("proof evidence has mismatched firmware revision, artifact bytes, or smoke identities");
 }
 const output = {
@@ -49,7 +53,7 @@ const output = {
   checks: {
     ...provenance.checks,
     chip: device.chip,
-    smokeProtocol: "embedded-swift-smoke-v2",
+    smokeProtocol: smoke.runId,
     artifactFlashed: true,
   },
 };
