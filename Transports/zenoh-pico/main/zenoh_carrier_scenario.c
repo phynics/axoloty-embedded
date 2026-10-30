@@ -19,6 +19,12 @@
 // milliseconds and gives up after a fixed count.
 #define SCENARIO_RECEIVE_ATTEMPTS 64u
 #define SCENARIO_RECEIVE_DELAY_MS 5u
+// A burst crosses a real link, so the scenario waits, bounded, until the burst
+// is accounted for before draining, and then for the link to go quiet before the
+// next step reads. Both waits are fixed ceilings: one second to settle, and a
+// frame-free tenth of a second to count as quiet.
+#define SCENARIO_SETTLE_ATTEMPTS 200u
+#define SCENARIO_QUIET_ATTEMPTS 20u
 // Hard ceilings on the two caller-sized loops. A device run may ask for more
 // than a host run, but never unboundedly.
 #define SCENARIO_MAX_CONTINUOUS_FRAMES 64u
@@ -153,6 +159,57 @@ static int receive_expected(const ScenarioState *state, const ZenohScenarioEnvir
         return STEP_FAIL;
     }
     return STEP_FAIL;
+}
+
+// Waits, bounded, until every frame of a burst is accounted for. Nothing polls
+// during the wait, so a burst larger than the queue must end with the queue full
+// and the excess counted as dropped. Stopping as soon as the queue is full would
+// be too early: a drain that starts then frees slots for the frames still in
+// flight, and nothing overflows.
+static void wait_for_burst_accounted(const ScenarioState *state, const ZenohScenarioEnvironment *environment,
+                                     uint32_t offered, uint32_t dropped_before) {
+    uint32_t expected_drops = offered - AXOLOTY_ZENOH_RECEIVE_QUEUE_CAPACITY;
+    for (uint32_t attempt = 0u; attempt < SCENARIO_SETTLE_ATTEMPTS; ++attempt) {
+        uint32_t depth = 0u;
+        uint32_t dropped = 0u;
+        if (axoloty_zenoh_queue_depth(state->subscriber, state->subscription, &depth) != AXOLOTY_ZENOH_OK ||
+            axoloty_zenoh_dropped_frame_count(state->subscriber, state->subscription, &dropped) !=
+                AXOLOTY_ZENOH_OK) {
+            return;
+        }
+        if ((depth >= AXOLOTY_ZENOH_RECEIVE_QUEUE_CAPACITY && dropped - dropped_before >= expected_drops) ||
+            environment->delay_ms == NULL) {
+            return;
+        }
+        environment->delay_ms(SCENARIO_RECEIVE_DELAY_MS, environment->context);
+    }
+}
+
+// Reads and discards frames until the link has been quiet for a short window,
+// so a late frame of one step cannot be mistaken for a frame of the next. Every
+// frame read is counted, because it did cross the carrier.
+static void drain_until_quiet(const ScenarioState *state, const ZenohScenarioEnvironment *environment) {
+    uint32_t quiet = 0u;
+    for (uint32_t attempt = 0u; attempt < SCENARIO_SETTLE_ATTEMPTS && quiet < SCENARIO_QUIET_ATTEMPTS;
+         ++attempt) {
+        uint32_t key_length = 0u;
+        uint32_t payload_length = 0u;
+        axoloty_zenoh_result_t result = poll_once(state, &key_length, &payload_length);
+        if (result == AXOLOTY_ZENOH_OK) {
+            (void)carrier_diagnostics_add(CARRIER_METRIC_FRAMES_RECEIVED, 1u);
+            quiet = 0u;
+        } else if (result == AXOLOTY_ZENOH_QUEUE_FULL) {
+            quiet = 0u;
+        } else if (result == AXOLOTY_ZENOH_QUEUE_EMPTY) {
+            if (environment->delay_ms == NULL) {
+                return;
+            }
+            environment->delay_ms(SCENARIO_RECEIVE_DELAY_MS, environment->context);
+            quiet += 1u;
+        } else {
+            return;
+        }
+    }
 }
 
 static void build_config(const ZenohScenarioConfig *config, axoloty_zenoh_config_t *out_config) {
@@ -324,11 +381,10 @@ int zenoh_carrier_scenario_run(const ZenohScenarioConfig *config,
     // 7. Queue saturation: offer more than the queue holds, then drain. The
     // admitted frames arrive; the rest are reported as a drop notification.
     {
-        if (environment->arm_queue_full_notification != NULL) {
-            environment->arm_queue_full_notification(environment->context);
-        }
         uint32_t offered = AXOLOTY_ZENOH_RECEIVE_QUEUE_CAPACITY + 2u;
         uint32_t payload_length = 8u;
+        uint32_t dropped_before = 0u;
+        (void)axoloty_zenoh_dropped_frame_count(state.subscriber, state.subscription, &dropped_before);
         fill_pattern(scenario_payload, payload_length, 0x5au);
         for (uint32_t index = 0u; index < offered; ++index) {
             axoloty_zenoh_result_t publish_result = axoloty_zenoh_publish(
@@ -340,9 +396,14 @@ int zenoh_carrier_scenario_run(const ZenohScenarioConfig *config,
             }
         }
 
+        wait_for_burst_accounted(&state, environment, offered, dropped_before);
         uint32_t depth = 0u;
+        uint32_t dropped_after = dropped_before;
         axoloty_zenoh_result_t depth_result =
             axoloty_zenoh_queue_depth(state.subscriber, state.subscription, &depth);
+        if (depth_result == AXOLOTY_ZENOH_OK) {
+            depth_result = axoloty_zenoh_dropped_frame_count(state.subscriber, state.subscription, &dropped_after);
+        }
         uint32_t received = 0u;
         uint32_t drops = 0u;
         bool errored = depth_result != AXOLOTY_ZENOH_OK;
@@ -371,22 +432,24 @@ int zenoh_carrier_scenario_run(const ZenohScenarioConfig *config,
             }
             errored = true;
         }
-        // Offering more than the queue holds must fill it: either the depth
-        // read saw a full queue, or the drain observed the coalesced drop
-        // notification. A run that neither filled nor dropped did not
-        // exercise saturation, so it is not a pass.
-        bool filled = depth >= AXOLOTY_ZENOH_RECEIVE_QUEUE_CAPACITY;
+        // Frames of the burst that are still in flight must not reach the next
+        // step, which expects only its own.
+        drain_until_quiet(&state, environment);
+
+        // The burst has one exact outcome: the queue fills, the excess is counted
+        // as dropped, the drain returns what the queue holds, and one coalesced
+        // notification follows. Anything else did not exercise saturation, and a
+        // partial result is how a timing race in this step shows itself.
         if (errored) {
             record(&state, environment, "queue_saturation", STEP_FAIL, "the drain did not complete");
-        } else if (filled && drops > 0u && received > 0u) {
+        } else if (depth == AXOLOTY_ZENOH_RECEIVE_QUEUE_CAPACITY &&
+                   dropped_after - dropped_before == offered - AXOLOTY_ZENOH_RECEIVE_QUEUE_CAPACITY &&
+                   received == AXOLOTY_ZENOH_RECEIVE_QUEUE_CAPACITY && drops == 1u) {
             record(&state, environment, "queue_saturation", STEP_PASS,
                    "the queue filled, drained, and reported a drop");
-        } else if (drops > 0u && received > 0u) {
-            record(&state, environment, "queue_saturation", STEP_PASS,
-                   "the drain observed a full-queue notification");
         } else {
             record(&state, environment, "queue_saturation", STEP_FAIL,
-                   "the offered burst neither filled the queue nor reported a drop");
+                   "the burst did not end with a full queue and every excess frame dropped");
         }
     }
 
@@ -437,7 +500,7 @@ int zenoh_carrier_scenario_run(const ZenohScenarioConfig *config,
             outcome = receive_expected(&state, environment, payload_length, 0xa5u);
         }
         record(&state, environment, "maximum_payload", outcome,
-               outcome == STEP_PASS ? "the limit payload crossed intact" : "the limit payload was lost");
+               outcome == STEP_PASS ? "the limit payload crossed intact" : "the limit payload did not arrive intact");
     }
 
     // 10. Oversized payload: one byte over the limit is refused locally, with

@@ -155,7 +155,6 @@ void app_main(void) {
     // Those steps record `unavailable` when the environment cannot drive them.
     environment.loopback = NULL;
     environment.set_router_available = NULL;
-    environment.arm_queue_full_notification = NULL;
     environment.read_resource = device_read_resource;
     environment.flash_image_bytes = device_flash_image_bytes();
 
