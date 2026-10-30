@@ -280,8 +280,9 @@ async function runCLI() {
   } else {
     validator = createEmbeddedSwiftTestValidator();
   }
-  const runId = process.env.AXOLOTY_WIRE_PROFILE === "axoloty1CBOR" && !validatorPath
-    ? expectedCborRunId : expectedRunId;
+  // The recorded run id follows the wire profile alone, so a harness that
+  // supplies its own validator cannot mislabel the proof.
+  const runId = process.env.AXOLOTY_WIRE_PROFILE === "axoloty1CBOR" ? expectedCborRunId : expectedRunId;
   const lines = fs.readFileSync(logPath, "utf8").split(/\r?\n/);
   for (const rawLine of lines) {
     const start = rawLine.indexOf("{");
