@@ -64,6 +64,16 @@ private extension BorrowedProtocolDeliveryKey {
 ///
 /// The value is intentionally non-`Sendable`: one firmware callback owns and
 /// mutates it synchronously. Transport callbacks remain outside this module.
+/// The wire profile this image's transport carries: `coaty/3` JSON when the
+/// JSON parser is linked, `axoloty/1` CBOR when it is not.
+private func agentWireProfile() -> WireProfile {
+    #if canImport(_JSONCore)
+    return .coaty3JSON
+    #else
+    return .axoloty1CBOR
+    #endif
+}
+
 struct StaticDeviceAgent: ~Copyable {
     static let agentAId = UUID16(bytes: (
         0x32, 0x40, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00,
@@ -130,6 +140,7 @@ struct StaticDeviceAgent: ~Copyable {
         )
         self.processor = ProtocolProcessor<16>(
             capabilities: .coatyCore3,
+            wireCodec: WireCodec(profile: agentWireProfile()),
             maximumPayloadBytes: WireBufferConfig.maxPayloadSize
         )
         let isA = agentId == Self.agentAId
@@ -245,7 +256,7 @@ struct StaticDeviceAgent: ~Copyable {
         recordWithProcessor: Bool = true
     ) throws(WireEncodeError) -> (topicLength: Int, payloadLength: Int) {
         var topic = TopicBuilder(buffer: topicBuffer, capacity: topicCapacity)
-        try topic.writePrefix()
+        try topic.writePrefix(agentWireProfile())
         try topic.writeNamespace(Self.namespace)
         let objectTypeFilter: StaticString = "coaty.test.Device"
         let filter = eventType == .advertise
@@ -255,7 +266,8 @@ struct StaticDeviceAgent: ~Copyable {
         try topic.writeSourceId(agentId)
         if let correlationId { try topic.writeCorrelationId(correlationId) }
 
-        var payload = WireWriter(buffer: payloadBuffer, capacity: payloadCapacity)
+        var payload = WireCodec(profile: agentWireProfile())
+            .writer(buffer: payloadBuffer, capacity: payloadCapacity)
         try value.encode(to: &payload)
         let borrowedPayload = ByteSlice(bytes: payloadBuffer, length: payload.position)
         let capability = ProtocolCapability(wireEventType: eventType)
@@ -406,6 +418,9 @@ private func phase4NamedObjectSource(
     _ buffer: UnsafeMutablePointer<UInt8>,
     capacity: Int
 ) -> Int? {
+    #if !canImport(_JSONCore)
+    return phase4CBORNamedObjectSource(buffer, capacity: capacity)
+    #else
     let prefix: StaticString = "{\"object\":{\"coreType\":\"CoatyObject\",\"objectId\":\"32400000-0000-4000-8000-000000000002\",\"objectType\":\"coaty.test.Device\",\"name\":\""
     let suffix: StaticString = "\"}}"
     var position = 0
@@ -423,9 +438,50 @@ private func phase4NamedObjectSource(
         position += 1
     }
     return position
+    #endif
 }
 
-#if canImport(_JSONCore)
+#if !canImport(_JSONCore)
+/// Builds the role-A advertised object as an `axoloty/1` CBOR payload with the
+/// operator-configured device display name. Every other member is the frozen
+/// object envelope of the JSON source, so both profiles advertise one object.
+private func phase4CBORNamedObjectSource(
+    _ buffer: UnsafeMutablePointer<UInt8>,
+    capacity: Int
+) -> Int? {
+    let idText: StaticString = "32400000-0000-4000-8000-000000000002"
+    guard let objectId = UUID16(parsing: ByteSlice(
+        bytes: idText.utf8Start, length: idText.utf8CodeUnitCount
+    )) else { return nil }
+    return withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 160) { inner -> Int? in
+        let nameCapacity = 48
+        return withUnsafeTemporaryAllocation(of: UInt8.self, capacity: nameCapacity) { name -> Int? in
+            let nameLength = deviceSmokeSeam().deviceDisplayName(name.baseAddress!, Int32(nameCapacity))
+            guard nameLength >= 0, Int(nameLength) <= nameCapacity else { return nil }
+            let coreType: StaticString = "CoatyObject"
+            let objectType: StaticString = "coaty.test.Device"
+            var objectWriter = WireCodec(profile: .axoloty1CBOR)
+                .writer(buffer: inner.baseAddress!, capacity: inner.count)
+            guard (try? objectWriter.beginObject()) != nil,
+                  (try? objectWriter.writeStringField("coreType", ByteSlice(
+                      bytes: coreType.utf8Start, length: coreType.utf8CodeUnitCount))) != nil,
+                  (try? objectWriter.writeUUIDField("objectId", objectId)) != nil,
+                  (try? objectWriter.writeStringField("objectType", ByteSlice(
+                      bytes: objectType.utf8Start, length: objectType.utf8CodeUnitCount))) != nil,
+                  (try? objectWriter.writeStringField("name", ByteSlice(
+                      bytes: UnsafePointer(name.baseAddress!), length: Int(nameLength)))) != nil,
+                  (try? objectWriter.endObject()) != nil else { return nil }
+            var outer = WireCodec(profile: .axoloty1CBOR).writer(buffer: buffer, capacity: capacity)
+            guard (try? outer.beginObject()) != nil,
+                  (try? outer.writeRawField("object", ByteSlice(
+                      bytes: UnsafePointer(inner.baseAddress!), length: objectWriter.position))) != nil,
+                  (try? outer.endObject()) != nil else { return nil }
+            return outer.position
+        }
+    }
+}
+#endif
+
 /// Decodes one frozen wire source and encodes it through the static agent.
 @inline(__always)
 private func phase4EncodeSource(
@@ -443,7 +499,7 @@ private func phase4EncodeSource(
     recordWithProcessor: Bool = true
 ) -> Bool {
     let result: (topicLength: Int, payloadLength: Int)?
-    let reader = WireReader(bytes: sourceBytes, length: sourceLength)
+    let reader = WireCodec(profile: agentWireProfile()).reader(bytes: sourceBytes, length: sourceLength)
     switch eventType {
     case .advertise:
         result = (try? AdvertiseWireData(from: reader)).flatMap {
@@ -481,25 +537,45 @@ private func phase4EncodeSource(
     payloadLength.pointee = Int32(result.payloadLength)
     return true
 }
-#else
-// The frozen exchange sources are `coaty/3` JSON text. A build without the
-// JSON parser has no source it can decode, so it reports none.
-@inline(__always)
-private func phase4EncodeSource(
-    role: Int32,
-    eventType: WireEventType,
-    correlationId: UUID16?,
-    sourceBytes: UnsafePointer<UInt8>,
-    sourceLength: Int,
-    topicBuffer: UnsafeMutablePointer<UInt8>,
-    topicCapacity: Int32,
-    payloadBuffer: UnsafeMutablePointer<UInt8>,
-    payloadCapacity: Int32,
-    topicLength: UnsafeMutablePointer<Int32>,
-    payloadLength: UnsafeMutablePointer<Int32>,
-    recordWithProcessor: Bool = true
-) -> Bool {
-    false
+
+#if !canImport(_JSONCore)
+/// Builds `{"objectTypes": ["coaty.test.Device"]}` as an `axoloty/1` payload.
+private func phase4CBORDiscoverSource(_ buffer: UnsafeMutablePointer<UInt8>, capacity: Int) -> Int? {
+    let type: StaticString = "coaty.test.Device"
+    return withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 32) { items -> Int? in
+        // array(1), text(17)
+        items[0] = 0x81
+        items[1] = 0x71
+        for index in 0..<type.utf8CodeUnitCount { items[2 + index] = type.utf8Start[index] }
+        var writer = WireCodec(profile: .axoloty1CBOR).writer(buffer: buffer, capacity: capacity)
+        guard (try? writer.beginObject()) != nil,
+              (try? writer.writeRawField("objectTypes", ByteSlice(
+                  bytes: UnsafePointer(items.baseAddress!), length: 2 + type.utf8CodeUnitCount))) != nil,
+              (try? writer.endObject()) != nil else { return nil }
+        return writer.position
+    }
+}
+
+/// Builds `{"objectIds": [<role-A object id>]}` as an `axoloty/1` payload.
+private func phase4CBORDeadvertiseSource(_ buffer: UnsafeMutablePointer<UInt8>, capacity: Int) -> Int? {
+    let idText: StaticString = "32400000-0000-4000-8000-000000000002"
+    guard let objectId = UUID16(parsing: ByteSlice(
+        bytes: idText.utf8Start, length: idText.utf8CodeUnitCount
+    )) else { return nil }
+    return withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 32) { items -> Int? in
+        var writer = WireCodec(profile: .axoloty1CBOR).writer(buffer: items.baseAddress!, capacity: items.count)
+        // array(1) of one UUID item (tag 37 over 16 bytes)
+        guard (try? writer.beginArray()) != nil,
+              (try? writer.writeUUIDValue(objectId)) != nil,
+              (try? writer.endArray()) != nil else { return nil }
+        let arrayLength = writer.position
+        var outer = WireCodec(profile: .axoloty1CBOR).writer(buffer: buffer, capacity: capacity)
+        guard (try? outer.beginObject()) != nil,
+              (try? outer.writeRawField("objectIds", ByteSlice(
+                  bytes: UnsafePointer(items.baseAddress!), length: arrayLength))) != nil,
+              (try? outer.endObject()) != nil else { return nil }
+        return outer.position
+    }
 }
 #endif
 
@@ -528,6 +604,18 @@ private func preparePhase4Message(
             )
         }
     case (2, 2):
+        #if !canImport(_JSONCore)
+        return withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 64) { source in
+            guard let length = phase4CBORDiscoverSource(source.baseAddress!, capacity: source.count) else { return false }
+            return phase4EncodeSource(
+                role: role, eventType: .discover, correlationId: phase4Correlation,
+                sourceBytes: UnsafePointer(source.baseAddress!), sourceLength: length,
+                topicBuffer: topicBuffer, topicCapacity: topicCapacity,
+                payloadBuffer: payloadBuffer, payloadCapacity: payloadCapacity,
+                topicLength: topicLength, payloadLength: payloadLength
+            )
+        }
+        #else
         let source: StaticString = "{\"objectTypes\":[\"coaty.test.Device\"]}"
         return phase4EncodeSource(
             role: role, eventType: .discover, correlationId: phase4Correlation,
@@ -536,6 +624,7 @@ private func preparePhase4Message(
             payloadBuffer: payloadBuffer, payloadCapacity: payloadCapacity,
             topicLength: topicLength, payloadLength: payloadLength
         )
+        #endif
     case (1, 3):
         return withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 256) { source in
             guard let length = phase4NamedObjectSource(source.baseAddress!, capacity: source.count) else { return false }
@@ -552,6 +641,19 @@ private func preparePhase4Message(
         // publishes after an abnormal disconnect. It is prepared at connect
         // time, before the object is advertised, so it must not plan a live
         // outbound transition (that would require the object to already exist).
+        #if !canImport(_JSONCore)
+        return withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 64) { source in
+            guard let length = phase4CBORDeadvertiseSource(source.baseAddress!, capacity: source.count) else { return false }
+            return phase4EncodeSource(
+                role: role, eventType: .deadvertise, correlationId: nil,
+                sourceBytes: UnsafePointer(source.baseAddress!), sourceLength: length,
+                topicBuffer: topicBuffer, topicCapacity: topicCapacity,
+                payloadBuffer: payloadBuffer, payloadCapacity: payloadCapacity,
+                topicLength: topicLength, payloadLength: payloadLength,
+                recordWithProcessor: false
+            )
+        }
+        #else
         let source: StaticString = "{\"objectIds\":[\"32400000-0000-4000-8000-000000000002\"]}"
         return phase4EncodeSource(
             role: role, eventType: .deadvertise, correlationId: nil,
@@ -561,6 +663,7 @@ private func preparePhase4Message(
             topicLength: topicLength, payloadLength: payloadLength,
             recordWithProcessor: false
         )
+        #endif
     default:
         return false
     }
