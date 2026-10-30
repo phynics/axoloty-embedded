@@ -48,6 +48,7 @@ private struct EmbeddedZenohHostTest {
         host_zenoh_reset()
 
         carrierLifecycle()
+        keyExpressionGrammar()
         partialProfileInterestCleanup()
         willCapabilityScenarioGate()
         carrierBounds()
@@ -215,23 +216,27 @@ private struct EmbeddedZenohHostTest {
         let expectedEndpoint = Array("tcp/127.0.0.1:7447".utf8)
         check(host_zenoh_session_endpoint_length(0) == UInt32(expectedEndpoint.count), "endpoint length recorded")
 
-        // Three profile filters install side by side; a repeat is idempotent.
-        let hashFilter = Array("coaty/3/axoloty-embedded/#".utf8)
-        let twoLevel = Array("coaty/3/axoloty-embedded/*/*".utf8)
-        let threeLevel = Array("coaty/3/axoloty-embedded/*/*/*".utf8)
+        // The two key shapes the host binding installs go in side by side; a
+        // repeat is idempotent. The hash-shaped filter is not a Zenoh key
+        // expression: the router panics on it, so the carrier refuses it before
+        // anything reaches the facade.
+        let hashFilter = Array("axoloty/1/axoloty-embedded/#".utf8)
+        let twoLevel = Array("axoloty/1/axoloty-embedded/*/*".utf8)
+        let threeLevel = Array("axoloty/1/axoloty-embedded/*/*/*".utf8)
         check(withSpan(hashFilter, count: hashFilter.count) {
             carrier.subscribe(topic: $0, deadlineMS: 1_000)
-        }, "hash filter")
+        } == false, "hash filter is refused")
+        check(host_zenoh_call_count(1) == 0, "refused hash filter declares nothing")
         check(withSpan(twoLevel, count: twoLevel.count) {
             carrier.subscribe(topic: $0, deadlineMS: 1_000)
         }, "two-level filter")
         check(withSpan(threeLevel, count: threeLevel.count) {
             carrier.subscribe(topic: $0, deadlineMS: 1_000)
         }, "three-level filter")
-        check(withSpan(hashFilter, count: hashFilter.count) {
+        check(withSpan(twoLevel, count: twoLevel.count) {
             carrier.subscribe(topic: $0, deadlineMS: 1_000)
         }, "duplicate subscribe")
-        check(host_zenoh_call_count(1) == 3, "duplicate subscribe declares nothing")
+        check(host_zenoh_call_count(1) == 2, "duplicate subscribe declares nothing")
 
         // Removal is exact: unknown topics remove nothing.
         let unknown = Array("coaty/3/axoloty-embedded/NOPE".utf8)
@@ -254,6 +259,38 @@ private struct EmbeddedZenohHostTest {
         check(!carrier.disconnect(), "second disconnect is rejected")
         check(!carrier.connect(deadlineMS: 5_000), "reconnect after close is rejected")
         check(!carrier.waitForReconnect(deadlineMS: 100), "reconnect after close is rejected")
+    }
+
+    // MARK: - Key-expression grammar
+
+    /// Keys the router cannot parse are refused on the device. `zenohd` 1.10.0
+    /// panics and exits on a declaration containing `#`, so this is the only
+    /// place the mistake can be caught before it takes the router down.
+    static func keyExpressionGrammar() {
+        func subscription(_ key: String) -> Bool {
+            Array(key.utf8).withUnsafeBytes { ZenohKeyExpression.isValidSubscription($0) }
+        }
+        func publication(_ key: String) -> Bool {
+            Array(key.utf8).withUnsafeBytes { ZenohKeyExpression.isValidPublication($0) }
+        }
+        for key in [
+            "axoloty/1/ns/ADV/source", "axoloty/1/axoloty-embedded/*/*", "a/**", "a/*/b",
+            "a/b$*", "a/$*b", "a/b$*c", "**", "*",
+        ] {
+            check(subscription(key), "valid subscription \(key)")
+        }
+        for key in [
+            "", "/", "a/", "/a", "a//b", "a/#", "#", "a/b#", "a/?", "a?b", "a*b", "a/**b",
+            "a/b**", "a/$", "a/$x", "a/b$*$*", "a/***",
+        ] {
+            check(!subscription(key), "invalid subscription \(key)")
+        }
+        for key in ["axoloty/1/ns/ADV/source", "a/b", "a"] {
+            check(publication(key), "valid publication \(key)")
+        }
+        for key in ["a/*", "a/**", "a/b$*", "a/#", "a//b", ""] {
+            check(!publication(key), "invalid publication \(key)")
+        }
     }
 
     // MARK: - Application partial profile-interest install

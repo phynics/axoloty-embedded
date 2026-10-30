@@ -157,6 +157,75 @@ private func noteSubscriptionFailure() {
 ///
 /// Carrier outcomes update the fixed C counter set. Readers can take atomic
 /// per-field snapshots without changing this value's lifecycle ownership.
+/// Key-expression grammar the router enforces.
+///
+/// A router that is asked to declare a key it cannot parse does not refuse the
+/// declaration: `zenohd` 1.10.0 panics and exits, taking every other session
+/// with it. The carrier therefore rejects such a key before it leaves the
+/// device. The rules follow the key-expression grammar:
+/// - no empty chunk, and no leading or trailing separator;
+/// - `#` and `?` are forbidden everywhere;
+/// - `*` and `**` are wildcards only as a whole chunk, and `$*` is the only
+///   in-chunk wildcard; a `$` must be followed by `*`, and `$*` may not repeat
+///   back to back.
+/// A published key additionally carries no wildcard at all.
+enum ZenohKeyExpression {
+    /// Whether `key` can be declared as a subscription.
+    static func isValidSubscription(_ key: UnsafeRawBufferPointer) -> Bool {
+        isValid(key, allowWildcards: true)
+    }
+
+    /// Whether `key` can be published to: valid, and wildcard free.
+    static func isValidPublication(_ key: UnsafeRawBufferPointer) -> Bool {
+        isValid(key, allowWildcards: false)
+    }
+
+    private static func isValid(_ key: UnsafeRawBufferPointer, allowWildcards: Bool) -> Bool {
+        let count = key.count
+        guard count > 0 else { return false }
+        var chunkStart = 0
+        var index = 0
+        while index <= count {
+            // The end of the key closes the last chunk like a separator does.
+            if index == count || key[index] == 0x2F {
+                let length = index - chunkStart
+                guard length > 0,
+                      chunkIsValid(key, start: chunkStart, length: length, allowWildcards: allowWildcards)
+                else { return false }
+                chunkStart = index + 1
+            }
+            index += 1
+        }
+        return true
+    }
+
+    private static func chunkIsValid(
+        _ key: UnsafeRawBufferPointer, start: Int, length: Int, allowWildcards: Bool
+    ) -> Bool {
+        if length == 1 && key[start] == 0x2A { return allowWildcards }
+        if length == 2 && key[start] == 0x2A && key[start + 1] == 0x2A { return allowWildcards }
+        var index = 0
+        var previousWasPair = false
+        while index < length {
+            switch key[start + index] {
+            case 0x23, 0x3F, 0x2A:
+                // `#`, `?`, and a `*` that is not the whole chunk or part of `$*`.
+                return false
+            case 0x24:
+                guard allowWildcards, index + 1 < length, key[start + index + 1] == 0x2A,
+                      !previousWasPair else { return false }
+                previousWasPair = true
+                index += 2
+                continue
+            default:
+                previousWasPair = false
+            }
+            index += 1
+        }
+        return true
+    }
+}
+
 struct ZenohCarrier: ~Copyable {
     /// The facade's fixed per-session subscription capacity.
     static let maximumSubscriptions = 8
@@ -351,6 +420,10 @@ struct ZenohCarrier: ~Copyable {
         }
         let subscribed = topic.withUnsafeBytes { raw -> Bool in
             guard let base = raw.baseAddress else { return false }
+            guard ZenohKeyExpression.isValidSubscription(raw) else {
+                noteSubscriptionFailure()
+                return false
+            }
             if findSlot(keyBytes: base, keyLength: topic.count) != nil { return true }
             guard let free = findFreeSlot() else {
                 noteSubscriptionFailure()
@@ -425,6 +498,10 @@ struct ZenohCarrier: ~Copyable {
         }
         return topic.withUnsafeBytes { topicRaw in
             guard let topicBase = topicRaw.baseAddress else {
+                notePublishRefusedLocally()
+                return false
+            }
+            guard ZenohKeyExpression.isValidPublication(topicRaw) else {
                 notePublishRefusedLocally()
                 return false
             }
