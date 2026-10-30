@@ -4,6 +4,7 @@
 // selected transport.
 
 #include "esp_event.h"
+#include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
@@ -110,6 +111,12 @@ unsigned int axoloty_network_prepare(unsigned int overall_deadline_ms) {
     network_netif = esp_netif_create_default_wifi_sta();
     if (!network_netif) goto network_prepare_failed;
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
+    // The Wi-Fi driver logs warnings from its own task at arbitrary moments
+    // (block-ack negotiation, for one). They share the UART with the
+    // structured smoke records, which are written in fragments, so a warning
+    // can land inside a record and corrupt it. Keep driver errors, drop the
+    // asynchronous warnings and info.
+    esp_log_level_set("wifi", ESP_LOG_ERROR);
     if (esp_wifi_init(&init) != ESP_OK) goto network_prepare_failed;
     network_wifi_initialized = 1;
     if (esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, network_wifi_event, NULL) != ESP_OK) {

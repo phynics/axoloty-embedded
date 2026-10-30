@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { checksum } from "../../Platforms/esp32c6-idf/tools/validate-smoke.mjs";
+import { checksum, expectedCborRunId } from "../../Platforms/esp32c6-idf/tools/validate-smoke.mjs";
 import { createEmbeddedAgentValidator } from "./agent-validator.mjs";
 import {
   createEmbeddedZenohNetworkValidator,
@@ -37,7 +37,7 @@ const createStream = (statuses, counts) => {
   const append = (caseId, operation, stage, status, recordCounts) => {
     const record = {
       schemaVersion: 2,
-      runId: "embedded-swift-smoke-v2",
+      runId: expectedCborRunId,
       sequence,
       caseId,
       operation,
@@ -58,7 +58,7 @@ const createStream = (statuses, counts) => {
   append("summary", "summary", "summary", "completed", counts);
   const completion = {
     schemaVersion: 2,
-    runId: "embedded-swift-smoke-v2",
+    runId: expectedCborRunId,
     sequence,
     caseId: "completion",
     operation: "complete",

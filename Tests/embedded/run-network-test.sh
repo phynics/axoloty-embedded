@@ -85,7 +85,13 @@ if [ "$build_status" -ne 0 ]; then
     exit "$build_status"
 fi
 
-AXOLOTY_CORPUS_MANIFEST="$corpus_manifest" \
+# The profile's transport declares the wire profile, which selects the smoke
+# protocol the flash step validates and records.
+transport=$(node -e 'const p = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(p.transport);' \
+    "$repo_root/Profiles/$profile/profile.json")
+
+AXOLOTY_TRANSPORT_DIR="$repo_root/Transports/$transport" \
+    AXOLOTY_CORPUS_MANIFEST="$corpus_manifest" \
     EMBEDDED_VALIDATOR="$script_dir/network-validator.mjs" \
     EMBEDDED_VALIDATOR_FACTORY="$validator_factory" \
     AXOLOTY_DEVICE_PORT="$AXOLOTY_DEVICE_PORT" \

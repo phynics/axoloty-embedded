@@ -6,6 +6,8 @@
 
 import {
   createEmbeddedSwiftSmokeValidator,
+  expectedCborRunId,
+  expectedCborSmokeTests,
   expectedEmbeddedSwiftTests,
 } from "../../Platforms/esp32c6-idf/tools/validate-smoke.mjs";
 
@@ -35,8 +37,12 @@ export function createEmbeddedNetworkValidator() {
 // unsupported capabilities instead of the MQTT will/connect/receive cases.
 // The strict validator accepts `unsupported` only for these two declared
 // case IDs, and their count is separate from passed checks in the summary.
+//
+// A Zenoh image carries only the `axoloty/1` CBOR profile and links no JSON
+// parser, so its stream is smoke protocol v3: the CBOR smoke set plus these
+// carrier records, under the v3 run id.
 export const expectedZenohNetworkTests = new Set([
-  ...expectedEmbeddedSwiftTests,
+  ...expectedCborSmokeTests,
   "network:wifi",
   "network:ip",
   "network:zenohConnect",
@@ -55,5 +61,5 @@ export function createEmbeddedZenohNetworkValidator() {
   return createEmbeddedSwiftSmokeValidator(expectedZenohNetworkTests, new Set([
     "network:lastWillUnsupported",
     "network:receiveUnsupported",
-  ]));
+  ]), expectedCborRunId);
 }
