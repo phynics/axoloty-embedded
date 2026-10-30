@@ -63,6 +63,7 @@ enum {
 typedef struct {
     uint32_t generation;
     uint32_t depth;
+    uint32_t dropped;
     uint32_t key_length;
     uint32_t payload_length;
     uint8_t key[AXOLOTY_ZENOH_MAX_KEY_BYTES];
@@ -168,7 +169,13 @@ static int decode_subscription(const axoloty_zenoh_session_t *session,
 
 static void host_zenoh_push(HostSubscription *subscription, const void *key, uint32_t key_length,
                             const void *payload, uint32_t payload_length) {
-    if (subscription->depth >= HOST_QUEUE_CAPACITY) return;
+    // Like the production queue: a full queue refuses the newest frame, counts
+    // it, and owes the next drained poll one coalesced notification.
+    if (subscription->depth >= HOST_QUEUE_CAPACITY) {
+        subscription->dropped += 1;
+        host_failures |= REPORT_QUEUE_FULL;
+        return;
+    }
     memcpy(subscription->key, key, key_length);
     if (payload_length > 0) memcpy(subscription->payload, payload, payload_length);
     subscription->key_length = key_length;
@@ -391,7 +398,7 @@ axoloty_zenoh_result_t axoloty_zenoh_dropped_frame_count(const axoloty_zenoh_ses
     uint32_t generation = 0;
     int index = decode_subscription(session, subscription, &generation);
     if (index < 0) return AXOLOTY_ZENOH_INVALID_ARGUMENT;
-    *out_count = 0;
+    *out_count = host_subscriptions[session_index][index].dropped;
     return AXOLOTY_ZENOH_OK;
 }
 

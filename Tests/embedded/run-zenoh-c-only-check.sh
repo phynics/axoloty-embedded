@@ -131,6 +131,20 @@ if [ -n "${AXOLOTY_KEEP_STREAM:-}" ]; then
     cp "$stream" "$AXOLOTY_KEEP_STREAM"
 fi
 
+# The same scenario with frames in flight, as they are on a real link. This is
+# the only host coverage of a step that reads the queue before its frames land.
+staggered_stream=$tmp/scenario-staggered.jsonl
+if ! AXOLOTY_SCENARIO_DELIVERY=staggered "$tmp/zenoh-c-only-runner" > "$staggered_stream"; then
+    echo "C-only carrier scenario check: the scenario failed with frames in flight" >&2
+    cat "$staggered_stream" >&2
+    exit 1
+fi
+node "$script_dir/validate-carrier-runner.mjs" "$staggered_stream" > "$tmp/staggered-validation.json" || {
+    echo "C-only carrier scenario check: the staggered scenario stream did not validate" >&2
+    cat "$staggered_stream" >&2
+    exit 1
+}
+
 node "$script_dir/validate-carrier-runner.mjs" "$stream" > "$tmp/validation.json" || {
     echo "C-only carrier scenario check: the scenario stream did not validate" >&2
     cat "$stream" >&2

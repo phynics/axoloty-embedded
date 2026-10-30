@@ -66,12 +66,6 @@ typedef struct {
     /// operator action, not a carrier mechanic.
     bool (*set_router_available)(bool available, void *context);
 
-    /// Arms the next full-queue notification so the drain observes one.
-    ///
-    /// A host fake drops silently; a real router reports the drop. The host
-    /// supplies this to exercise the same received-drop path. A device leaves
-    /// it `NULL`.
-    void (*arm_queue_full_notification)(void *context);
 
     /// Reads one resource metric into `out_value`, returning false when the
     /// environment cannot answer. A host returns false for every metric.
