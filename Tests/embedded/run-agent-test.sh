@@ -21,14 +21,30 @@ script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH='' cd -- "$script_dir/../.." && pwd)
 device_runner_name=run-agent-test
 . "$script_dir/device-common.sh"
-profile=esp32c6-mqtt
+# The profile's transport carries one wire profile; a Zenoh image is CBOR-only
+# and its exchange is smoke protocol v3.
+profile=${AXOLOTY_NETWORK_PROFILE:-esp32c6-mqtt}
+case "$profile" in
+    esp32c6-mqtt)
+        agent_validator_factory=createEmbeddedAgentValidator
+        agent_cases="deterministic exchange cases over serial JSON Lines"
+        ;;
+    esp32c6-zenoh)
+        agent_validator_factory=createEmbeddedCborAgentValidator
+        agent_cases="deterministic axoloty/1 CBOR exchange cases over serial JSON Lines"
+        ;;
+    *)
+        echo "run-agent-test: unsupported AXOLOTY_NETWORK_PROFILE: $profile" >&2
+        exit 64
+        ;;
+esac
 
 if [ -z "${AXOLOTY_DEVICE_PORT:-}" ] || [ -z "${EMBEDDED_DEVICE_B:-}" ]; then
     echo "run-agent-test: AXOLOTY_DEVICE_PORT and EMBEDDED_DEVICE_B must name two boards" >&2
     exit 69
 fi
-require_network_env
-require_broker_reachable
+require_network_env "$profile"
+require_broker_reachable "$profile"
 
 device_a=$AXOLOTY_DEVICE_PORT
 device_b=$EMBEDDED_DEVICE_B
@@ -46,8 +62,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-AXOLOTY_DEVICE_ROLE=A node "$script_dir/generate-network-config.mjs" "$config_a"
-AXOLOTY_DEVICE_ROLE=B node "$script_dir/generate-network-config.mjs" "$config_b"
+AXOLOTY_NETWORK_PROFILE="$profile" AXOLOTY_DEVICE_ROLE=A node "$script_dir/generate-network-config.mjs" "$config_a"
+AXOLOTY_NETWORK_PROFILE="$profile" AXOLOTY_DEVICE_ROLE=B node "$script_dir/generate-network-config.mjs" "$config_b"
 
 # A failed build must not leave the previous run's `passed` result in place.
 clear_run_results "$root_a/working-evidence"
@@ -91,6 +107,8 @@ SERIAL_TOOLS="$script_dir/serial-tools.mjs" \
 ESPTOOL_TOOLS="$script_dir/esptool-tools.mjs" \
 AXOLOTY_CORPUS_MANIFEST="$repo_root/Applications/device-smoke-agent/fixtures/manifest.json" \
 AGENT_VALIDATOR="$script_dir/agent-validator.mjs" \
+AGENT_VALIDATOR_FACTORY="$agent_validator_factory" \
+AGENT_CASES="$agent_cases" \
 EVIDENCE_WRITER="$script_dir/write-device-evidence.mjs" \
 ESPTOOL="$esptool" \
 PROFILE_NAME="$profile" \
@@ -100,7 +118,11 @@ import fs from "node:fs";
 import path from "node:path";
 
 const { captureSerial, drainSerial } = await import(process.env.SERIAL_TOOLS);
-const { createEmbeddedAgentValidator } = await import(process.env.AGENT_VALIDATOR);
+const validatorModule = await import(process.env.AGENT_VALIDATOR);
+const createEmbeddedAgentValidator = validatorModule[process.env.AGENT_VALIDATOR_FACTORY];
+if (typeof createEmbeddedAgentValidator !== "function") {
+  throw new Error(`validator module does not export ${process.env.AGENT_VALIDATOR_FACTORY}`);
+}
 const { writePassedDeviceEvidence } = await import(process.env.EVIDENCE_WRITER);
 const { flashFirmware, runFirmware } = await import(process.env.ESPTOOL_TOOLS);
 
@@ -157,7 +179,7 @@ for (const result of results) {
     validation: result.validation,
     profile: process.env.PROFILE_NAME,
     check: "agent-test",
-    cases: "deterministic exchange cases over serial JSON Lines",
+    cases: process.env.AGENT_CASES,
     output: path.join(process.env.EVIDENCE_DIR, `${process.env.PROFILE_NAME}-agent-test-${result.role}.json`),
   });
 }
