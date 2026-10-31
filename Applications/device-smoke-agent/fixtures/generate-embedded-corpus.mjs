@@ -465,7 +465,8 @@ private func corpusLoadHex(_ hex: StaticString, at offset: Int) -> Bool {
 private func withCorpusReader<R>(
     _ offset: Int, _ length: Int, _ body: (WireReader) -> R
 ) -> R {
-    withUnsafeBytes(of: &embeddedCorpusCBOR) { raw in
+    // The mutable form borrows the storage in place; the read-only form copies it.
+    withUnsafeMutableBytes(of: &embeddedCorpusCBOR) { raw in
         body(WireCodec(profile: .axoloty1CBOR).reader(
             bytes: raw.baseAddress!.assumingMemoryBound(to: UInt8.self) + offset, length: length
         ))
