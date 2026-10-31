@@ -217,6 +217,7 @@ if (fs.existsSync(evidenceDir)) {
     if (record.status === "passed" || record.status === "failed") {
       entry.coreRevision = record.coreRevision ?? null;
       entry.firmwareSHA256 = record.firmwareSHA256 ?? null;
+      entry.device = record.device ?? null;
     } else {
       entry.reason = record.reason ?? null;
     }
@@ -224,13 +225,37 @@ if (fs.existsSync(evidenceDir)) {
   }
 }
 // docs/evidence.md: a build or component record proves the artifact compiles,
-// not that the profile works. Only a device record, whose tier defaults to
-// "device" when absent, may carry the compatibility claim.
-const qualified = evidence.some(entry =>
-  (entry.tier === "device" || entry.tier === null) &&
-  entry.status === "passed" &&
-  entry.coreRevision === preparation.core.sha &&
-  entry.firmwareSHA256 === provenance.artifact.sha256);
+// not that the profile works. A certificate needs every check the profile
+// declares, so one passed device record cannot stand in for the others. A failed
+// or unexecuted record for a required check blocks it even beside a passed one.
+const requiredChecks = profile.qualification?.requiredChecks;
+if (!Array.isArray(requiredChecks) || requiredChecks.length === 0) {
+  throw new Error(`profile ${profile.name} declares no qualification.requiredChecks; refusing to guess what certifies it`);
+}
+const outstanding = [];
+for (const required of requiredChecks) {
+  if (typeof required.check !== "string" || !["release", "variant"].includes(required.artifact) ||
+      !Number.isInteger(required.units) || required.units < 1) {
+    throw new Error(`profile ${profile.name} declares a malformed required check: ${JSON.stringify(required)}`);
+  }
+  const records = evidence.filter(entry => entry.check === required.check);
+  const accepted = records.filter(entry =>
+    (entry.tier === "device" || entry.tier === null) &&
+    entry.status === "passed" &&
+    entry.coreRevision === preparation.core.sha &&
+    (required.artifact === "release"
+      ? entry.firmwareSHA256 === provenance.artifact.sha256
+      : /^[0-9a-f]{64}$/.test(entry.firmwareSHA256 ?? "")));
+  const units = new Set(accepted.map(entry => entry.device).filter(Boolean)).size;
+  if (records.length === 0) {
+    outstanding.push(`${required.check} has no record`);
+  } else if (accepted.length !== records.length) {
+    outstanding.push(`${required.check} has a record that did not pass for this build`);
+  } else if (units < required.units) {
+    outstanding.push(`${required.check} ran on ${units} of ${required.units} required units`);
+  }
+}
+const qualified = outstanding.length === 0;
 
 // --- Resource evidence: only when a size report exists.
 const sizeReportPath = path.join(path.dirname(provenance.artifact.path), "size.json");
@@ -245,10 +270,10 @@ const compatibilityDescription = preview
   ? `Preview build of profile ${profile.name} against Axoloty candidate ${shortSha}; this is not a compatibility claim.`
   : qualified
     ? `Profile ${profile.name} is qualified against Axoloty ${axolotyVersion} (${shortSha}) on ${profile.board}.`
-    : `Profile ${profile.name} is built against Axoloty ${axolotyVersion} (${shortSha}) but is not qualified; no passed device evidence matches this artifact (${provenance.artifact.sha256.slice(0, 12)}).`;
+    : `Profile ${profile.name} is built against Axoloty ${axolotyVersion} (${shortSha}) but is not qualified for artifact ${provenance.artifact.sha256.slice(0, 12)}: ${outstanding.join("; ")}.`;
 
 const manifest = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   mode: preview ? "preview" : "release",
   profile: profile.name,
   application: profile.application,
@@ -293,6 +318,8 @@ const manifest = {
   resources,
   qualification: {
     status: qualified ? "qualified" : "unqualified",
+    requiredChecks,
+    outstanding,
     evidence,
   },
 };

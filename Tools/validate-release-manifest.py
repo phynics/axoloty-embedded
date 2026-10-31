@@ -202,6 +202,36 @@ def validate_evidence(record, path):
     return problems
 
 
+def required_check_problems(required_checks, entries, core_sha, image_sha):
+    """Return why the cited evidence does not satisfy the required checks."""
+    if not isinstance(required_checks, list) or not required_checks:
+        return ["qualification.requiredChecks must name at least one check"]
+    problems = []
+    for required in required_checks:
+        check = required.get("check") if isinstance(required, dict) else None
+        artifact = required.get("artifact") if isinstance(required, dict) else None
+        units = required.get("units") if isinstance(required, dict) else None
+        if (not is_nonempty_string(check) or artifact not in {"release", "variant"}
+                or not isinstance(units, int) or isinstance(units, bool) or units < 1):
+            problems.append("malformed required check: %r" % (required,))
+            continue
+        records = [entry for entry in entries if isinstance(entry, dict) and entry.get("check") == check]
+        accepted = [entry for entry in records
+                    if entry.get("tier") in {"device", None}
+                    and entry.get("status") == "passed"
+                    and entry.get("coreRevision") == core_sha
+                    and (entry.get("firmwareSHA256") == image_sha if artifact == "release"
+                         else HEX64.fullmatch(str(entry.get("firmwareSHA256", ""))))]
+        observed = {entry.get("device") for entry in accepted if is_nonempty_string(entry.get("device"))}
+        if not records:
+            problems.append("required check %s has no record" % check)
+        elif len(accepted) != len(records):
+            problems.append("required check %s has a record that did not pass for this build" % check)
+        elif len(observed) < units:
+            problems.append("required check %s ran on %d of %d required units" % (check, len(observed), units))
+    return problems
+
+
 def validate(repo_root, manifest_path, require_qualified, allow_revoked):
     repo_root = os.path.abspath(repo_root)
     manifest_path = os.path.abspath(manifest_path)
@@ -217,8 +247,10 @@ def validate(repo_root, manifest_path, require_qualified, allow_revoked):
     problems = []
     problems.extend(revocation_problems)
 
-    if manifest.get("schemaVersion") != 1:
-        problems.append("schemaVersion must be 1, found %r" % manifest.get("schemaVersion"))
+    # Schema 1 predates required checks. It stays readable so that a published
+    # certificate remains valid; the writer only produces schema 2.
+    if manifest.get("schemaVersion") not in {1, 2}:
+        problems.append("schemaVersion must be 1 or 2, found %r" % manifest.get("schemaVersion"))
     mode = manifest.get("mode")
     if mode not in {"release", "preview"}:
         problems.append("mode must be release or preview, found %r" % mode)
@@ -415,6 +447,10 @@ def validate(repo_root, manifest_path, require_qualified, allow_revoked):
             matching += 1
     if status == "qualified" and matching == 0:
         problems.append("a qualified manifest needs a passed evidence record for this Core revision and image checksum")
+    if manifest.get("schemaVersion") == 2:
+        outstanding = required_check_problems(qualification.get("requiredChecks"), entries, axoloty_sha, image_sha)
+        if status == "qualified":
+            problems.extend(outstanding)
     if require_qualified and status != "qualified":
         problems.append("this manifest is not qualified; a published release must be")
     if revocation is not None and not allow_revoked:

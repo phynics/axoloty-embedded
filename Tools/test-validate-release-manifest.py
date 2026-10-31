@@ -220,7 +220,27 @@ with tempfile.TemporaryDirectory() as temporary:
         (lambda d: d["transport"].pop("revision"),
          "MQTT manifest omitted the backend revision field"),
     ], "MQTT")
+    # Schema 2: a qualified manifest must satisfy every check it requires, so a
+    # hand-edited status cannot cite one passed record for the whole profile.
     document = json.loads(manifest.read_text(encoding="utf-8"))
+    schema_two = copy.deepcopy(document)
+    schema_two["schemaVersion"] = 2
+    schema_two["qualification"]["evidence"][0].update({"tier": "device", "device": "unit-a"})
+    schema_two["qualification"]["requiredChecks"] = [{"check": "smoke", "artifact": "release", "units": 1}]
+    write_json(manifest, schema_two)
+    require(run(repo, manifest, "--require-qualified"), 0, "a complete schema 2 manifest was rejected")
+    for label, requirement in (
+            ("a missing required check", {"check": "router-restart", "artifact": "variant", "units": 1}),
+            ("too few units", {"check": "smoke", "artifact": "release", "units": 2})):
+        incomplete = copy.deepcopy(schema_two)
+        incomplete["qualification"]["requiredChecks"] = [requirement]
+        write_json(manifest, incomplete)
+        require(run(repo, manifest, "--require-qualified"), 1, "a qualified manifest accepted %s" % label)
+    no_requirements = copy.deepcopy(schema_two)
+    no_requirements["qualification"].pop("requiredChecks")
+    write_json(manifest, no_requirements)
+    require(run(repo, manifest, "--require-qualified"), 1, "a schema 2 manifest with no required checks was accepted")
+    write_json(manifest, document)
     revocation = repo / "releases" / "revocations" / "esp32c6-mqtt" / (VERSION + ".json")
     write_json(revocation, {
         "schemaVersion": 1,

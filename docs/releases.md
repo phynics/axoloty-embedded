@@ -81,13 +81,13 @@ historical certificate as a current qualification claim.
 
 ## Manifest schema
 
-The format is a versioned JSON document with `schemaVersion: 1`, following
+The format is a versioned JSON document with `schemaVersion: 2`, following
 [`axoloty-core.lock.json`](../axoloty-core.lock.json) and the evidence records
 in [docs/evidence.md](./evidence.md).
 
 | Field | Meaning | Where the build gets it |
 |---|---|---|
-| `schemaVersion` | `1` | format |
+| `schemaVersion` | `2`; a published schema `1` certificate stays readable | format |
 | `mode` | `release` or `preview` | the preview environment variable |
 | `profile` | Profile name | `Profiles/<name>/profile.json` |
 | `application` | Application axis | profile |
@@ -119,7 +119,24 @@ in [docs/evidence.md](./evidence.md).
 | `image.byteCount` | Artifact size | build provenance |
 | `resources` | Size report when one exists, else `null` | optional `size.json` beside the artifact |
 | `qualification.status` | `qualified` or `unqualified` | computed from evidence |
+| `qualification.requiredChecks` | Checks this profile must pass | `qualification.requiredChecks` in the profile |
+| `qualification.outstanding` | Why each unsatisfied check blocks the certificate | computed from evidence |
 | `qualification.evidence` | Cited evidence records | every `docs/evidence/` record for the profile |
+
+A profile is qualified only when every required check is satisfied. Each entry
+in `qualification.requiredChecks` names a `check`, an `artifact`, and `units`:
+
+- `artifact: release` means the record must name the exact image being released.
+- `artifact: variant` means the check ran on its own image, because that image
+  embeds network configuration or a role. The record must name that image's
+  checksum and the locked Core revision. Nothing ties a variant image to the
+  firmware commit being released, so rerun variant checks after a firmware
+  change that can affect them.
+- `units` is the number of distinct boards the passed records must name.
+
+A required check with no record, or with any record that is failed, unexecuted,
+or from another Core revision, blocks the certificate. `Tools/release.sh`
+refuses to publish an unqualified manifest.
 
 The `board` field is the declared target board. The qualification evidence
 names the unit that was actually used. A certificate carries both.
