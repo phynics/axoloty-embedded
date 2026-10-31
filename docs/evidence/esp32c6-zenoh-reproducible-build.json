@@ -3,7 +3,14 @@
   "profile": "esp32c6-zenoh",
   "check": "reproducible-build",
   "tier": "build",
-  "status": "unexecuted",
-  "recordedAt": "2026-10-29",
-  "reason": "The lock moved from Core v0.9.0 (f8c201f717e8) to Core v0.10.0 (087bd9bb1bfb563d0347799245ea4dd43e509bc9); this check has not been rerun against the new lock. The previous passing record is in git history."
+  "status": "passed",
+  "recordedAt": "2026-10-31",
+  "firmwareRevision": "eb510a3d2ae5f8040386fde378f7af02994cf997",
+  "firmwareSHA256": "e51713f2042a0ad1dc29b3cb2d1ce7ed9f1c8644c6b1529a982197390c3a58fc",
+  "firmwareSizeBytes": 633088,
+  "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+  "toolchain": "axoloty-embedded-dev image sha256:9006ed8fa42927aa468ff206a8f4ad3149a2994cb327307ee7752e96ac2bbda2; Swift version 6.4 (swift-6.4-RELEASE)\nTarget: x86_64-unknown-linux-gnu; ESP-IDF v5.4",
+  "result": "Two clean unconfigured Zenoh builds in disjoint proof roots produced identical images. This is not a claim that configured device-test images have the same checksum.",
+  "rebuilds": 2,
+  "allBuildsIdentical": true
 }
