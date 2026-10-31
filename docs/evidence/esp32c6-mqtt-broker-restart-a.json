@@ -4,9 +4,9 @@
   "check": "broker-restart",
   "tier": "device",
   "status": "passed",
-  "recordedAt": "2026-10-29",
+  "recordedAt": "2026-10-31",
   "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
-  "firmwareSHA256": "344bdc1768997d067e4027b1ddcdb59b5085efd68ddbde9027b3b48043adf1ab",
+  "firmwareSHA256": "aff005dc541498b9d3c18b807aa7dc2187fc8b339af0a37fccf834b0bee64b8f",
   "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
   "protocol": "11 deterministic broker-restart cases over serial JSON Lines",
   "result": "11/11 passed"
