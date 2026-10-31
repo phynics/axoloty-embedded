@@ -191,6 +191,28 @@ with tempfile.TemporaryDirectory() as temporary:
     write_json(evidence_record, build_record)
     require(run(repo, manifest, "--require-qualified"), 0,
             "restoring the device record did not re-qualify the manifest")
+    # A build-size report is evidence about this image: a failed budget or a
+    # report for another image's byte count must not ride into a certificate.
+    original = json.loads(manifest.read_text(encoding="utf-8"))
+    for status, expected in (("passed", 0), ("not-applicable", 0), ("not-configured", 0), ("failed", 1)):
+        with_report = copy.deepcopy(original)
+        with_report["resources"] = {"available": True, "report": {
+            "kind": "build-size",
+            "image": {"bytes": original["image"]["byteCount"]},
+            "enforcement": {"status": status},
+        }}
+        write_json(manifest, with_report)
+        require(run(repo, manifest, "--require-qualified"), expected,
+                "a build-size report with status %s gave the wrong verdict" % status)
+    wrong_image = copy.deepcopy(original)
+    wrong_image["resources"] = {"available": True, "report": {
+        "kind": "build-size",
+        "image": {"bytes": original["image"]["byteCount"] + 1},
+        "enforcement": {"status": "passed"},
+    }}
+    write_json(manifest, wrong_image)
+    require(run(repo, manifest, "--require-qualified"), 1, "a build-size report for another image was accepted")
+    write_json(manifest, original)
     document = json.loads(manifest.read_text(encoding="utf-8"))
     document["embedded"]["dirty"] = True
     write_json(manifest, document)
