@@ -4,9 +4,9 @@
   "check": "last-will",
   "tier": "device",
   "status": "passed",
-  "recordedAt": "2026-10-29",
+  "recordedAt": "2026-10-31",
   "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8",
-  "firmwareSHA256": "e1a424719186434163ea740a64ab0285053b082d27e18c2b2780ebb3ffef65c5",
+  "firmwareSHA256": "fe4329b1e1818e0ce8e206c50a5e1002d18a82d43597f39c1d99d284f54a56c8",
   "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
   "protocol": "8 deterministic last-will cases over serial JSON Lines",
   "result": "8/8 passed"
