@@ -4,9 +4,9 @@
   "check": "agent-test",
   "tier": "device",
   "status": "passed",
-  "recordedAt": "2026-10-30",
+  "recordedAt": "2026-10-31",
   "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
-  "firmwareSHA256": "41cbddef478ff794e942fef4eeeb72e25f85c400de4156d1f2912cfd8c4485c4",
+  "firmwareSHA256": "7ac1f8c0204529b4a210e95ca209ece3732535d464fdad9942e7d348c7235c7f",
   "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
   "protocol": "10 deterministic axoloty/1 CBOR exchange cases over serial JSON Lines",
   "result": "10/10 passed"
