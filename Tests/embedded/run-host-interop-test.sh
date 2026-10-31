@@ -8,15 +8,20 @@
 # Role A means the device advertises and answers a host Discover; role B means
 # the device discovers and answers a host Advertise.
 #
-# The host peer is built by SwiftPM from the pinned Core revision in
-# axoloty-core.lock.json. Nothing is read from a sibling Core checkout or from
-# Core's tests, and this repository vendors no Core source.
+# On MQTT, SwiftPM builds the host peer from the pinned Core revision in
+# axoloty-core.lock.json, and nothing is read from a sibling Core checkout. On
+# Zenoh, AxolotyZenoh is a subdirectory package SwiftPM cannot resolve from a URL,
+# so the peer builds from the checkout the Core preparation report names, which
+# must be clean and at the locked revision. This repository vendors no Core source.
 #
 # Environment:
 #   AXOLOTY_DEVICE_PORT    required; the board, never guessed.
+#   AXOLOTY_NETWORK_PROFILE optional; esp32c6-mqtt (default) or esp32c6-zenoh.
 #   EMBEDDED_HOST_ROLE     optional; A (default) or B.
-#   AXOLOTY_WIFI_SSID / AXOLOTY_WIFI_PASSWORD / AXOLOTY_MQTT_HOST  required.
-#   AXOLOTY_MQTT_PORT / AXOLOTY_SCRATCH / AXOLOTY_PROOF_RUN_ID  passed through.
+#   AXOLOTY_WIFI_SSID / AXOLOTY_WIFI_PASSWORD  required.
+#   AXOLOTY_MQTT_HOST      required on MQTT; AXOLOTY_ZENOH_HOST required on Zenoh.
+#   AXOLOTY_MQTT_PORT / AXOLOTY_ZENOH_PORT / AXOLOTY_SCRATCH / AXOLOTY_PROOF_RUN_ID
+#                          passed through.
 #   EMBEDDED_HOST_BUILD_DEADLINE  optional; host-ready wait in ms, 900000.
 #   EMBEDDED_HOST_DEADLINE        optional; serial capture seconds, 240.
 #
@@ -28,7 +33,21 @@ script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH='' cd -- "$script_dir/../.." && pwd)
 device_runner_name=run-host-interop-test
 . "$script_dir/device-common.sh"
-profile=esp32c6-mqtt
+profile=${AXOLOTY_NETWORK_PROFILE:-esp32c6-mqtt}
+case "$profile" in
+    esp32c6-mqtt)
+        agent_validator_factory=createEmbeddedAgentValidator
+        host_cases="deterministic exchange cases against the Axoloty host runtime"
+        ;;
+    esp32c6-zenoh)
+        agent_validator_factory=createEmbeddedCborAgentValidator
+        host_cases="deterministic axoloty/1 CBOR exchange cases against the Axoloty host runtime over AxolotyZenoh"
+        ;;
+    *)
+        echo "run-host-interop-test: unsupported AXOLOTY_NETWORK_PROFILE: $profile" >&2
+        exit 64
+        ;;
+esac
 
 role=${EMBEDDED_HOST_ROLE:-A}
 case "$role" in
@@ -44,8 +63,8 @@ if [ -z "${AXOLOTY_DEVICE_PORT:-}" ]; then
     echo "run-host-interop-test: AXOLOTY_DEVICE_PORT must name a board" >&2
     exit 69
 fi
-require_network_env
-require_broker_reachable
+require_network_env "$profile"
+require_broker_reachable "$profile"
 if ! command -v swift >/dev/null 2>&1; then
     echo "run-host-interop-test: swift is required to build the host peer" >&2
     exit 69
@@ -54,7 +73,6 @@ fi
     echo "run-host-interop-test: the host peer manifest is missing at $repo_root/Package.swift" >&2
     exit 69
 }
-
 device=$AXOLOTY_DEVICE_PORT
 scratch=${AXOLOTY_SCRATCH:-"$repo_root/.axoloty"}
 proof_run_id=${AXOLOTY_PROOF_RUN_ID:-host-interop}
@@ -92,8 +110,33 @@ if [ "$build_status" -ne 0 ]; then
 fi
 
 echo "== build host peer =="
-swift build --package-path "$repo_root" --scratch-path "$swift_build" -c debug
-host_peer="$swift_build/debug/EmbeddedHostPeer"
+if [ "$profile" = esp32c6-zenoh ]; then
+    report="$scratch/core-preparation.json"
+    # The report the firmware build just wrote names the checkout. It is the
+    # supported channel for Core paths, and it records revision and cleanliness.
+    # shellcheck disable=SC2016
+    if ! zenoh_package=$(LOCK="$repo_root/axoloty-core.lock.json" node -e '
+const report = require(process.argv[1]);
+const locked = require(process.env.LOCK).core.revision;
+if (report.core.sha !== locked || report.core.dirty !== false) process.exit(1);
+process.stdout.write(require("path").resolve(report.zenohCore.sourceDir, "../.."));
+' "$report"); then
+        echo "run-host-interop-test: the Core preparation report is not a clean checkout at the locked revision" >&2
+        exit 69
+    fi
+    core_dir=$(node -p 'require(process.argv[1]).core.sourceDir' "$report")
+    zenoh_c=$("$script_dir/provision-zenoh-c.sh" "$scratch/zenoh-host")
+    swift_build="$scratch/zenoh-host-peer-swift-build"
+    AXOLOTY_SOURCE_DIR="$core_dir" AXOLOTY_ZENOH_PACKAGE_DIR="$zenoh_package" \
+    PKG_CONFIG_PATH="$zenoh_c/lib/pkgconfig" \
+        swift build --package-path "$repo_root/Tests/zenoh-host-peer" --scratch-path "$swift_build" -c debug
+    host_peer="$swift_build/debug/ZenohHostPeer"
+    LD_LIBRARY_PATH="$zenoh_c/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export LD_LIBRARY_PATH
+else
+    swift build --package-path "$repo_root" --scratch-path "$swift_build" -c debug
+    host_peer="$swift_build/debug/EmbeddedHostPeer"
+fi
 [ -x "$host_peer" ] || {
     echo "run-host-interop-test: host peer binary was not produced at $host_peer" >&2
     exit 1
@@ -107,6 +150,8 @@ SERIAL_TOOLS="$script_dir/serial-tools.mjs" \
 ESPTOOL_TOOLS="$script_dir/esptool-tools.mjs" \
 AXOLOTY_CORPUS_MANIFEST="$repo_root/Applications/device-smoke-agent/fixtures/manifest.json" \
 AGENT_VALIDATOR="$script_dir/agent-validator.mjs" \
+AGENT_VALIDATOR_FACTORY="$agent_validator_factory" \
+HOST_CASES="$host_cases" \
 EVIDENCE_WRITER="$script_dir/write-device-evidence.mjs" \
 ESPTOOL="$esptool" \
 HOST_PEER="$host_peer" \
@@ -124,7 +169,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 const { captureSerial, drainSerial } = await import(process.env.SERIAL_TOOLS);
-const { createEmbeddedAgentValidator } = await import(process.env.AGENT_VALIDATOR);
+const agentValidators = await import(process.env.AGENT_VALIDATOR);
 const { writePassedDeviceEvidence } = await import(process.env.EVIDENCE_WRITER);
 const { flashFirmware, runFirmware } = await import(process.env.ESPTOOL_TOOLS);
 
@@ -132,7 +177,7 @@ const [device, root] = process.argv.slice(2);
 flashFirmware(process.env.ESPTOOL, device, root);
 await drainSerial(device);
 
-const validator = createEmbeddedAgentValidator();
+const validator = agentValidators[process.env.AGENT_VALIDATOR_FACTORY]();
 const controller = new AbortController();
 
 const capture = captureSerial(device, Number(process.env.SERIAL_DEADLINE), line => {
@@ -157,6 +202,7 @@ try {
       WIRE_EMBEDDED_HOST_DIRECTION: process.env.DIRECTION,
       WIRE_BROKER_HOST: process.env.AXOLOTY_MQTT_HOST,
       WIRE_BROKER_PORT: process.env.AXOLOTY_MQTT_PORT ?? "1883",
+      WIRE_ZENOH_ENDPOINT: `tcp/${process.env.AXOLOTY_ZENOH_HOST}:${process.env.AXOLOTY_ZENOH_PORT ?? "7447"}`,
       WIRE_READY_FILE: process.env.READY_FILE,
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -196,7 +242,7 @@ try {
     validation,
     profile: process.env.PROFILE_NAME,
     check: "host-interop",
-    cases: "deterministic exchange cases against the Axoloty host runtime",
+    cases: process.env.HOST_CASES,
     output: path.join(process.env.EVIDENCE_DIR, `${process.env.PROFILE_NAME}-host-interop-${process.env.ROLE.toLowerCase()}.json`),
   });
   console.log("EMBEDDED HOST INTEROPERABILITY OK");

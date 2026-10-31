@@ -3,8 +3,9 @@
 
 import PackageDescription
 
-// The host peer for the embedded↔host interoperability check. This is the only
-// SwiftPM manifest in this repository: it does not build the firmware. It
+// The host peer for the embedded↔host interoperability check on MQTT. It does
+// not build the firmware; the Zenoh peer has its own manifest under
+// Tests/zenoh-host-peer because it links the native zenoh-c archive. This one
 // consumes the Axoloty host runtime as an ordinary pinned git dependency, at
 // the exact revision in axoloty-core.lock.json, and nothing from Core's
 // sources is vendored or read from a sibling checkout.
