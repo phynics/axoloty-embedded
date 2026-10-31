@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "profile": "esp32c6-zenoh",
+  "check": "router-restart",
+  "tier": "device",
+  "recordedAt": "2026-10-31",
+  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
+  "firmwareSHA256": "fac28e59d98f77a4b1aeb07d2cd1e5ea1b1435e1e3ee69d1acbb17c78c390ae0",
+  "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+  "protocol": "the pinned zenohd 1.10.0 process was stopped and a new one started on the same port after the device had connected, before the host peer attached; the router logs were kept; a Core host peer then completed a CBOR exchange",
+  "recovery": {
+    "routerVersion": "1.10.0",
+    "restarts": 1,
+    "returnSeconds": [
+      0.8
+    ],
+    "leaseExpiries": 0
+  },
+  "status": "passed",
+  "result": "router restarted 1 time, the same client opened a session on the new process 0.8 s after it started, 0 lease expiries, host exchange 10/10 passed after the restart"
+}
