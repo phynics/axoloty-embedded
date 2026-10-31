@@ -4,9 +4,9 @@
   "check": "embedded-swift-smoke-v2",
   "tier": "device",
   "status": "passed",
-  "recordedAt": "2026-10-29",
+  "recordedAt": "2026-10-31",
   "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
-  "firmwareSHA256": "c3e1920645081c22f21fb50c4c36db8b1b66d948ee8fd7da62bf10f7013d2783",
+  "firmwareSHA256": "b84716313be3288bbca86185e1d83a3ff1621cf79e92084eb93e6898ed12256f",
   "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
   "protocol": "312 deterministic cases over serial JSON Lines",
   "result": "312/312 passed"
