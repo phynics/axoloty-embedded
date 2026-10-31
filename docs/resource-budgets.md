@@ -24,7 +24,11 @@ the toolchain's `size -A`, and the image size from the `.bin`.
 The padding section `.flash_rodata_dummy` is not flash use and is not counted.
 The report also records the application partition size and the headroom left in
 it, and names the profile, application, platform, transport, and Core revision
-it was measured for.
+it was measured for. The Core revision comes from the preparation report, and
+the image SHA-256 binds the measurement to the exact binary. A missing required
+section, malformed table, or invalid budget declaration fails the report.
+Optional end-marker, IRAM data, app descriptor, and no-init sections count as
+zero when absent.
 
 ## What is budgeted
 
@@ -52,7 +56,9 @@ resetting the budgets with new evidence.
 
 - **Configured qualification variants.** The C-only carrier scenario image is
   larger and is reported but not gated, following the static-storage policy
-  receipt (`not-applicable`). A network-configured image is gated.
+  receipt (`not-applicable`). This is a Zenoh qualification variant, not a
+  qualified release artifact. A certificate for a qualified release cannot use
+  the exemption; network-configured images are gated.
 - **Runtime budgets.** Minimum free heap and the main-stack remainder come from
   a device run and are not measured at build time. They are recorded in the smoke
   completion record and are not yet gated.

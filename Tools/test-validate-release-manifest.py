@@ -5,6 +5,7 @@
 
 import copy
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -194,24 +195,146 @@ with tempfile.TemporaryDirectory() as temporary:
     # A build-size report is evidence about this image: a failed budget or a
     # report for another image's byte count must not ride into a certificate.
     original = json.loads(manifest.read_text(encoding="utf-8"))
-    for status, expected in (("passed", 0), ("not-applicable", 0), ("not-configured", 0), ("failed", 1)):
+    if shutil.which("node"):
+        # Invoke the real writer with a hermetic size tool, then validate its report.
+        writer = ROOT / "Platforms/esp32c6-idf/tools/write-size-report.mjs"
+        binary = base / "firmware.bin"
+        binary.write_bytes(b"x")
+        import hashlib
+        actual_sha = hashlib.sha256(b"x").hexdigest()
+        original["image"]["sha256"] = actual_sha
+        original["qualification"]["evidence"][0]["firmwareSHA256"] = actual_sha
+        evidence = repo / "docs/evidence/esp32c6-mqtt-smoke.json"
+        evidence_doc = json.loads(evidence.read_text())
+        evidence_doc["firmwareSHA256"] = actual_sha
+        write_json(evidence, evidence_doc)
+        profile_path = repo / "Profiles/esp32c6-mqtt/profile.json"
+        profile_doc = json.loads(profile_path.read_text())
+        profile_doc["budgets"] = {"basis": "fixture", "build": {"imageBytes": 2}}
+        write_json(profile_path, profile_doc)
+        policy_path, prep_path, output = base / "policy.json", base / "prep.json", base / "size.json"
+        write_json(policy_path, {"schema": "axoloty.app-static-storage-policy.v1", "profile": "esp32c6-mqtt", "status": "enforced"})
+        write_json(prep_path, {"schemaVersion": 1, "status": "prepared", "core": {"sha": LOCK["revision"]}})
+        size_tool = base / "size-tool"
+        size_tool.write_text("#!/bin/sh\nprintf 'section size addr\n.iram0.text 1 1\n.dram0.data 1 1\n.dram0.bss 1 1\n.flash.text 1 1\n.flash.rodata 1 1\nTotal 5\n'\n")
+        size_tool.chmod(0o755)
+        partition = base / "partitions.csv"
+        partition.write_text("factory,app,factory,0,100,\n")
+        subprocess.run(["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(policy_path), str(prep_path), str(output), str(size_tool)], check=True, capture_output=True)
+        # Failed runs clear stale output, but never delete an input through an alias.
+        bad_policy = base / "bad-policy.json"
+        write_json(bad_policy, {"status": "not-applicable"})
+        command = ["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(bad_policy), str(prep_path), str(output), str(size_tool)]
+        assert subprocess.run(command, capture_output=True).returncode != 0 and not output.exists()
+        subprocess.run(["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(policy_path), str(prep_path), str(output), str(size_tool)], check=True, capture_output=True)
+        alias = base / "alias"
+        os_link = __import__("os").link
+        os_link(binary, alias)
+        alias_command = command.copy()
+        alias_command[8] = str(alias)
+        assert subprocess.run(alias_command, capture_output=True).returncode != 0
+        assert binary.read_bytes() == b"x" and alias.read_bytes() == b"x"
+        # Exercise the manifest writer on the report at the artifact's real path.
+        profile_doc["qualification"] = {"requiredChecks": [{"check": "smoke", "artifact": "release", "records": 1, "units": 1}]}
+        write_json(profile_path, profile_doc)
+        preparation = {"schemaVersion": 1, "status": "prepared", "core": {"sha": LOCK["revision"], "dirty": False}, "contractSHA256": "c" * 64}
+        write_json(prep_path, preparation)
+        provenance = base / "provenance.json"
+        write_json(provenance, {"schemaVersion": 1, "status": "passed", "core": {"sha": LOCK["revision"], "dirty": False}, "firmware": {"revision": FIRMWARE_SHA, "dirty": False}, "artifact": {"path": str(binary), "sha256": actual_sha, "byteCount": 1}, "toolchain": {"swift": "fixture", "espIdf": "fixture", "target": "esp32c6"}})
+        generator = ROOT / "Platforms/esp32c6-idf/tools/write-release-manifest.mjs"
+        generated = base / "generated.json"
+        generate = ["node", str(generator), str(repo), str(profile_path), str(repo / "axoloty-core.lock.json"), str(repo / "VERSION"), str(prep_path), str(provenance), str(generated)]
+        subprocess.run(generate, check=True, capture_output=True)
+        require(run(repo, generated, "--require-qualified"), 0, "writer to manifest validation failed")
+        # A preview uses the prepared revision, even when the profile names the lock.
+        import os
+        preview_sha = "f" * 40
+        profile_doc["core"] = {"revision": LOCK["revision"]}
+        write_json(profile_path, profile_doc)
+        preparation["core"]["sha"] = preview_sha
+        write_json(prep_path, preparation)
+        subprocess.run(["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(policy_path), str(prep_path), str(output), str(size_tool)], check=True, capture_output=True)
+        preview_report = json.loads(output.read_text())
+        assert preview_report["coreRevision"] == preview_sha
+        provenance_doc = json.loads(provenance.read_text())
+        provenance_doc["core"]["sha"] = preview_sha
+        write_json(provenance, provenance_doc)
+        subprocess.run(generate, check=True, capture_output=True, env={**os.environ, "AXOLOTY_PREVIEW_CORE_REVISION": preview_sha})
+        require(run(repo, generated), 0, "preview report did not bind to actual Core")
+        generated_doc = json.loads(generated.read_text())
+        generated_doc["resources"]["report"]["coreRevision"] = LOCK["revision"]
+        write_json(generated, generated_doc)
+        require(run(repo, generated), 1, "preview accepted the declared lock instead of actual Core")
+        preparation["core"]["sha"] = LOCK["revision"]
+        write_json(prep_path, preparation)
+        subprocess.run(["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(policy_path), str(prep_path), str(output), str(size_tool)], check=True, capture_output=True)
+        valid_report = json.loads(output.read_text())
         with_report = copy.deepcopy(original)
-        with_report["resources"] = {"available": True, "report": {
-            "kind": "build-size",
-            "image": {"bytes": original["image"]["byteCount"]},
-            "enforcement": {"status": status},
-        }}
+        with_report["resources"] = {"available": True, "report": valid_report}
         write_json(manifest, with_report)
-        require(run(repo, manifest, "--require-qualified"), expected,
-                "a build-size report with status %s gave the wrong verdict" % status)
-    wrong_image = copy.deepcopy(original)
-    wrong_image["resources"] = {"available": True, "report": {
-        "kind": "build-size",
-        "image": {"bytes": original["image"]["byteCount"] + 1},
-        "enforcement": {"status": "passed"},
-    }}
-    write_json(manifest, wrong_image)
-    require(run(repo, manifest, "--require-qualified"), 1, "a build-size report for another image was accepted")
+        require(run(repo, manifest, "--require-qualified"), 0, "real size report rejected")
+        mutations = [
+            lambda r: r.update(kind="typo"),
+            lambda r: r.update(schemaVersion=2),
+            lambda r: r.update(profile="foreign"),
+            lambda r: r.update(application="foreign"),
+            lambda r: r.update(platform="foreign"),
+            lambda r: r.update(transport="foreign"),
+            lambda r: r.update(coreRevision="f" * 40),
+            lambda r: r["image"].update(sha256=hashlib.sha256(b"y").hexdigest()),
+            lambda r: r["image"].update(bytes=2),
+            lambda r: r["enforcement"].update(status="failed"),
+            lambda r: r["enforcement"]["results"][0].update(passed=False),
+            lambda r: r["enforcement"].update(results=[]),
+            lambda r: r["metrics"].update(imageBytes=True),
+            lambda r: r.update(enforcement={"status": "not-configured", "reason": "the profile declares no build budgets"}, budgets=None),
+        ]
+        for mutate in mutations:
+            changed = copy.deepcopy(with_report)
+            mutate(changed["resources"]["report"])
+            write_json(manifest, changed)
+            require(run(repo, manifest, "--require-qualified"), 1, "malformed or foreign size report accepted")
+        variant = copy.deepcopy(with_report)
+        variant["resources"]["report"].update(budgets=None, enforcement={"status": "not-applicable", "reason": "configured C-only carrier qualification image"})
+        write_json(manifest, variant)
+        require(run(repo, manifest, "--require-qualified"), 1, "qualified MQTT C-only report accepted")
+        # A Zenoh C-only scenario is a variant, never the qualified release artifact.
+        validator = __import__("importlib.util").util.spec_from_file_location("validator", ROOT / "Tools/validate-release-manifest.py")
+        module = __import__("importlib.util").util.module_from_spec(validator)
+        validator.loader.exec_module(module)
+        variant_profile = copy.deepcopy(profile_doc)
+        variant_profile["transport"] = "zenoh-pico"
+        variant_profile["qualification"] = {"requiredChecks": [{"check": "c-only-carrier-scenario", "artifact": "variant"}]}
+        variant["transport"]["name"] = "zenoh-pico"
+        variant["resources"]["report"]["transport"] = "zenoh-pico"
+        variant["qualification"]["status"] = "unqualified"
+        assert module.validate_size_report(variant["resources"]["report"], variant, variant_profile) == []
+        variant["qualification"]["status"] = "qualified"
+        assert module.validate_size_report(variant["resources"]["report"], variant, variant_profile)
+        corrupt = copy.deepcopy(with_report)
+        corrupt["resources"]["report"]["metrics"]["staticRamBytes"] = 0
+        write_json(manifest, corrupt)
+        require(run(repo, manifest, "--require-qualified"), 1, "inconsistent static RAM accepted")
+        overflow = copy.deepcopy(with_report)
+        overflow["resources"]["report"]["metrics"].update(iramTextBytes=9007199254740991, initializedDataBytes=1, dramBssBytes=1, staticRamBytes=9007199254740991)
+        write_json(manifest, overflow)
+        require(run(repo, manifest, "--require-qualified"), 1, "overflowing static RAM sum accepted")
+        profile_doc["budgets"] = {"basis": "fixture", "buid": {"imageBytes": 2}}
+        write_json(profile_path, profile_doc)
+        corrupt = copy.deepcopy(with_report)
+        corrupt["resources"]["report"].update(budgets=None, enforcement={"status": "not-configured", "reason": "the profile declares no build budgets"})
+        write_json(manifest, corrupt)
+        require(run(repo, manifest, "--require-qualified"), 1, "unknown outer budget key accepted")
+        command[6] = str(policy_path)
+        assert subprocess.run(command, capture_output=True).returncode != 0 and not output.exists()
+        profile_doc.pop("budgets")
+        write_json(profile_path, profile_doc)
+        original["image"]["sha256"] = IMAGE_SHA
+        original["qualification"]["evidence"][0]["firmwareSHA256"] = IMAGE_SHA
+        evidence_doc["firmwareSHA256"] = IMAGE_SHA
+        write_json(evidence, evidence_doc)
+    else:
+        print("SKIP: size report integration requires node")
     write_json(manifest, original)
     document = json.loads(manifest.read_text(encoding="utf-8"))
     document["embedded"]["dirty"] = True

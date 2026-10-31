@@ -156,6 +156,83 @@ def load_revocation(repo_root, manifest_path):
     return record, problems
 
 
+SIZE_METRICS = ("imageBytes", "flashTextBytes", "flashRodataBytes", "iramTextBytes",
+                "initializedDataBytes", "dramBssBytes", "staticRamBytes")
+BUDGET_METRICS = ("imageBytes", "flashTextBytes", "staticRamBytes", "dramBssBytes")
+MAX_SAFE_INTEGER = 9007199254740991
+
+
+def safe_integer(value, minimum=0):
+    return type(value) is int and minimum <= value <= MAX_SAFE_INTEGER
+
+
+def validate_size_report(report, manifest, profile):
+    """Check the complete writer contract and bind measurements to this manifest."""
+    problems = []
+    def check(condition, message):
+        if not condition:
+            problems.append("resources.report." + message)
+    if not isinstance(report, dict):
+        return ["resources.report must be an object"]
+    check(set(report) == {"schemaVersion", "kind", "profile", "application", "platform", "transport", "coreRevision", "metrics", "image", "budgets", "enforcement"}, "has invalid fields")
+    check(type(report.get("schemaVersion")) is int and report.get("schemaVersion") == 1 and report.get("kind") == "build-size", "has invalid schema or kind")
+    for field, expected in (("profile", manifest.get("profile")), ("application", manifest.get("application")),
+                            ("platform", manifest.get("platform")), ("transport", (manifest.get("transport") if isinstance(manifest.get("transport"), dict) else {}).get("name")),
+                            ("coreRevision", (manifest.get("axoloty") if isinstance(manifest.get("axoloty"), dict) else {}).get("sha"))):
+        check(is_nonempty_string(expected) and report.get(field) == expected, field + " does not match manifest")
+    metrics = report.get("metrics")
+    valid_metrics = isinstance(metrics, dict) and set(metrics) == set(SIZE_METRICS) and all(safe_integer(v) for v in metrics.values())
+    check(valid_metrics, "metrics are invalid")
+    if valid_metrics:
+        total = metrics["iramTextBytes"] + metrics["initializedDataBytes"] + metrics["dramBssBytes"]
+        check(safe_integer(total) and metrics["staticRamBytes"] == total, "static RAM does not match components")
+    image = report.get("image")
+    valid_image = isinstance(image, dict) and set(image) == {"bytes", "sha256", "appPartitionBytes", "partitionHeadroomBytes"}
+    if valid_image:
+        valid_image = (safe_integer(image["bytes"], 1) and safe_integer(image["appPartitionBytes"], 1)
+                       and type(image["partitionHeadroomBytes"]) is int
+                       and abs(image["partitionHeadroomBytes"]) <= MAX_SAFE_INTEGER
+                       and image["partitionHeadroomBytes"] == image["appPartitionBytes"] - image["bytes"]
+                       and isinstance(image["sha256"], str) and bool(HEX64.fullmatch(image["sha256"])))
+    check(valid_image, "image is invalid")
+    if valid_image:
+        check(image["bytes"] == (manifest.get("image") if isinstance(manifest.get("image"), dict) else {}).get("byteCount") and image["sha256"] == (manifest.get("image") if isinstance(manifest.get("image"), dict) else {}).get("sha256"), "image does not match manifest image")
+        if valid_metrics:
+            check(metrics["imageBytes"] == image["bytes"], "image metric does not match image bytes")
+    enforcement = report.get("enforcement")
+    if not isinstance(enforcement, dict):
+        return problems + ["resources.report.enforcement must be an object"]
+    status = enforcement.get("status")
+    check(status in ("passed", "not-applicable", "not-configured"), "enforcement status is invalid")
+    declared = profile.get("budgets", {}) if isinstance(profile, dict) else {}
+    declared_build = declared.get("build") if isinstance(declared, dict) else None
+    if isinstance(profile, dict) and "budgets" in profile:
+        check(isinstance(declared, dict) and set(declared) <= {"basis", "build"} and ("basis" not in declared or is_nonempty_string(declared["basis"])), "profile budgets are invalid")
+    if isinstance(declared, dict) and "build" in declared:
+        check(isinstance(declared_build, dict) and bool(declared_build) and set(declared_build) <= set(BUDGET_METRICS) and all(safe_integer(v, 1) for v in declared_build.values()), "profile build budgets are invalid")
+    if status in ("passed", "failed"):
+        budgets = report.get("budgets")
+        valid_budgets = isinstance(budgets, dict) and set(budgets) == {"basis", "build"} and isinstance(budgets.get("build"), dict)
+        if valid_budgets:
+            build = budgets["build"]
+            valid_budgets = bool(build) and set(build) <= set(BUDGET_METRICS) and all(safe_integer(v, 1) for v in build.values())
+        check(valid_budgets, "budgets are invalid")
+        if valid_budgets:
+            check(build == declared_build and budgets["basis"] == declared.get("basis"), "budgets do not match profile")
+            expected = [dict(metric=k, measured=metrics[k], budget=build[k], headroomBytes=build[k]-metrics[k], passed=metrics[k] <= build[k]) for k in BUDGET_METRICS if k in build] if valid_metrics else None
+            check(set(enforcement) == {"status", "results"} and type(enforcement.get("results")) is list and json.dumps(enforcement.get("results"), sort_keys=True) == json.dumps(expected, sort_keys=True) and expected is not None and all(x["passed"] for x in expected) == (status == "passed"), "verdicts are inconsistent")
+    elif status in ("not-applicable", "not-configured"):
+        reason = "configured C-only carrier qualification image" if status == "not-applicable" else "the profile declares no build budgets"
+        check(report.get("budgets") is None and enforcement == {"status": status, "reason": reason}, "enforcement is inconsistent")
+        if status == "not-applicable":
+            qualification = manifest.get("qualification")
+            requirements = (profile.get("qualification") or {}).get("requiredChecks", []) if isinstance(profile, dict) and isinstance(profile.get("qualification"), dict) else []
+            check(isinstance(qualification, dict) and qualification.get("status") == "unqualified" and isinstance(profile, dict) and profile.get("transport") == "zenoh-pico" and isinstance(requirements, list) and any(isinstance(r, dict) and r.get("check") == "c-only-carrier-scenario" and r.get("artifact") == "variant" for r in requirements), "C-only report requires the unqualified Zenoh qualification variant")
+        if status == "not-configured":
+            check(declared_build is None, "not-configured contradicts profile budgets")
+    return problems
+
+
 def validate_evidence(record, path):
     """Return a list of problems, mirroring docs/evidence.md."""
     problems = []
@@ -410,17 +487,10 @@ def validate(repo_root, manifest_path, require_qualified, allow_revoked):
 
     resources = manifest.get("resources")
     if resources is not None:
-        if not isinstance(resources, dict) or resources.get("available") is not True or not isinstance(resources.get("report"), dict):
+        if not isinstance(resources, dict) or set(resources) != {"available", "report"} or resources.get("available") is not True:
             problems.append("resources must be null or {available: true, report: {...}}")
         else:
-            report = resources["report"]
-            if report.get("kind") == "build-size":
-                enforcement = report.get("enforcement")
-                status = enforcement.get("status") if isinstance(enforcement, dict) else None
-                if status not in ("passed", "not-applicable", "not-configured"):
-                    problems.append("resources.report.enforcement.status must be passed, not-applicable, or not-configured, found %r" % (status,))
-                if report.get("image", {}).get("bytes") != image.get("byteCount"):
-                    problems.append("resources.report.image.bytes does not match image.byteCount")
+            problems.extend(validate_size_report(resources["report"], manifest, profile))
 
     # --- Qualification: evidence decides, and it must match this build. ------
     qualification = manifest.get("qualification")
