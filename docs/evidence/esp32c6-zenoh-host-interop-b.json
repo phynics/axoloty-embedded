@@ -6,7 +6,7 @@
   "status": "passed",
   "recordedAt": "2026-10-31",
   "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
-  "firmwareSHA256": "fac28e59d98f77a4b1aeb07d2cd1e5ea1b1435e1e3ee69d1acbb17c78c390ae0",
+  "firmwareSHA256": "d58cb1bfa7bd0aaa38529c8634a203c2bf466d876838569ad72b6c3776e018b5",
   "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
   "protocol": "10 deterministic axoloty/1 CBOR exchange cases against the Axoloty host runtime over AxolotyZenoh",
   "result": "10/10 passed"
