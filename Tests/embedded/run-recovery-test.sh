@@ -104,8 +104,11 @@ trap cleanup EXIT INT TERM
 start_router
 deadline=$(( $(date +%s) + 20 ))
 until (require_broker_reachable "$profile") >/dev/null 2>&1; do
-    [ -f "$router_pid_file" ] && kill -0 "$(cat "$router_pid_file")" 2>/dev/null ||
-        { echo "run-recovery-test: the router exited" >&2; cat "$router_log" >&2; exit 1; }
+    if [ ! -f "$router_pid_file" ] || ! kill -0 "$(cat "$router_pid_file")" 2>/dev/null; then
+        echo "run-recovery-test: the router exited" >&2
+        cat "$router_log" >&2
+        exit 1
+    fi
     [ "$(date +%s)" -lt "$deadline" ] || { echo "run-recovery-test: the router did not listen on port $port" >&2; exit 1; }
     sleep 1
 done
