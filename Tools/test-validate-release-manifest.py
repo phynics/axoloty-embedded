@@ -226,12 +226,13 @@ with tempfile.TemporaryDirectory() as temporary:
     schema_two = copy.deepcopy(document)
     schema_two["schemaVersion"] = 2
     schema_two["qualification"]["evidence"][0].update({"tier": "device", "device": "unit-a"})
-    schema_two["qualification"]["requiredChecks"] = [{"check": "smoke", "artifact": "release", "units": 1}]
+    schema_two["qualification"]["requiredChecks"] = [{"check": "smoke", "artifact": "release", "records": 1, "units": 1}]
     write_json(manifest, schema_two)
     require(run(repo, manifest, "--require-qualified"), 0, "a complete schema 2 manifest was rejected")
     for label, requirement in (
-            ("a missing required check", {"check": "router-restart", "artifact": "variant", "units": 1}),
-            ("too few units", {"check": "smoke", "artifact": "release", "units": 2})):
+            ("a missing required check", {"check": "router-restart", "artifact": "variant", "records": 1, "units": 1}),
+            ("too few records", {"check": "smoke", "artifact": "release", "records": 2, "units": 1}),
+            ("too few units", {"check": "smoke", "artifact": "release", "records": 1, "units": 2})):
         incomplete = copy.deepcopy(schema_two)
         incomplete["qualification"]["requiredChecks"] = [requirement]
         write_json(manifest, incomplete)

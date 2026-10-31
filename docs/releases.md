@@ -124,7 +124,7 @@ in [docs/evidence.md](./evidence.md).
 | `qualification.evidence` | Cited evidence records | every `docs/evidence/` record for the profile |
 
 A profile is qualified only when every required check is satisfied. Each entry
-in `qualification.requiredChecks` names a `check`, an `artifact`, and `units`:
+in `qualification.requiredChecks` names a `check`, an `artifact`, `records`, and `units`:
 
 - `artifact: release` means the record must name the exact image being released.
 - `artifact: variant` means the check ran on its own image, because that image
@@ -132,7 +132,9 @@ in `qualification.requiredChecks` names a `check`, an `artifact`, and `units`:
   checksum and the locked Core revision. Nothing ties a variant image to the
   firmware commit being released, so rerun variant checks after a firmware
   change that can affect them.
-- `units` is the number of distinct boards the passed records must name.
+- `records` is the number of passed records the check needs, for example one per
+  role.
+- `units` is the number of distinct boards those records must name.
 
 A required check with no record, or with any record that is failed, unexecuted,
 or from another Core revision, blocks the certificate. `Tools/release.sh`

@@ -9,13 +9,13 @@
   },
   "qualification": {
     "requiredChecks": [
-      { "check": "embedded-swift-smoke-v2", "artifact": "release", "units": 1 },
-      { "check": "network-test", "artifact": "variant", "units": 1 },
-      { "check": "agent-test", "artifact": "variant", "units": 2 },
-      { "check": "host-interop", "artifact": "variant", "units": 2 },
-      { "check": "coatyjs-interop", "artifact": "variant", "units": 2 },
-      { "check": "broker-restart", "artifact": "variant", "units": 2 },
-      { "check": "last-will", "artifact": "variant", "units": 1 }
+      { "check": "embedded-swift-smoke-v2", "artifact": "release", "records": 1, "units": 1 },
+      { "check": "network-test", "artifact": "variant", "records": 1, "units": 1 },
+      { "check": "agent-test", "artifact": "variant", "records": 2, "units": 2 },
+      { "check": "host-interop", "artifact": "variant", "records": 2, "units": 1 },
+      { "check": "coatyjs-interop", "artifact": "variant", "records": 2, "units": 1 },
+      { "check": "broker-restart", "artifact": "variant", "records": 2, "units": 2 },
+      { "check": "last-will", "artifact": "variant", "records": 1, "units": 1 }
     ]
   }
 }

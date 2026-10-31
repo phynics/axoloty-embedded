@@ -235,6 +235,7 @@ if (!Array.isArray(requiredChecks) || requiredChecks.length === 0) {
 const outstanding = [];
 for (const required of requiredChecks) {
   if (typeof required.check !== "string" || !["release", "variant"].includes(required.artifact) ||
+      !Number.isInteger(required.records) || required.records < 1 ||
       !Number.isInteger(required.units) || required.units < 1) {
     throw new Error(`profile ${profile.name} declares a malformed required check: ${JSON.stringify(required)}`);
   }
@@ -251,6 +252,8 @@ for (const required of requiredChecks) {
     outstanding.push(`${required.check} has no record`);
   } else if (accepted.length !== records.length) {
     outstanding.push(`${required.check} has a record that did not pass for this build`);
+  } else if (accepted.length < required.records) {
+    outstanding.push(`${required.check} has ${accepted.length} of ${required.records} required records`);
   } else if (units < required.units) {
     outstanding.push(`${required.check} ran on ${units} of ${required.units} required units`);
   }

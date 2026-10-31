@@ -26,8 +26,9 @@ const IMAGE_SHA = "a".repeat(64);
 const ZENOH_REVISION = "96006957fddef401c20c8c2d813c2a630b666974";
 
 const REQUIRED_CHECKS = [
-  { check: "smoke", artifact: "release", units: 1 },
-  { check: "exchange", artifact: "variant", units: 2 },
+  { check: "smoke", artifact: "release", records: 1, units: 1 },
+  { check: "interop", artifact: "variant", records: 2, units: 1 },
+  { check: "exchange", artifact: "variant", records: 2, units: 2 },
 ];
 
 const writeJson = (file, value) => {
@@ -157,8 +158,11 @@ try {
   expectBlocked(/smoke has no record/, "no evidence at all qualified the profile");
   passed("smoke", "", "unit-a", IMAGE_SHA);
   expectBlocked(/exchange has no record/, "a passed smoke alone qualified the profile");
+  passed("interop", "-a", "unit-a", "1".repeat(64));
   passed("exchange", "-a", "unit-a", "c".repeat(64));
-  expectBlocked(/exchange ran on 1 of 2/, "one board satisfied a two-unit check");
+  expectBlocked(/interop has 1 of 2 required records/, "one role satisfied a two-role check");
+  passed("interop", "-b", "unit-a", "2".repeat(64));
+  expectBlocked(/exchange has 1 of 2 required records/, "one record satisfied a two-record check");
   passed("exchange", "-b", "unit-a", "d".repeat(64));
   expectBlocked(/exchange ran on 1 of 2/, "two records from one board satisfied a two-unit check");
   passed("exchange", "-b", "unit-b", "d".repeat(64));

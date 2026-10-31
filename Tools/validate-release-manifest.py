@@ -210,8 +210,10 @@ def required_check_problems(required_checks, entries, core_sha, image_sha):
     for required in required_checks:
         check = required.get("check") if isinstance(required, dict) else None
         artifact = required.get("artifact") if isinstance(required, dict) else None
+        record_count = required.get("records") if isinstance(required, dict) else None
         units = required.get("units") if isinstance(required, dict) else None
         if (not is_nonempty_string(check) or artifact not in {"release", "variant"}
+                or not isinstance(record_count, int) or isinstance(record_count, bool) or record_count < 1
                 or not isinstance(units, int) or isinstance(units, bool) or units < 1):
             problems.append("malformed required check: %r" % (required,))
             continue
@@ -227,6 +229,8 @@ def required_check_problems(required_checks, entries, core_sha, image_sha):
             problems.append("required check %s has no record" % check)
         elif len(accepted) != len(records):
             problems.append("required check %s has a record that did not pass for this build" % check)
+        elif len(accepted) < record_count:
+            problems.append("required check %s has %d of %d required records" % (check, len(accepted), record_count))
         elif len(observed) < units:
             problems.append("required check %s ran on %d of %d required units" % (check, len(observed), units))
     return problems

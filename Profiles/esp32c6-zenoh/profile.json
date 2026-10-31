@@ -9,13 +9,13 @@
   },
   "qualification": {
     "requiredChecks": [
-      { "check": "embedded-swift-smoke-v3", "artifact": "release", "units": 1 },
-      { "check": "network-test", "artifact": "variant", "units": 1 },
-      { "check": "agent-test", "artifact": "variant", "units": 2 },
-      { "check": "c-only-carrier-scenario", "artifact": "variant", "units": 1 },
-      { "check": "host-interop", "artifact": "variant", "units": 1 },
-      { "check": "router-restart", "artifact": "variant", "units": 1 },
-      { "check": "wifi-recovery", "artifact": "variant", "units": 1 }
+      { "check": "embedded-swift-smoke-v3", "artifact": "release", "records": 1, "units": 1 },
+      { "check": "network-test", "artifact": "variant", "records": 1, "units": 1 },
+      { "check": "agent-test", "artifact": "variant", "records": 2, "units": 2 },
+      { "check": "c-only-carrier-scenario", "artifact": "variant", "records": 1, "units": 1 },
+      { "check": "host-interop", "artifact": "variant", "records": 2, "units": 1 },
+      { "check": "router-restart", "artifact": "variant", "records": 1, "units": 1 },
+      { "check": "wifi-recovery", "artifact": "variant", "records": 1, "units": 1 }
     ]
   }
 }
