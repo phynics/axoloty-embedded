@@ -105,6 +105,82 @@ const borrowedBenchmarkStatements = manifest.cases.map((corpusCase, index) => {
   return `    if (try? BorrowedMessage.validated(topicBytes: corpusTopic${index}.utf8Start, topicLength: corpusTopic${index}.utf8CodeUnitCount, payloadBytes: corpusPayload${index}.utf8Start, payloadLength: corpusPayload${index}.utf8CodeUnitCount)) != nil { result &+= 1 }`;
 }).join("\n");
 
+// Deterministic `axoloty/1` encoding of each corpus payload, for the build that
+// carries CBOR and no JSON parser. It follows the profile rules: shortest-form
+// heads, definite lengths, map keys ordered by length and then bytes, and the
+// shortest lossless single or double float. The device decodes and re-encodes
+// every case before it times anything, so a divergence from the Core codec
+// fails the measurement instead of skewing it.
+function cborHead(major, argument) {
+  const base = major << 5;
+  if (argument < 24) return [base | argument];
+  if (argument < 0x100) return [base | 24, argument];
+  if (argument < 0x10000) return [base | 25, argument >> 8, argument & 0xff];
+  if (argument < 0x100000000) {
+    return [base | 26, argument >>> 24, (argument >> 16) & 0xff, (argument >> 8) & 0xff, argument & 0xff];
+  }
+  throw new Error("corpus integers above 32 bits are not supported");
+}
+
+function cborEncode(value) {
+  if (value === null) return [0xf6];
+  if (value === true) return [0xf5];
+  if (value === false) return [0xf4];
+  if (typeof value === "number") {
+    if (Number.isInteger(value)) {
+      return value >= 0 ? cborHead(0, value) : cborHead(1, -1 - value);
+    }
+    const single = Buffer.alloc(4);
+    single.writeFloatBE(value);
+    if (single.readFloatBE() === value) return [0xfa, ...single];
+    const double = Buffer.alloc(8);
+    double.writeDoubleBE(value);
+    return [0xfb, ...double];
+  }
+  if (typeof value === "string") {
+    const bytes = [...Buffer.from(value, "utf8")];
+    return [...cborHead(3, bytes.length), ...bytes];
+  }
+  if (Array.isArray(value)) {
+    return [...cborHead(4, value.length), ...value.flatMap(cborEncode)];
+  }
+  const members = Object.entries(value).map(([key, member]) => [Buffer.from(key, "utf8"), member]);
+  members.sort(([left], [right]) => left.length - right.length || Buffer.compare(left, right));
+  return [
+    ...cborHead(5, members.length),
+    ...members.flatMap(([key, member]) => [...cborHead(3, key.length), ...key, ...cborEncode(member)]),
+  ];
+}
+
+const cborCorpus = manifest.cases.map(corpusCase => {
+  const text = fs.readFileSync(path.join(corpusDirectory, corpusCase.payloadFile), "utf8");
+  return Buffer.from(cborEncode(JSON.parse(text)));
+});
+let cborTotalBytes = 0;
+const cborOffsets = cborCorpus.map(bytes => {
+  const offset = cborTotalBytes;
+  cborTotalBytes += bytes.length;
+  return offset;
+});
+
+// Swift string literals hold UTF-8, so the CBOR bytes travel as hex text and
+// the build decodes them once into zero-backed storage.
+const cborConstants = cborCorpus.map((bytes, index) =>
+  `private let corpusCBOR${index}: StaticString = "${bytes.toString("hex")}"`,
+).join("\n");
+const cborLoads = cborCorpus.map((bytes, index) =>
+  `    loaded = corpusLoadHex(corpusCBOR${index}, at: ${cborOffsets[index]}) && loaded`,
+).join("\n");
+const cborDecodeStatements = manifest.cases.map((corpusCase, index) =>
+  `    if corpusDecodes(${dtoByFamily[corpusCase.family]}.self, ${cborOffsets[index]}, ${cborCorpus[index].length}) { result &+= 1 }`,
+).join("\n");
+const cborReaderStatements = manifest.cases.map((corpusCase, index) =>
+  `    if corpusReaderBuilds(${cborOffsets[index]}, ${cborCorpus[index].length}) { result &+= 1 }`,
+).join("\n");
+const cborRoundTripStatements = manifest.cases.map((corpusCase, index) =>
+  `    if corpusRoundTrips(${dtoByFamily[corpusCase.family]}.self, ${cborOffsets[index]}, ${cborCorpus[index].length}) { result &+= 1 }`,
+).join("\n");
+
 const source = `// Copyright (c) 2026 Atakan DULKER. Licensed under the MIT License.
 // Generated from Applications/device-smoke-agent/fixtures/manifest.json. Do not edit.
 
@@ -128,7 +204,6 @@ struct EmbeddedBenchmarkMetrics {
 #if canImport(_JSONCore)
 ${corpusConstants}
 
-private var embeddedBenchmarkSink: UInt32 = 0
 private var embeddedCorpusParserWorkspace = EmbeddedWireParserWorkspace()
 private var embeddedCorpusEncodeBuffer = InlineArray<2_048, UInt8>(repeating: 0)
 
@@ -210,6 +285,10 @@ ${borrowedBenchmarkStatements}
     return result
 }
 
+#endif
+
+private var embeddedBenchmarkSink: UInt32 = 0
+
 private func measureCorpusPass(_ pass: () -> UInt32) -> (UInt32, UInt32) {
     for warmupIndex in 0..<1000 {
         embeddedBenchmarkSink &+= pass()
@@ -248,6 +327,7 @@ private func measureCorpusPass(_ pass: () -> UInt32) -> (UInt32, UInt32) {
     }
 }
 
+#if canImport(_JSONCore)
 func benchmarkGeneratedCorpus() -> EmbeddedBenchmarkMetrics {
     let topic = measureCorpusPass(topicBenchmarkPass)
     let reader = measureCorpusPass(readerBenchmarkPass)
@@ -338,14 +418,136 @@ func runGeneratedCorpus(_ record: (StaticString, Bool) -> Void) {
 ${invocations}
 }
 #else
-// The corpus is \`coaty/3\` JSON. A build without the JSON parser has no use
-// for it and carries none of its payload bytes.
-func initializeEmbeddedGeneratedCorpusStaticState() {}
+// The corpus is \`coaty/3\` JSON. A build without the JSON parser carries the
+// same logical payloads as deterministic \`axoloty/1\` CBOR instead, so the
+// device times its own codec on the same 39 cases. The route-bound metrics
+// (topic parse, combined, borrowed) stay zero: the CBOR routes differ from the
+// corpus topics, and zero means unmeasured.
+${cborConstants}
 
+private var embeddedCorpusCBOR = InlineArray<${cborTotalBytes}, UInt8>(repeating: 0)
+private var embeddedCorpusEncodeBuffer = InlineArray<2_048, UInt8>(repeating: 0)
+
+/// Checks the zero-backed storage without changing it, as the JSON corpus does.
+func initializeEmbeddedGeneratedCorpusStaticState() {
+    let corpusStartsZero = withUnsafePointer(to: &embeddedCorpusCBOR) { $0.pointee[0] == 0 }
+    let encodeBufferStartsZero = withUnsafePointer(to: &embeddedCorpusEncodeBuffer) {
+        $0.pointee[0] == 0
+    }
+    precondition(corpusStartsZero && encodeBufferStartsZero)
+}
+
+@inline(__always)
+private func corpusHexValue(_ character: UInt8) -> UInt8? {
+    switch character {
+    case 0x30...0x39: return character - 0x30
+    case 0x61...0x66: return character - 0x61 + 10
+    default: return nil
+    }
+}
+
+/// Decodes \`hex\` into the corpus storage at \`offset\`.
+@inline(never)
+private func corpusLoadHex(_ hex: StaticString, at offset: Int) -> Bool {
+    let count = hex.utf8CodeUnitCount / 2
+    return withUnsafeMutableBytes(of: &embeddedCorpusCBOR) { raw in
+        guard offset + count <= raw.count else { return false }
+        for index in 0..<count {
+            guard let high = corpusHexValue(hex.utf8Start[2 * index]),
+                  let low = corpusHexValue(hex.utf8Start[2 * index + 1]) else { return false }
+            raw[offset + index] = high << 4 | low
+        }
+        return true
+    }
+}
+
+@inline(__always)
+private func withCorpusReader<R>(
+    _ offset: Int, _ length: Int, _ body: (WireReader) -> R
+) -> R {
+    // The loader writes this storage, so every access takes the mutable borrow.
+    withUnsafeMutableBytes(of: &embeddedCorpusCBOR) { raw in
+        body(WireCodec(profile: .axoloty1CBOR).reader(
+            bytes: raw.baseAddress!.assumingMemoryBound(to: UInt8.self) + offset, length: length
+        ))
+    }
+}
+
+@inline(__always)
+private func corpusReaderBuilds(_ offset: Int, _ length: Int) -> Bool {
+    withCorpusReader(offset, length) { $0.length == length }
+}
+
+@inline(__always)
+private func corpusDecodes<T: WireDecodable>(_ type: T.Type, _ offset: Int, _ length: Int) -> Bool {
+    withCorpusReader(offset, length) { (try? T(from: $0)) != nil }
+}
+
+/// Decodes the payload, then encodes the decoded value, like the JSON pass.
+@inline(__always)
+private func corpusRoundTrips<T: WireDecodable & WireEncodable>(
+    _ type: T.Type, _ offset: Int, _ length: Int
+) -> Bool {
+    withCorpusReader(offset, length) { reader in
+        guard let decoded = try? T(from: reader) else { return false }
+        return withUnsafeMutableBytes(of: &embeddedCorpusEncodeBuffer) { output in
+            var writer = WireCodec(profile: .axoloty1CBOR).writer(
+                buffer: output.baseAddress!.assumingMemoryBound(to: UInt8.self),
+                capacity: output.count
+            )
+            return (try? decoded.encode(to: &writer)) != nil
+        }
+    }
+}
+
+@inline(never)
+private func decodeBenchmarkPass() -> UInt32 {
+    var result: UInt32 = 0
+${cborDecodeStatements}
+    return result
+}
+
+@inline(never)
+private func readerBenchmarkPass() -> UInt32 {
+    var result: UInt32 = 0
+${cborReaderStatements}
+    return result
+}
+
+@inline(never)
+private func encodeBenchmarkPass() -> UInt32 {
+    var result: UInt32 = 0
+${cborRoundTripStatements}
+    return result
+}
+
+@inline(never)
+private func loadCorpus() -> Bool {
+    var loaded = true
+${cborLoads}
+    return loaded
+}
+
+/// Times the CBOR codec over the corpus, or reports zeros when any case fails
+/// to load, decode, or re-encode, so a wrong measurement cannot look valid.
 func benchmarkGeneratedCorpus() -> EmbeddedBenchmarkMetrics {
-    EmbeddedBenchmarkMetrics(
+    let unmeasured = EmbeddedBenchmarkMetrics(
         topicParseP50ns: 0, topicParseP95ns: 0, readerP50ns: 0, readerP95ns: 0,
         dtoDecodeP50ns: 0, dtoDecodeP95ns: 0, dtoEncodeP50ns: 0, dtoEncodeP95ns: 0,
+        combinedP50ns: 0, combinedP95ns: 0, borrowedP50ns: 0, borrowedP95ns: 0
+    )
+    let cases = UInt32(${manifest.cases.length})
+    guard loadCorpus(), decodeBenchmarkPass() == cases, encodeBenchmarkPass() == cases else {
+        return unmeasured
+    }
+    let reader = measureCorpusPass(readerBenchmarkPass)
+    let decode = measureCorpusPass(decodeBenchmarkPass)
+    let encode = measureCorpusPass(encodeBenchmarkPass)
+    return EmbeddedBenchmarkMetrics(
+        topicParseP50ns: 0, topicParseP95ns: 0,
+        readerP50ns: reader.0, readerP95ns: reader.1,
+        dtoDecodeP50ns: decode.0, dtoDecodeP95ns: decode.1,
+        dtoEncodeP50ns: encode.0, dtoEncodeP95ns: encode.1,
         combinedP50ns: 0, combinedP95ns: 0, borrowedP50ns: 0, borrowedP95ns: 0
     )
 }
