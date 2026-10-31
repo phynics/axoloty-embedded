@@ -7,6 +7,15 @@
   "core": {
     "revision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9"
   },
+  "budgets": {
+    "basis": "Smoke harness image, not the production application. Measured on 0.10.0-embedded.2 (Core v0.10.0, 2026-10-31) plus 10 percent, rounded up to the next KiB. See docs/resource-budgets.md.",
+    "build": {
+      "imageBytes": 738304,
+      "flashTextBytes": 544768,
+      "staticRamBytes": 174080,
+      "dramBssBytes": 76800
+    }
+  },
   "qualification": {
     "requiredChecks": [
       { "check": "embedded-swift-smoke-v3", "artifact": "release", "records": 1, "units": 1 },

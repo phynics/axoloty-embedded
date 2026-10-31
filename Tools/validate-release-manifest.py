@@ -412,6 +412,15 @@ def validate(repo_root, manifest_path, require_qualified, allow_revoked):
     if resources is not None:
         if not isinstance(resources, dict) or resources.get("available") is not True or not isinstance(resources.get("report"), dict):
             problems.append("resources must be null or {available: true, report: {...}}")
+        else:
+            report = resources["report"]
+            if report.get("kind") == "build-size":
+                enforcement = report.get("enforcement")
+                status = enforcement.get("status") if isinstance(enforcement, dict) else None
+                if status not in ("passed", "not-applicable", "not-configured"):
+                    problems.append("resources.report.enforcement.status must be passed, not-applicable, or not-configured, found %r" % (status,))
+                if report.get("image", {}).get("bytes") != image.get("byteCount"):
+                    problems.append("resources.report.image.bytes does not match image.byteCount")
 
     # --- Qualification: evidence decides, and it must match this build. ------
     qualification = manifest.get("qualification")

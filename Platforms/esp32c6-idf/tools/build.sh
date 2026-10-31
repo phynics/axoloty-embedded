@@ -99,7 +99,7 @@ rm -f "$evidence_dir/build-provenance.json" "$evidence_dir/axoloty-swift.bin" \
     "$evidence_dir/static-storage-policy.json"
 rm -rf "$build_project_dir"
 mkdir -p "$build_project_dir"
-rm -f "$build_dir/flash_args" "$build_dir/axoloty-swift.bin"
+rm -f "$build_dir/flash_args" "$build_dir/axoloty-swift.bin" "$build_dir/size.json"
 
 EMBEDDED_PROOF_ROOT="$proof_root" EMBEDDED_BUILD_DIR="$build_dir" \
     EMBEDDED_EVIDENCE_DIR="$evidence_dir" "$platform_dir/tools/validate.sh"
@@ -277,6 +277,14 @@ if [ "$wire_profile" = axoloty1CBOR ]; then
 fi
 
 cp "$artifact" "$evidence_dir/axoloty-swift.bin"
+
+# Report the linked image's sizes beside the artifact, where the release
+# manifest picks them up as `resources`, and fail the build when the profile's
+# build budgets are exceeded. A configured qualification variant is reported
+# but not gated, matching the static-storage policy receipt.
+node "$script_dir/write-size-report.mjs" "$build_dir/axoloty-swift.elf" "$artifact" \
+    "$platform_dir/partitions.csv" "$AXOLOTY_PROFILE_DIR/profile.json" \
+    "$evidence_dir/static-storage-policy.json" "$build_dir/size.json"
 
 node "$script_dir/write-provenance.mjs" \
     "$report" "$artifact" "$evidence_dir/build-provenance.json" \

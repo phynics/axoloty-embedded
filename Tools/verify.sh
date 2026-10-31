@@ -211,6 +211,9 @@ if wanted build; then
     check_script manifest-generator \
         'node is not available for the release-manifest generator check' \
         node Tools/test-write-release-manifest.mjs
+    check_script size-report \
+        'node is not available for the size report check' \
+        node Tools/test-write-size-report.mjs
     # The recovery verdicts come from the router log. These run the parser
     # and the evidence writer on log lines in zenohd's shape, no router needed.
     check_script recovery-evidence \
