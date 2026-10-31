@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "status": "revoked",
+  "manifestPath": "releases/esp32c6-zenoh/0.10.0-embedded.1.json",
+  "reason": "Superseded, not found invalid. It certified image 1fbf87e6 (source a59a091), which does not label device samples application/cbor. Issue #113 added that label, which changes the Zenoh image, so the Zenoh variant records in docs/evidence were rerun on the labeled firmware and replaced. The certificate's evidence no longer matches the tracked records, and VERSION moved to 0.10.0-embedded.2. The replacement is releases/esp32c6-zenoh/0.10.0-embedded.2.json."
+}
