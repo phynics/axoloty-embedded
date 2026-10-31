@@ -13,7 +13,7 @@ const ACCEPT = /^(\S+)Z\s+\w+\s+\S+\s+ThreadId\(\d+\)\s+\S*:\s+Accepted TCP conn
 const OPEN = /^(\S+)Z\s+\w+\s+\S+\s+ThreadId\(\d+\)\s+\S*:\s+New transport opened between \S+ and (\S+) - whatami: client/;
 const READ_ERROR = /^(\S+)Z\s+\w+\s+\S+\s+ThreadId\(\d+\)\s+\S*:\s+RX task failed: Read error on TCP link \S+ => (\S+): (.*)$/;
 const EXPIRED = /^(\S+)Z\s+\w+\s+\S+\s+ThreadId\(\d+\)\s+\S*:\s+RX task failed: tcp\/\S+ => tcp\/([^:]+:\d+):.*expired after (\d+) milliseconds/;
-const VERSION = /zenohd v(\d+\.\d+\.\d+)/;
+const START = /^(\S+)Z\s+\w+\s+\S+\s+ThreadId\(\d+\)\s+zenohd:\s+zenohd v(\d+\.\d+\.\d+)/;
 
 /** Seconds since midnight UTC for an ISO timestamp such as `2026-10-31T10:57:43.094225`. */
 export function secondsOfDay(iso) {
@@ -27,14 +27,19 @@ export function parseRouterLog(text) {
   const sessions = [];
   const byPeer = new Map();
   let version = null;
+  const routerStarts = [];
   let lastAccepted = null;
   for (const raw of text.replace(ANSI, "").split("\n")) {
     const line = raw.trim();
-    const versionMatch = VERSION.exec(line);
-    if (versionMatch && version === null) version = versionMatch[1];
+    const start = START.exec(line);
+    if (start) {
+      routerStarts.push(secondsOfDay(start[1]));
+      if (version === null) version = start[2];
+      continue;
+    }
     let match = ACCEPT.exec(line);
     if (match) {
-      const session = { peer: match[2], acceptedAt: secondsOfDay(match[1]), zid: null, openedAt: null, endedAt: null, endReason: null };
+      const session = { peer: match[2], process: routerStarts.length - 1, acceptedAt: secondsOfDay(match[1]), zid: null, openedAt: null, endedAt: null, endReason: null };
       sessions.push(session);
       byPeer.set(session.peer, session);
       lastAccepted = session;
@@ -68,7 +73,7 @@ export function parseRouterLog(text) {
       }
     }
   }
-  return { version, sessions };
+  return { version, routerStarts, sessions };
 }
 
 /**
@@ -117,5 +122,51 @@ export function analyzeRecovery(parsed, { device, windowStart, windowEnd, maxRet
     returnSeconds,
     leaseExpiries: expiries.length,
     sessionsSeen: mine.length,
+  };
+}
+
+/**
+ * Decides whether the device got its session back after the router process was
+ * restarted. The log holds more than one router process: the first one's last
+ * session of this device must have ended with the process, and a session with
+ * the same client ID must open on a later process within `maxReturnSeconds`
+ * of that process starting. A lease expiry on the later process, or no session
+ * open at the end of the window, fails the check.
+ */
+export function analyzeRouterRestart(parsed, { device, windowStart, windowEnd, maxReturnSeconds = 30 }) {
+  const reasons = [];
+  const restartAt = parsed.routerStarts.find(time => time > windowStart && time <= windowEnd);
+  if (restartAt === undefined) {
+    reasons.push("the log shows no router restart in the window");
+    return { passed: false, reasons, routerVersion: parsed.version, restarts: 0, returnSeconds: [], leaseExpiries: 0 };
+  }
+  const mine = parsed.sessions.filter(session => session.openedAt !== null && session.peer.split(":")[0] === device);
+  const before = mine.filter(session => session.openedAt < restartAt && session.endReason !== "expired");
+  const last = before[before.length - 1];
+  if (!last) reasons.push("the device had no session on the first router process");
+  const returnSeconds = [];
+  if (last) {
+    const after = mine.find(session => session.openedAt >= restartAt && session.zid === last.zid);
+    if (!after) {
+      reasons.push(`no session with client ${last.zid.slice(0, 8)} opened on the restarted router`);
+    } else {
+      const seconds = after.openedAt - restartAt;
+      returnSeconds.push(Number(seconds.toFixed(1)));
+      if (seconds > maxReturnSeconds) reasons.push(`the client returned ${seconds.toFixed(1)} s after the restart, over the ${maxReturnSeconds} s bound`);
+    }
+  }
+  const expiries = mine.filter(session =>
+    session.openedAt >= restartAt && session.endReason === "expired" && session.endedAt <= windowEnd);
+  if (expiries.length > 0) reasons.push(`${expiries.length} session(s) expired by lease after the restart`);
+  const open = mine.filter(session =>
+    session.openedAt >= restartAt && session.openedAt <= windowEnd && (session.endedAt === null || session.endedAt > windowEnd));
+  if (open.length === 0) reasons.push("no device session was open on the restarted router at the end of the window");
+  return {
+    passed: reasons.length === 0,
+    reasons,
+    routerVersion: parsed.version,
+    restarts: parsed.routerStarts.filter(time => time > windowStart && time <= windowEnd).length,
+    returnSeconds,
+    leaseExpiries: expiries.length,
   };
 }
