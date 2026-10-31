@@ -1,0 +1,222 @@
+{
+  "schemaVersion": 2,
+  "mode": "release",
+  "profile": "esp32c6-zenoh",
+  "application": "device-smoke-agent",
+  "platform": "esp32c6-idf",
+  "board": "ESP32-C6-DevKitC-1",
+  "transport": {
+    "name": "zenoh-pico",
+    "backend": "eclipse-zenoh/zenoh-pico",
+    "component": "eclipse-zenoh/zenoh-pico",
+    "version": "1.10.0",
+    "revision": "96006957fddef401c20c8c2d813c2a630b666974",
+    "versionSource": "Platforms/esp32c6-idf/dependencies/zenoh-pico.lock.json"
+  },
+  "compatibility": {
+    "scope": "profile",
+    "status": "qualified",
+    "description": "Profile esp32c6-zenoh is qualified against Axoloty 0.10.0 (087bd9bb1bfb) on ESP32-C6-DevKitC-1."
+  },
+  "axoloty": {
+    "version": "0.10.0",
+    "tag": "v0.10.0",
+    "sha": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+    "dirty": false,
+    "contractSha256": "8c94b7edf5dede29592121decc5aba2f2e66e68cd540195c327e78165bcd9014"
+  },
+  "embedded": {
+    "version": "0.10.0-embedded.1",
+    "sha": "a59a0917013a3e72b78f1ff45835819d5dc1b5ea",
+    "dirty": false
+  },
+  "toolchain": {
+    "swift": "Swift version 6.4 (swift-6.4-RELEASE)\nTarget: x86_64-unknown-linux-gnu",
+    "sdk": "ESP-IDF v5.4",
+    "target": "esp32c6"
+  },
+  "configurationFingerprint": "c9b7747a5e80cef746963d1c97ef322c9dc2e0805933cd0314aff6d517a41a9f",
+  "image": {
+    "path": "axoloty-swift.bin",
+    "sha256": "1fbf87e605e3c7668256858d688d37b061cea6c1ce38bdf211376731720eff55",
+    "byteCount": 670384
+  },
+  "resources": null,
+  "qualification": {
+    "status": "qualified",
+    "requiredChecks": [
+      {
+        "check": "embedded-swift-smoke-v3",
+        "artifact": "release",
+        "records": 1,
+        "units": 1
+      },
+      {
+        "check": "network-test",
+        "artifact": "variant",
+        "records": 1,
+        "units": 1
+      },
+      {
+        "check": "agent-test",
+        "artifact": "variant",
+        "records": 2,
+        "units": 2
+      },
+      {
+        "check": "c-only-carrier-scenario",
+        "artifact": "variant",
+        "records": 1,
+        "units": 1
+      },
+      {
+        "check": "host-interop",
+        "artifact": "variant",
+        "records": 2,
+        "units": 1
+      },
+      {
+        "check": "router-restart",
+        "artifact": "variant",
+        "records": 1,
+        "units": 1
+      },
+      {
+        "check": "wifi-recovery",
+        "artifact": "variant",
+        "records": 1,
+        "units": 1
+      }
+    ],
+    "outstanding": [],
+    "evidence": [
+      {
+        "path": "docs/evidence/esp32c6-zenoh-agent-test-a.json",
+        "check": "agent-test",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+        "firmwareSHA256": "7ac1f8c0204529b4a210e95ca209ece3732535d464fdad9942e7d348c7235c7f",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc"
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-agent-test-b.json",
+        "check": "agent-test",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+        "firmwareSHA256": "d58cb1bfa7bd0aaa38529c8634a203c2bf466d876838569ad72b6c3776e018b5",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8"
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-c-only-carrier-scenario.json",
+        "check": "c-only-carrier-scenario",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+        "firmwareSHA256": "02dfb44a33bd983d68bf96bab5dfe28499192388cd638ff34ef5d7430c5daa22",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc"
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-carrier-diagnostics-build.json",
+        "check": "carrier-diagnostics-build",
+        "tier": "build",
+        "status": "unexecuted",
+        "reason": "The lock moved from Core v0.9.0 (f8c201f717e8) to Core v0.10.0 (087bd9bb1bfb563d0347799245ea4dd43e509bc9); this check has not been rerun against the new lock. The previous passing record is in git history."
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-carrier-diagnostics-device.json",
+        "check": "carrier-diagnostics-device",
+        "tier": "device",
+        "status": "unexecuted",
+        "reason": "No ESP32-C6 is attached to this run: AXOLOTY_DEVICE_PORT is unset. Carrier counters have host conformance coverage; device traffic, loss totals, heap, stack, allocation measurements, and resource thresholds remain unqualified."
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-embedded-swift-smoke-v3.json",
+        "check": "embedded-swift-smoke-v3",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+        "firmwareSHA256": "1fbf87e605e3c7668256858d688d37b061cea6c1ce38bdf211376731720eff55",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc"
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-embedded-zenoh-smoke.json",
+        "check": "embedded-zenoh-smoke",
+        "tier": "device",
+        "status": "unexecuted",
+        "reason": "Not run in this task: no physical ESP32-C6 or reachable Zenoh router is attached. A firmware image exists, but image builds and host mocks do not prove device behavior."
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-firmware-build.json",
+        "check": "firmware-build",
+        "tier": "build",
+        "status": "passed",
+        "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+        "firmwareSHA256": "0d72798cd85a317365c52eb99983d1af40494e46b14f80a3d94e67f55e765d2c",
+        "device": null
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-host-interop-a.json",
+        "check": "host-interop",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+        "firmwareSHA256": "7ac1f8c0204529b4a210e95ca209ece3732535d464fdad9942e7d348c7235c7f",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc"
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-host-interop-b.json",
+        "check": "host-interop",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+        "firmwareSHA256": "d58cb1bfa7bd0aaa38529c8634a203c2bf466d876838569ad72b6c3776e018b5",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc"
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-network-test.json",
+        "check": "network-test",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+        "firmwareSHA256": "a60383eb5b90f63d77fc3051ed1d725f1fdba7b74a47e031ecfd6ac2b7b8303e",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc"
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-reproducible-build.json",
+        "check": "reproducible-build",
+        "tier": "build",
+        "status": "passed",
+        "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+        "firmwareSHA256": "e51713f2042a0ad1dc29b3cb2d1ce7ed9f1c8644c6b1529a982197390c3a58fc",
+        "device": null
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-router-restart.json",
+        "check": "router-restart",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+        "firmwareSHA256": "d58cb1bfa7bd0aaa38529c8634a203c2bf466d876838569ad72b6c3776e018b5",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc"
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-wifi-recovery.json",
+        "check": "wifi-recovery",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+        "firmwareSHA256": "d58cb1bfa7bd0aaa38529c8634a203c2bf466d876838569ad72b6c3776e018b5",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc"
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-zenoh-pico-compile.json",
+        "check": "zenoh-pico-compile",
+        "tier": "component",
+        "status": "unexecuted",
+        "reason": "The lock moved from Core v0.9.0 (f8c201f717e8) to Core v0.10.0 (087bd9bb1bfb563d0347799245ea4dd43e509bc9); this check has not been rerun against the new lock. The previous passing record is in git history."
+      }
+    ]
+  }
+}
