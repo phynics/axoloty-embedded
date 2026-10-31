@@ -117,7 +117,7 @@ in [docs/evidence.md](./evidence.md).
 | `image.path` | Artifact file name | build provenance |
 | `image.sha256` | Artifact checksum | build provenance, hashed from the bytes |
 | `image.byteCount` | Artifact size | build provenance |
-| `resources` | Size report when one exists, else `null` | optional `size.json` beside the artifact |
+| `resources` | Build-stage size report (see [resource budgets](resource-budgets.md)) when one exists, else `null` | `size.json` beside the artifact, written by the build |
 | `qualification.status` | `qualified` or `unqualified` | computed from evidence |
 | `qualification.requiredChecks` | Checks this profile must pass | `qualification.requiredChecks` in the profile |
 | `qualification.outstanding` | Why each unsatisfied check blocks the certificate | computed from evidence |
