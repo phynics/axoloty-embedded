@@ -281,6 +281,8 @@ struct ZenohCarrier: ~Copyable {
     private var frames = ZenohFrameStorage()
     private var hasPendingFrame = false
     private var pollCursor = 0
+    /// The time of the last keep-alive this carrier sent while polling.
+    private var lastKeepAliveMS: UInt64 = 0
     private var slot0 = ZenohCarrierSlot()
     private var slot1 = ZenohCarrierSlot()
     private var slot2 = ZenohCarrierSlot()
@@ -549,6 +551,27 @@ struct ZenohCarrier: ~Copyable {
         }
     }
 
+    /// How long the carrier lets a polled session stay silent before it sends a
+    /// keep-alive itself, in milliseconds.
+    ///
+    /// The router closes a session that sends nothing for its 10 s lease.
+    /// zenoh-pico's keep-alive task is meant to send every third of the lease,
+    /// but on a session it reopened after a Wi-Fi loss, an idle device sent
+    /// nothing for a full lease and the router closed the session (phynics/
+    /// axoloty-embedded#56). Three seconds is that third.
+    static let keepAliveIntervalMS: UInt64 = 3_000
+
+    /// Sends a keep-alive when the session has been silent for
+    /// ``keepAliveIntervalMS``. Counting routers sends one before it reports
+    /// (see `axoloty_zenoh_connected_router_count`), so this reuses the public
+    /// facade call and adds nothing to the Core-owned contract.
+    private mutating func keepSessionAlive() {
+        let nowMS = UInt64(max(0, esp_timer_get_time() / 1_000))
+        guard nowMS &- lastKeepAliveMS >= Self.keepAliveIntervalMS else { return }
+        lastKeepAliveMS = nowMS
+        _ = session.connectedRouterCount()
+    }
+
     /// Polls once and retains the legacy seam's copy-on-read behavior.
     fileprivate mutating func pollOneEventOutcome(
         topic: UnsafeMutablePointer<UInt8>, topicCapacity: Int32,
@@ -568,6 +591,7 @@ struct ZenohCarrier: ~Copyable {
         }
         let active = activeSlotCount()
         guard active > 0 else { return .noEvent }
+        keepSessionAlive()
         for _ in 0..<Self.maximumSubscriptions {
             pollCursor = (pollCursor + 1) % Self.maximumSubscriptions
             let slot = slotAt(pollCursor)

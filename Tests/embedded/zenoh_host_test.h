@@ -53,6 +53,9 @@ int64_t esp_timer_get_time(void);
 void vTaskDelay(uint32_t ticks);
 int64_t host_zenoh_fake_time_us(void);
 uint32_t host_zenoh_router_query_count(void);
+/// Every router-count query since reset, in any failure mode. A query sends a
+/// keep-alive on the device backend.
+uint32_t host_zenoh_router_total_queries(void);
 uint32_t host_zenoh_scheduler_hz(void);
 void host_zenoh_set_scheduler_hz(uint32_t hz);
 
