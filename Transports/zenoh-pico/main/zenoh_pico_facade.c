@@ -283,7 +283,19 @@ axoloty_zenoh_result_t axoloty_zenoh_publish(const axoloty_zenoh_session_t *sess
         z_drop(z_move(zenoh_key));
         return AXOLOTY_ZENOH_TRANSPORT_ERROR;
     }
-    int published = z_put(session_loan(session_index), z_loan(zenoh_key), z_move(zenoh_payload), NULL);
+    // Core's Zenoh binding labels every sample `application/cbor`; do the same.
+    // The route prefix stays the authority and receivers treat the label as
+    // advisory, but a tool that reads it then sees the payload format.
+    z_put_options_t options;
+    z_put_options_default(&options);
+    z_owned_encoding_t encoding;
+    if (z_encoding_clone(&encoding, z_encoding_application_cbor()) < 0) {
+        z_drop(z_move(zenoh_key));
+        z_drop(z_move(zenoh_payload));
+        return AXOLOTY_ZENOH_TRANSPORT_ERROR;
+    }
+    options.encoding = z_move(encoding);
+    int published = z_put(session_loan(session_index), z_loan(zenoh_key), z_move(zenoh_payload), &options);
     z_drop(z_move(zenoh_key));
     return published == 0 ? AXOLOTY_ZENOH_OK : AXOLOTY_ZENOH_TRANSPORT_ERROR;
 }

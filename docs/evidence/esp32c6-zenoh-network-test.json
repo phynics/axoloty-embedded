@@ -6,7 +6,7 @@
   "status": "passed",
   "recordedAt": "2026-10-31",
   "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
-  "firmwareSHA256": "a60383eb5b90f63d77fc3051ed1d725f1fdba7b74a47e031ecfd6ac2b7b8303e",
+  "firmwareSHA256": "cb3219d844fb720fb5e433c31de7d5790edfa0f2f9087c5a418e6a7b5250b794",
   "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
   "protocol": "65 deterministic cases over serial JSON Lines",
   "result": "65/65 passed, 2 declared unsupported"
