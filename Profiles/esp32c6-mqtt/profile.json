@@ -6,5 +6,16 @@
   "board": "ESP32-C6-DevKitC-1",
   "core": {
     "revision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9"
+  },
+  "qualification": {
+    "requiredChecks": [
+      { "check": "embedded-swift-smoke-v2", "artifact": "release", "records": 1, "units": 1 },
+      { "check": "network-test", "artifact": "variant", "records": 1, "units": 1 },
+      { "check": "agent-test", "artifact": "variant", "records": 2, "units": 2 },
+      { "check": "host-interop", "artifact": "variant", "records": 2, "units": 1 },
+      { "check": "coatyjs-interop", "artifact": "variant", "records": 2, "units": 1 },
+      { "check": "broker-restart", "artifact": "variant", "records": 2, "units": 2 },
+      { "check": "last-will", "artifact": "variant", "records": 1, "units": 1 }
+    ]
   }
 }

@@ -25,6 +25,12 @@ const FIRMWARE_SHA = "b".repeat(40);
 const IMAGE_SHA = "a".repeat(64);
 const ZENOH_REVISION = "96006957fddef401c20c8c2d813c2a630b666974";
 
+const REQUIRED_CHECKS = [
+  { check: "smoke", artifact: "release", records: 1, units: 1 },
+  { check: "interop", artifact: "variant", records: 2, units: 1 },
+  { check: "exchange", artifact: "variant", records: 2, units: 2 },
+];
+
 const writeJson = (file, value) => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
@@ -101,6 +107,7 @@ try {
       platform: "esp32c6-idf",
       transport,
       board: "ESP32-C6-DevKitC-1",
+      qualification: { requiredChecks: REQUIRED_CHECKS },
     });
     const output = path.join(workspace, "out", `${config.name}.json`);
     generate(workspace, profilePath, output);
@@ -118,6 +125,7 @@ try {
     platform: "esp32c6-idf",
     transport: "carrier-unknown",
     board: "ESP32-C6-DevKitC-1",
+    qualification: { requiredChecks: REQUIRED_CHECKS },
   });
   let failed = false;
   try {
@@ -128,6 +136,63 @@ try {
       "the refusal did not name the missing backend declaration");
   }
   assert.ok(failed, "a transport with no backend declaration was accepted");
+
+  // A certificate needs every required check. One passed device record used to
+  // qualify the whole profile, so each way of missing a check is proved here.
+  const gateProfile = path.join(workspace, "Profiles", "esp32c6-mqtt", "profile.json");
+  const evidenceDir = path.join(workspace, "docs", "evidence");
+  const passed = (check, suffix, device, firmwareSHA256) => writeJson(
+    path.join(evidenceDir, `esp32c6-mqtt-${check}${suffix}.json`),
+    { profile: "esp32c6-mqtt", check, tier: "device", status: "passed", device, firmwareSHA256, coreRevision: CORE_SHA });
+  const qualification = () => {
+    const output = path.join(workspace, "out", "gate.json");
+    generate(workspace, gateProfile, output);
+    return JSON.parse(fs.readFileSync(output, "utf8")).qualification;
+  };
+  const expectBlocked = (pattern, message) => {
+    const result = qualification();
+    assert.equal(result.status, "unqualified", message);
+    assert.match(result.outstanding.join("\n"), pattern, message);
+  };
+
+  expectBlocked(/smoke has no record/, "no evidence at all qualified the profile");
+  passed("smoke", "", "unit-a", IMAGE_SHA);
+  expectBlocked(/exchange has no record/, "a passed smoke alone qualified the profile");
+  passed("interop", "-a", "unit-a", "1".repeat(64));
+  passed("exchange", "-a", "unit-a", "c".repeat(64));
+  expectBlocked(/interop has 1 of 2 required records/, "one role satisfied a two-role check");
+  passed("interop", "-b", "unit-a", "2".repeat(64));
+  expectBlocked(/exchange has 1 of 2 required records/, "one record satisfied a two-record check");
+  passed("exchange", "-b", "unit-a", "d".repeat(64));
+  expectBlocked(/exchange ran on 1 of 2/, "two records from one board satisfied a two-unit check");
+  passed("exchange", "-b", "unit-b", "d".repeat(64));
+  assert.equal(qualification().status, "qualified", "a complete evidence set was not qualified");
+
+  passed("smoke", "", "unit-a", "e".repeat(64));
+  expectBlocked(/smoke has a record that did not pass/, "a release check accepted another image");
+  passed("smoke", "", "unit-a", IMAGE_SHA);
+  writeJson(path.join(evidenceDir, "esp32c6-mqtt-exchange-b.json"),
+    { profile: "esp32c6-mqtt", check: "exchange", tier: "device", status: "failed", device: "unit-b", firmwareSHA256: "d".repeat(64), coreRevision: CORE_SHA });
+  expectBlocked(/exchange has a record that did not pass/, "a failed record was ignored");
+  writeJson(path.join(evidenceDir, "esp32c6-mqtt-exchange-b.json"),
+    { profile: "esp32c6-mqtt", check: "exchange", tier: "device", status: "unexecuted", reason: "fixture" });
+  expectBlocked(/exchange has a record that did not pass/, "an unexecuted record was ignored");
+  passed("exchange", "-b", "unit-b", "d".repeat(64));
+  writeJson(path.join(evidenceDir, "esp32c6-mqtt-exchange-a.json"),
+    { profile: "esp32c6-mqtt", check: "exchange", tier: "device", status: "passed", device: "unit-a", firmwareSHA256: "c".repeat(64), coreRevision: "f".repeat(40) });
+  expectBlocked(/exchange has a record that did not pass/, "a record from another Core revision was accepted");
+  fs.rmSync(evidenceDir, { recursive: true });
+
+  const undeclared = path.join(workspace, "Profiles", "esp32c6-undeclared", "profile.json");
+  writeJson(undeclared, {
+    name: "esp32c6-undeclared",
+    application: "device-smoke-agent",
+    platform: "esp32c6-idf",
+    transport: "mqtt-espidf",
+    board: "ESP32-C6-DevKitC-1",
+  });
+  assert.throws(() => generate(workspace, undeclared, path.join(workspace, "out", "undeclared.json")),
+    /declares no qualification.requiredChecks/, "a profile with no required checks was accepted");
 
   // A certificate names a tagged Core release. An untagged lock is between
   // releases, so the generator must refuse instead of labelling a commit.
