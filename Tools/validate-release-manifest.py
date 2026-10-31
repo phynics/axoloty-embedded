@@ -36,6 +36,17 @@ STATUSES = {"passed", "failed", "unexecuted"}
 # and the generator together.
 ESPIDF_BACKENDS = {"mqtt-espidf": "esp-idf/mqtt"}
 
+# Certificates issued before the size report existed carry `resources: null`.
+# They stay valid through this closed list of exact `<profile>/<version>`
+# entries. Never add a new release here: a release of a profile that declares
+# `budgets.build` must carry a size report.
+SIZE_REPORT_GRANDFATHERED = frozenset({
+    "esp32c6-mqtt/0.8.2-embedded.2",
+    "esp32c6-mqtt/0.10.0-embedded.2",
+    "esp32c6-zenoh/0.10.0-embedded.1",
+    "esp32c6-zenoh/0.10.0-embedded.2",
+})
+
 
 def load(path):
     try:
@@ -486,7 +497,13 @@ def validate(repo_root, manifest_path, require_qualified, allow_revoked):
         problems.append("image.byteCount must be a positive integer")
 
     resources = manifest.get("resources")
-    if resources is not None:
+    declares_build_budgets = isinstance(profile, dict) and isinstance(profile.get("budgets"), dict) \
+        and "build" in profile["budgets"]
+    release_key = "%s/%s" % (profile_name, embedded.get("version"))
+    if resources is None:
+        if declares_build_budgets and release_key not in SIZE_REPORT_GRANDFATHERED:
+            problems.append("resources is null but profile %s declares budgets.build; a release must carry a size report" % profile_name)
+    else:
         if not isinstance(resources, dict) or set(resources) != {"available", "report"} or resources.get("available") is not True:
             problems.append("resources must be null or {available: true, report: {...}}")
         else:

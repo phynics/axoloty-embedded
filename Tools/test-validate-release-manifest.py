@@ -336,6 +336,35 @@ with tempfile.TemporaryDirectory() as temporary:
     else:
         print("SKIP: size report integration requires node")
     write_json(manifest, original)
+    # A profile that declares budgets.build cannot release without a size
+    # report, unless the release is a named pre-report certificate.
+    budget_profile_path = repo / "Profiles/esp32c6-mqtt/profile.json"
+    budget_profile = json.loads(budget_profile_path.read_text())
+    budget_profile["budgets"] = {"basis": "fixture", "build": {"imageBytes": 2}}
+    write_json(budget_profile_path, budget_profile)
+    result = run(repo, manifest, "--require-qualified")
+    require(result, 1, "null resources with declared budgets accepted for a new version")
+    assert "must carry a size report" in result.stderr + result.stdout, result.stderr
+    grandfathered_spec = __import__("importlib.util").util.spec_from_file_location("gf", VALIDATOR)
+    grandfathered = __import__("importlib.util").util.module_from_spec(grandfathered_spec)
+    grandfathered_spec.loader.exec_module(grandfathered)
+    assert grandfathered.SIZE_REPORT_GRANDFATHERED == {
+        "esp32c6-mqtt/0.8.2-embedded.2", "esp32c6-mqtt/0.10.0-embedded.2",
+        "esp32c6-zenoh/0.10.0-embedded.1", "esp32c6-zenoh/0.10.0-embedded.2",
+    }
+    old_manifest = repo / "releases" / "esp32c6-mqtt" / ("%s-embedded.2.json" % LOCK["version"])
+    old_document = copy.deepcopy(original)
+    old_document["embedded"]["version"] = "0.10.0-embedded.2"
+    old_repo_version = (repo / "VERSION").read_text()
+    (repo / "VERSION").write_text("0.10.0-embedded.2\n")
+    write_json(old_manifest, old_document)
+    old_result = run(repo, old_manifest, "--require-qualified")
+    require(old_result, 0, "a grandfathered pre-report certificate was rejected")
+    (repo / "VERSION").write_text(old_repo_version)
+    old_manifest.unlink()
+    budget_profile.pop("budgets")
+    write_json(budget_profile_path, budget_profile)
+    require(run(repo, manifest, "--require-qualified"), 0, "null resources without declared budgets rejected")
     document = json.loads(manifest.read_text(encoding="utf-8"))
     document["embedded"]["dirty"] = True
     write_json(manifest, document)

@@ -58,11 +58,21 @@ resetting the budgets with new evidence.
   larger and is reported but not gated, following the static-storage policy
   receipt (`not-applicable`). This is a Zenoh qualification variant, not a
   qualified release artifact. A certificate for a qualified release cannot use
-  the exemption; network-configured images are gated.
+  the exemption; network-configured images are gated. Known limit: the
+  validator cannot prove that a `not-applicable` report on an unqualified
+  Zenoh manifest came from the C-only image. This does not affect certificates,
+  because `--require-qualified` rejects the exemption.
 - **Runtime budgets.** Minimum free heap and the main-stack remainder come from
   a device run and are not measured at build time. They are recorded in the smoke
   completion record and are not yet gated.
 - **Stack bounds.** The report does not bound stack use.
+
+## Releases must carry a report
+
+A release of a profile that declares `budgets.build` must carry a size report in
+`resources`; the validator rejects `resources: null` for it. Only the four
+certificates issued before the report existed are exempt, through a fixed list of
+exact `<profile>/<version>` entries in `Tools/validate-release-manifest.py`.
 
 ## Reading a report
 

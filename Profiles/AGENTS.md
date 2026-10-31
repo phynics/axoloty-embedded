@@ -21,6 +21,14 @@ under this directory belongs in one of the other three axes.
 }
 ```
 
+Three further top-level keys are optional. `budgets` declares build-stage size
+budgets (see [docs/resource-budgets.md](../docs/resource-budgets.md)).
+`qualification` declares the required checks for a release. `configuration`
+holds profile-specific build configuration. `Tools/validate-composition.py`
+rejects any top-level key outside `schemaVersion`, `name`, `application`,
+`platform`, `transport`, `board`, `configuration`, `core`, `budgets`, and
+`qualification`, so a misspelled key fails instead of being ignored.
+
 `board` is the declared target board, not a claim that a unit from that board
 family was tested. The qualification evidence names the unit that was actually
 used. The release manifest records `board` from here and the tested unit
