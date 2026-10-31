@@ -55,6 +55,7 @@ private struct EmbeddedZenohHostTest {
         carrierPollMapping()
         willIsUnsupported()
         reconnectObservation()
+        idleKeepAlive()
         schedulerTickConversion()
         carrierDiagnostics()
         probeRecords()
@@ -570,6 +571,48 @@ private struct EmbeddedZenohHostTest {
         let closedStartUS = host_zenoh_fake_time_us()
         check(!carrier.waitForReconnect(deadlineMS: 5_000), "closed session fails fast")
         check(host_zenoh_fake_time_us() == closedStartUS, "closed session never waits out a deadline")
+    }
+
+    // MARK: - Idle keep-alive
+
+    /// A polled session that stays silent sends a keep-alive itself, because the
+    /// router closes one that is quiet for a full lease (#56). Time moves only
+    /// through vTaskDelay, so the interval is exact.
+    static func idleKeepAlive() {
+        host_zenoh_reset()
+        var carrier = ZenohCarrier()
+        check(carrier.connect(deadlineMS: 5_000), "open for keep-alive")
+        let key = Array("sample/key".utf8)
+        check(withSpan(key, count: key.count) {
+            carrier.subscribe(topic: $0, deadlineMS: 1_000)
+        }, "subscribe for keep-alive")
+        var outKey = [UInt8](repeating: 0, count: 256)
+        var outPayload = [UInt8](repeating: 0, count: 2_048)
+        var keyLength: Int32 = 0
+        var payloadLength: Int32 = 0
+        func poll() {
+            _ = outKey.withUnsafeMutableBufferPointer { keyBuffer in
+                outPayload.withUnsafeMutableBufferPointer { payloadBuffer in
+                    carrier.pollOneEvent(
+                        topic: keyBuffer.baseAddress!, topicCapacity: Int32(keyBuffer.count), topicLength: &keyLength,
+                        payload: payloadBuffer.baseAddress!, payloadCapacity: Int32(payloadBuffer.count),
+                        payloadLength: &payloadLength)
+                }
+            }
+        }
+        vTaskDelay(10_000)
+        let before = host_zenoh_router_total_queries()
+        poll()
+        check(host_zenoh_router_total_queries() == before + 1, "a silent session is kept alive")
+        poll()
+        check(host_zenoh_router_total_queries() == before + 1, "a second poll does not repeat it")
+        vTaskDelay(UInt32(ZenohCarrier.keepAliveIntervalMS) - 1)
+        poll()
+        check(host_zenoh_router_total_queries() == before + 1, "nothing is sent before the interval")
+        vTaskDelay(1)
+        poll()
+        check(host_zenoh_router_total_queries() == before + 2, "the next keep-alive follows the interval")
+        check(carrier.disconnect(), "keep-alive teardown")
     }
 
     // MARK: - Scheduler tick conversion

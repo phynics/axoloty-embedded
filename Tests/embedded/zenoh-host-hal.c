@@ -87,6 +87,7 @@ static uint32_t host_last_publish_payload_length;
 // advances the clock instead of sleeping, so timeout tests run instantly and
 // repeatably. Reset with host_zenoh_reset.
 static int64_t host_fake_time_us;
+static uint32_t host_router_total_queries;
 static int host_router_zero_observed;
 static uint32_t host_router_query_count;
 static uint32_t host_scheduler_hz = 1000;
@@ -107,6 +108,7 @@ void host_zenoh_reset(void) {
     host_fake_time_us = 0;
     host_router_zero_observed = 0;
     host_router_query_count = 0;
+    host_router_total_queries = 0;
     host_scheduler_hz = 1000;
 }
 
@@ -120,6 +122,7 @@ void vTaskDelay(uint32_t ticks) {
 
 int64_t host_zenoh_fake_time_us(void) { return host_fake_time_us; }
 uint32_t host_zenoh_router_query_count(void) { return host_router_query_count; }
+uint32_t host_zenoh_router_total_queries(void) { return host_router_total_queries; }
 
 uint32_t host_zenoh_scheduler_hz(void) { return host_scheduler_hz; }
 
@@ -240,6 +243,7 @@ axoloty_zenoh_result_t axoloty_zenoh_connected_router_count(const axoloty_zenoh_
     if (session_index < 0 || !out_count) return AXOLOTY_ZENOH_INVALID_ARGUMENT;
     *out_count = 0;
     if (!host_session_open[session_index]) return AXOLOTY_ZENOH_NOT_OPEN;
+    ++host_router_total_queries;
     if ((host_failures & FAIL_ROUTER_DROP_THEN_RESTORE) != 0) {
         ++host_router_query_count;
         if (host_router_query_count == 1u) {
