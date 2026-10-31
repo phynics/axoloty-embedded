@@ -211,6 +211,11 @@ if wanted build; then
     check_script manifest-generator \
         'node is not available for the release-manifest generator check' \
         node Tools/test-write-release-manifest.mjs
+    # The wifi-recovery verdict comes from the router log. These run the parser
+    # and the evidence writer on log lines in zenohd's shape, no router needed.
+    check_script wifi-recovery-evidence \
+        'node is not available for the wifi-recovery evidence checks' \
+        sh -c 'node Tests/embedded/test-router-session-analyzer.mjs && node Tests/embedded/test-wifi-recovery-record.mjs'
     check_script zenoh-host-seam \
         'swiftc or a host C compiler is not available for the Zenoh seam check' \
         Tests/embedded/run-zenoh-host-test.sh
