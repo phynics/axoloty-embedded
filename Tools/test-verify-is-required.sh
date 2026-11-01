@@ -8,6 +8,7 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 eval "$(sed -n '/^is_required() {/,/^}/p' "$repo_root/Tools/verify.sh")"
 failures=0
 check() {
+    # shellcheck disable=SC2034  # read by the sourced is_required
     required_tiers=$1
     if is_required "$2"; then got=required; else got=optional; fi
     if [ "$got" != "$3" ]; then
