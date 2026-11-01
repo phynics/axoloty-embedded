@@ -268,33 +268,43 @@ swiftc -swift-version 6 -enable-experimental-feature Lifetimes -parse-as-library
     -emit-module -emit-module-path "$tmp/AxolotyZenohCore.swiftmodule" \
     -c $(swift_sources "$zenoh_core_dir") -o "$tmp/AxolotyZenohCore.o"
 
+# The carrier is sized to the bounds the composition takes from the selected
+# application, so the same check runs at the bounds of two applications: the
+# smoke agent's 256/2048 and the sensor node's 128/512.
+for bounds_profile in esp32c6-zenoh esp32c6-sensor-node-zenoh; do
+out="$tmp/$bounds_profile"
+mkdir -p "$out"
+python3 "$repo_root/Tools/validate-composition.py" --repo-root "$repo_root" \
+    --profile "$repo_root/Profiles/$bounds_profile/profile.json" \
+    --emit-carrier-bounds-header "$out/axoloty_carrier_bounds.h" \
+    --emit-carrier-bounds-swift "$out/CarrierBounds.swift" >/dev/null
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
-    -I "$transport_main" -I "$facade_include" -I "$repo_root/Interop" \
-    -c "$script_dir/zenoh-host-hal.c" -o "$tmp/hal.o"
+    -I "$out" -I "$transport_main" -I "$facade_include" -I "$repo_root/Interop" \
+    -c "$script_dir/zenoh-host-hal.c" -o "$out/hal.o"
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
-    -I "$repo_root/Interop" -c "$transport_main/axoloty_carrier_v1.c" -o "$tmp/carrier-table.o"
+    -I "$repo_root/Interop" -c "$transport_main/axoloty_carrier_v1.c" -o "$out/carrier-table.o"
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
-    -I "$transport_main" -I "$facade_include" \
-    -c "$script_dir/zenoh-queue-test.c" -o "$tmp/queue-test.o"
+    -I "$out" -I "$transport_main" -I "$facade_include" \
+    -c "$script_dir/zenoh-queue-test.c" -o "$out/queue-test.o"
 # The carrier-diagnostics conformance vectors. Compiled against the production
 # counters, so the properties the device gate relies on are checked in C where
 # they can be observed exactly, and not approximated from Swift.
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
     -I "$transport_main" \
-    -c "$script_dir/carrier-diagnostics-test.c" -o "$tmp/diagnostics-test.o"
+    -c "$script_dir/carrier-diagnostics-test.c" -o "$out/diagnostics-test.o"
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
-    -I "$transport_main" \
-    -c "$transport_main/zenoh_sample_validation.c" -o "$tmp/validation.o"
+    -I "$out" -I "$transport_main" \
+    -c "$transport_main/zenoh_sample_validation.c" -o "$out/validation.o"
 # The transport-neutral carrier counters the production image links. Compiled
 # from the transport's own source with no Zenoh and no SDK header, exactly as
 # the image compiles it, so the host seam checks the production counters rather
 # than a stand-in.
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
     -I "$transport_main" \
-    -c "$transport_main/carrier_diagnostics.c" -o "$tmp/diagnostics.o"
+    -c "$transport_main/carrier_diagnostics.c" -o "$out/diagnostics.o"
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
-    -I "$transport_main" -I "$facade_include" \
-    -c "$transport_main/zenoh_pico_queue.c" -o "$tmp/queue.o"
+    -I "$out" -I "$transport_main" -I "$facade_include" \
+    -c "$transport_main/zenoh_pico_queue.c" -o "$out/queue.o"
 # The host ABI probe uses deterministic private network configuration while
 # compiling the production endpoint and copy callbacks.
 cat >"$tmp/axoloty_network_config.h" <<'EOF'
@@ -304,7 +314,7 @@ static const unsigned short axoloty_zenoh_port = 7447;
 EOF
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
     -I "$transport_main" -I "$tmp" -I "$repo_root/Platforms/esp32c6-idf/main" \
-    -c "$transport_main/zenoh_endpoint.c" -o "$tmp/endpoint.o"
+    -c "$transport_main/zenoh_endpoint.c" -o "$out/endpoint.o"
 # The real carrier and probe sources the firmware image compiles. The host
 # test flag exposes the host-only test module for the platform clock the
 # carrier waits on; the device links the SDK originals through its bridging
@@ -320,13 +330,14 @@ swiftc -D EMBEDDED_ZENOH_HOST_TEST \
     -Xcc -fmodule-map-file="$script_dir/zenoh_host_test.modulemap" \
     "$transport_main/ZenohCarrier.swift" \
     "$transport_main/ZenohNetworkProbe.swift" \
+    "$out/CarrierBounds.swift" \
     "$repo_root/Applications/device-smoke-agent/main/ProfileInterest.swift" \
     "$script_dir/zenoh-host-test.swift" \
-    "$tmp/hal.o" "$tmp/carrier-table.o" "$tmp/queue.o" "$tmp/queue-test.o" "$tmp/validation.o" "$tmp/endpoint.o" \
-    "$tmp/diagnostics.o" "$tmp/diagnostics-test.o" \
+    "$out/hal.o" "$out/carrier-table.o" "$out/queue.o" "$out/queue-test.o" "$out/validation.o" "$out/endpoint.o" \
+    "$out/diagnostics.o" "$out/diagnostics-test.o" \
     "$tmp/_JSONCore.o" "$tmp/AxolotyWire.o" "$tmp/AxolotyZenohCore.o" \
     -Xlinker -lpthread \
-    -o "$tmp/embedded-zenoh-host-test"
+    -o "$out/embedded-zenoh-host-test"
 
 # Nix's standalone Swift compiler does not always add the dispatch library to
 # the executable search path. Native CI images already provide it.
@@ -336,7 +347,9 @@ if [ "$(uname -s)" = "Linux" ] && [ -d /nix/store ]; then
     dispatch_dir=$(dirname "$(find /nix/store -name libdispatch.so 2>/dev/null | head -1)")
 fi
 LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}:$swift_runtime:$dispatch_dir" \
-    "$tmp/embedded-zenoh-host-test"
+    "$out/embedded-zenoh-host-test"
+echo "embedded Zenoh host seam tests passed at the bounds of $bounds_profile"
+done
 echo "embedded Zenoh host seam tests passed"
 
 # Compile the real key-expression conformance test from the exact prepared

@@ -30,6 +30,8 @@ int axoloty_mqtt_poll_one_event(
     int topic_capacity, int * AXOLOTY_NONNULL topic_length,
     unsigned char * AXOLOTY_NONNULL __counted_by(payload_capacity) AXOLOTY_C_NOESCAPE payload,
     int payload_capacity, int * AXOLOTY_NONNULL payload_length);
+/// Messages dropped for exceeding the composed bounds since boot, counted once each.
+unsigned int axoloty_mqtt_oversized_frame_count(void);
 int axoloty_mqtt_disconnect(void);
 
 #endif

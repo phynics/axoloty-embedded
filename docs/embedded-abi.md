@@ -213,19 +213,28 @@ plus the Core revision from `axoloty-core.lock.json`. Each axis manifest uses
 | `sources` | A nonempty list of existing `.swift` files. The set of listed paths must equal the app's discovered Swift source inventory. |
 | `requirements.platform` | Platform capability names from the finite catalog. |
 | `requirements.carrier` | Carrier capability names from the finite catalog. An empty array is valid. |
-| `capacities.maxTopicLength` | Positive `UInt32` byte limit. |
-| `capacities.maxPayloadSize` | Positive `UInt32` byte limit. |
+| `capacities.maxTopicLength` | Positive `UInt32` byte limit. The carrier sizes its fixed storage to it, and it may not exceed the transport's `limits.maxTopicLength`. |
+| `capacities.maxPayloadSize` | Positive `UInt32` byte limit. The carrier sizes its fixed storage to it, and it may not exceed the transport's `limits.maxPayloadSize`. |
 | `capacities.applicationStateBytes` | Positive `UInt32` state-stride budget. |
 
 `Platforms/<name>/platform.json` lists the platform capabilities it supplies.
-`Transports/<name>/transport.json` lists the carrier capabilities it supplies.
+`Transports/<name>/transport.json` lists the carrier capabilities it supplies
+and declares `limits.maxTopicLength` and `limits.maxPayloadSize`, the fixed
+ceilings the transport can carry at all (the wire bound, or the contract of a
+library it sits on). Composition fails when the application declares a capacity
+above a ceiling.
 Capability arrays reject duplicates and names absent from the catalog. A
 profile build fails before compilation when a selected axis does not provide
 an app requirement, when a manifest is malformed, or when the profile Core
 revision differs from the lock.
 
 `Tools/validate-composition.py` reads the manifests and emits one fixed
-`EmbeddedApplicationRequirements.current` value into the build directory.
+`EmbeddedApplicationRequirements.current` value into the build directory. It
+also writes the application's topic and payload capacities once as the carrier
+bounds: `axoloty_carrier_bounds.h` for the carrier's C, `EmbeddedCarrierBounds`
+for its Swift, and a CMake file for the zenoh-pico component, which derives
+`FRAG_MAX_SIZE` from them. A transport sizes its storage to these and names no
+application.
 It derives capability bits and function masks from
 `Tools/capability_catalog.py` and the C headers. It does not edit application
 source. At entry, the Swift boundary validates both tables against that

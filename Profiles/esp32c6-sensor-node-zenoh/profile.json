@@ -11,10 +11,10 @@
   "budgets": {
     "basis": "production reference application sensor-node, build configuration production, measured with the network stack linked (sizing-only placeholder header) on Core 087bd9bb1bfb; build budgets are measured plus 10 percent rounded up to the next KiB, runtime floors are the lowest of the normal and recovery runs minus 10 percent rounded down to the next KiB",
     "build": {
-      "imageBytes": 807936,
+      "imageBytes": 808960,
       "flashTextBytes": 636928,
-      "staticRamBytes": 154624,
-      "dramBssBytes": 39936
+      "staticRamBytes": 153600,
+      "dramBssBytes": 38912
     },
     "runtime": {
       "minimumFreeHeapBytes": 240640,

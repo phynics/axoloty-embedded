@@ -20,9 +20,10 @@
 // small, and deterministic teardown that never reopens a session behind the
 // caller.
 //
-// Bounds mirror the sibling transport and `AxolotyWire`: a key of at most
-// 256 bytes and a payload of at most 2_048 bytes. A zero-length payload is
-// legal; a null pointer with a non-zero length is rejected before use.
+// Bounds are the topic and payload capacities the composition took from the
+// selected application (`EmbeddedCarrierBounds`), never above the facade's own
+// 256-byte key and 2_048-byte payload. A zero-length payload is legal; a null
+// pointer with a non-zero length is rejected before use.
 
 import AxolotyWire
 import AxolotyZenohCore
@@ -63,7 +64,7 @@ private func zenohWaitTicks(milliseconds: UInt32) -> UInt32 {
 private struct ZenohCarrierSlot {
     var active = false
     var keyLength = 0
-    var key = InlineArray<256, UInt8>(repeating: 0)
+    var key = EmbeddedCarrierBounds.TopicStorage(repeating: 0)
     var subscription: ZenohSubscription?
 }
 
@@ -418,7 +419,7 @@ struct ZenohCarrier: ~Copyable {
     mutating func subscribe(topic: Span<UInt8>, deadlineMS: UInt32) -> Bool {
         _ = deadlineMS
         guard phase == .connected || phase == .subscribed,
-              !topic.isEmpty, topic.count <= ZenohFrameStorage.keyCapacity else {
+              !topic.isEmpty, topic.count <= EmbeddedCarrierBounds.maxTopicLength else {
             noteSubscriptionFailure()
             return false
         }
@@ -463,7 +464,7 @@ struct ZenohCarrier: ~Copyable {
     mutating func unsubscribe(topic: Span<UInt8>, deadlineMS: UInt32) -> Bool {
         _ = deadlineMS
         guard phase == .subscribed,
-              !topic.isEmpty, topic.count <= ZenohFrameStorage.keyCapacity else {
+              !topic.isEmpty, topic.count <= EmbeddedCarrierBounds.maxTopicLength else {
             noteSubscriptionFailure()
             return false
         }
@@ -495,8 +496,8 @@ struct ZenohCarrier: ~Copyable {
     /// installed.
     func publish(topic: Span<UInt8>, payload: Span<UInt8>) -> Bool {
         guard phase == .subscribed,
-              !topic.isEmpty, topic.count <= ZenohFrameStorage.keyCapacity,
-              payload.count <= ZenohFrameStorage.payloadCapacity else {
+              !topic.isEmpty, topic.count <= EmbeddedCarrierBounds.maxTopicLength,
+              payload.count <= EmbeddedCarrierBounds.maxPayloadSize else {
             notePublishRefusedLocally()
             return false
         }
@@ -581,8 +582,8 @@ struct ZenohCarrier: ~Copyable {
         payload: UnsafeMutablePointer<UInt8>, payloadCapacity: Int32,
         payloadLength: UnsafeMutablePointer<Int32>
     ) -> ZenohCarrierPollOutcome {
-        guard topicCapacity > 0, topicCapacity <= Int32(ZenohFrameStorage.keyCapacity),
-              payloadCapacity >= 0, payloadCapacity <= Int32(ZenohFrameStorage.payloadCapacity) else { return .failed }
+        guard topicCapacity > 0, topicCapacity <= Int32(EmbeddedCarrierBounds.maxTopicLength),
+              payloadCapacity >= 0, payloadCapacity <= Int32(EmbeddedCarrierBounds.maxPayloadSize) else { return .failed }
         if phase == .disconnected { return .closed }
         guard phase == .subscribed else { return .failed }
         if hasPendingFrame {
@@ -783,7 +784,7 @@ func embeddedExchangeConnect(_ deadlineMS: UInt32) -> Int32 {
 func embeddedExchangeSubscribe(
     _ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ deadlineMS: UInt32
 ) -> Int32 {
-    guard topicLength > 0, topicLength <= Int32(ZenohFrameStorage.keyCapacity) else { return 0 }
+    guard topicLength > 0, topicLength <= Int32(EmbeddedCarrierBounds.maxTopicLength) else { return 0 }
     return applicationExchangeCarrier.subscribe(
         topic: Span(_unsafeStart: topic, count: Int(topicLength)), deadlineMS: deadlineMS
     ) ? 1 : 0
@@ -792,7 +793,7 @@ func embeddedExchangeSubscribe(
 func embeddedExchangeUnsubscribe(
     _ topic: UnsafePointer<UInt8>, _ topicLength: Int32, _ deadlineMS: UInt32
 ) -> Int32 {
-    guard topicLength > 0, topicLength <= Int32(ZenohFrameStorage.keyCapacity) else { return 0 }
+    guard topicLength > 0, topicLength <= Int32(EmbeddedCarrierBounds.maxTopicLength) else { return 0 }
     return applicationExchangeCarrier.unsubscribe(
         topic: Span(_unsafeStart: topic, count: Int(topicLength)), deadlineMS: deadlineMS
     ) ? 1 : 0
@@ -802,8 +803,8 @@ func embeddedExchangePublish(
     _ topic: UnsafePointer<UInt8>, _ topicLength: Int32,
     _ payload: UnsafePointer<UInt8>, _ payloadLength: Int32
 ) -> Int32 {
-    guard topicLength > 0, topicLength <= Int32(ZenohFrameStorage.keyCapacity),
-          payloadLength >= 0, payloadLength <= Int32(ZenohFrameStorage.payloadCapacity) else { return 0 }
+    guard topicLength > 0, topicLength <= Int32(EmbeddedCarrierBounds.maxTopicLength),
+          payloadLength >= 0, payloadLength <= Int32(EmbeddedCarrierBounds.maxPayloadSize) else { return 0 }
     // A zero-length payload borrows nothing; the carrier maps it to its empty
     // value without reading the payload pointer.
     return applicationExchangeCarrier.publish(

@@ -25,8 +25,8 @@ static unsigned host_failures;
 static unsigned host_calls[9];
 static unsigned host_resubscriptions;
 static int host_event_ready;
-static unsigned char host_event_topic[256];
-static unsigned char host_event_payload[2048];
+static unsigned char host_event_topic[AXOLOTY_CARRIER_MAX_TOPIC_BYTES];
+static unsigned char host_event_payload[AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES];
 static int host_event_topic_length;
 static int host_event_payload_length;
 
@@ -140,13 +140,40 @@ int host_identity_tests(void) {
 int host_callback_validation_tests(void) {
     static const char topic[] = "coaty/3/ns/ADV/source";
     static const char payload[] = "{}";
-    if (!axoloty_mqtt_event_data_is_valid(topic, (int)strlen(topic), payload, 2, 2, 0)) return 0;
+    static char long_topic[AXOLOTY_MQTT_TOPIC_CAPACITY + 1];
+    static char long_payload[AXOLOTY_MQTT_PAYLOAD_CAPACITY + 1];
+    memset(long_topic, 't', sizeof(long_topic));
+    memset(long_payload, 'p', sizeof(long_payload));
+    const int topic_length = (int)strlen(topic);
+    if (!axoloty_mqtt_event_data_is_valid(topic, topic_length, payload, 2, 2, 0)) return 0;
     if (axoloty_mqtt_event_data_is_valid(NULL, 1, payload, 2, 2, 0)) return 0;
-    if (axoloty_mqtt_event_data_is_valid(topic, (int)strlen(topic), NULL, 2, 2, 0)) return 0;
+    if (axoloty_mqtt_event_data_is_valid(topic, topic_length, NULL, 2, 2, 0)) return 0;
     if (axoloty_mqtt_event_data_is_valid(topic, 0, payload, 2, 2, 0)) return 0;
-    if (axoloty_mqtt_event_data_is_valid(topic, (int)strlen(topic), payload, 1, 2, 0)) return 0;
-    if (axoloty_mqtt_event_data_is_valid(topic, (int)strlen(topic), payload, 1, 2, 1)) return 0;
-    if (axoloty_mqtt_event_data_is_valid(topic, 257, payload, 2, 2, 0)) return 0;
-    if (axoloty_mqtt_event_data_is_valid(topic, (int)strlen(topic), payload, 2049, 2049, 0)) return 0;
+    if (axoloty_mqtt_event_data_is_valid(topic, topic_length, payload, 1, 2, 0)) return 0;
+    if (axoloty_mqtt_event_data_is_valid(topic, topic_length, payload, 1, 2, 1)) return 0;
+
+    // The composed bounds are inclusive: a frame at them is admitted, one byte
+    // over either is not.
+    if (!axoloty_mqtt_event_data_is_valid(long_topic, AXOLOTY_CARRIER_MAX_TOPIC_BYTES, long_payload,
+                                          AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES, AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES, 0)) return 0;
+    if (axoloty_mqtt_event_data_is_valid(long_topic, AXOLOTY_CARRIER_MAX_TOPIC_BYTES + 1, payload, 2, 2, 0)) return 0;
+    if (axoloty_mqtt_event_data_is_valid(topic, topic_length, long_payload,
+                                         AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES + 1,
+                                         AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES + 1, 0)) return 0;
+
+    // Beyond the bounds the first event is counted once; later events are not.
+    if (axoloty_mqtt_event_classify(long_topic, AXOLOTY_CARRIER_MAX_TOPIC_BYTES + 1, payload, 2, 2, 0) !=
+        AXOLOTY_MQTT_EVENT_OVERSIZED) return 0;
+    if (axoloty_mqtt_event_classify(topic, topic_length, long_payload,
+                                    AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES + 1,
+                                    AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES + 1, 0) != AXOLOTY_MQTT_EVENT_OVERSIZED) return 0;
+    // A message split across events: the first is oversized, the rest are discarded.
+    if (axoloty_mqtt_event_classify(topic, topic_length, payload, 1, 2, 0) != AXOLOTY_MQTT_EVENT_OVERSIZED) return 0;
+    if (axoloty_mqtt_event_classify(NULL, 0, payload, 1, 2, 1) != AXOLOTY_MQTT_EVENT_DISCARD) return 0;
+    if (axoloty_mqtt_event_classify(topic, topic_length, payload, 1, 2, 1) != AXOLOTY_MQTT_EVENT_DISCARD) return 0;
+    // No topic, no payload pointer, or a negative length carries nothing to count.
+    if (axoloty_mqtt_event_classify(NULL, 1, payload, 2, 2, 0) != AXOLOTY_MQTT_EVENT_DISCARD) return 0;
+    if (axoloty_mqtt_event_classify(topic, topic_length, NULL, 2, 2, 0) != AXOLOTY_MQTT_EVENT_DISCARD) return 0;
+    if (axoloty_mqtt_event_classify(topic, topic_length, payload, -1, -1, 0) != AXOLOTY_MQTT_EVENT_DISCARD) return 0;
     return 1;
 }

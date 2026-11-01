@@ -3,7 +3,8 @@
 // Host self-test for the embedded Zenoh transport seam.
 //
 // Proves the production carrier and probe enforce lifecycle order, the
-// 256/2048 bounds, and multi-subscription handling; refuse the unsupported
+// composed key and payload bounds (the selected application's declared
+// capacities, `EmbeddedCarrierBounds`), and multi-subscription handling; refuse the unsupported
 // broker last-will without ever reporting success; observe router
 // connectivity within a deadline with honest timeout and closed-session
 // behavior; and emit the probe's record sequence. It compiles the real
@@ -53,6 +54,7 @@ private struct EmbeddedZenohHostTest {
         willCapabilityScenarioGate()
         carrierBounds()
         carrierPollMapping()
+        carrierComposedBounds()
         willIsUnsupported()
         reconnectObservation()
         idleKeepAlive()
@@ -121,8 +123,8 @@ private struct EmbeddedZenohHostTest {
         check(published == AXOLOTY_ABI_STATUS_OK, "Zenoh ABI publish callback succeeds")
         check(table.pointee.wait_for_reconnect!(table.pointee.context, 1_000) == AXOLOTY_ABI_STATUS_OK,
               "Zenoh ABI reconnect callback observes configured router")
-        var outTopic = [UInt8](repeating: 0, count: 256)
-        var outPayload = [UInt8](repeating: 0, count: 2_048)
+        var outTopic = [UInt8](repeating: 0, count: EmbeddedCarrierBounds.maxTopicLength)
+        var outPayload = [UInt8](repeating: 0, count: EmbeddedCarrierBounds.maxPayloadSize)
         var outTopicLength: UInt32 = 0
         var outPayloadLength: UInt32 = 0
         let emptyPoll = outTopic.withUnsafeMutableBufferPointer { topic in
@@ -373,8 +375,8 @@ private struct EmbeddedZenohHostTest {
         let subscribesBefore = host_zenoh_call_count(1)
         let publishesBefore = host_zenoh_call_count(2)
 
-        let oversizedKey = [UInt8](repeating: 0, count: 257)
-        let oversizedPayload = [UInt8](repeating: 0, count: 2_049)
+        let oversizedKey = [UInt8](repeating: 0, count: EmbeddedCarrierBounds.maxTopicLength + 1)
+        let oversizedPayload = [UInt8](repeating: 0, count: EmbeddedCarrierBounds.maxPayloadSize + 1)
         check(withSpan(oversizedKey, count: oversizedKey.count) {
             carrier.subscribe(topic: $0, deadlineMS: 1_000)
         } == false, "oversized key subscribe")
@@ -411,6 +413,88 @@ private struct EmbeddedZenohHostTest {
         check(carrier.disconnect(), "bounds teardown")
     }
 
+    // MARK: - Composed bounds
+
+    /// A key and payload exactly at the composed bounds cross the carrier in
+    /// both directions, and a frame the facade holds but the caller's buffers
+    /// cannot take never blocks the loop for good: the application ends its
+    /// session, the carrier discards the retained frame on disconnect, and the
+    /// next session receives.
+    static func carrierComposedBounds() {
+        host_zenoh_reset()
+        ZenohCarrier.resetDiagnostics()
+        var carrier = ZenohCarrier()
+        check(carrier.connect(deadlineMS: 5_000), "open for the composed bounds")
+        let boundKey = [UInt8](repeating: 0x6B, count: EmbeddedCarrierBounds.maxTopicLength)
+        let boundPayload = [UInt8](repeating: 0x70, count: EmbeddedCarrierBounds.maxPayloadSize)
+        var outKey = [UInt8](repeating: 0, count: EmbeddedCarrierBounds.maxTopicLength)
+        var outPayload = [UInt8](repeating: 0, count: EmbeddedCarrierBounds.maxPayloadSize)
+        var outKeyLength: Int32 = 0
+        var outPayloadLength: Int32 = 0
+
+        func poll() -> Int32 {
+            outKey.withUnsafeMutableBufferPointer { keyBuffer in
+                outPayload.withUnsafeMutableBufferPointer { payloadBuffer in
+                    carrier.pollOneEvent(
+                        topic: keyBuffer.baseAddress!, topicCapacity: Int32(keyBuffer.count), topicLength: &outKeyLength,
+                        payload: payloadBuffer.baseAddress!, payloadCapacity: Int32(payloadBuffer.count),
+                        payloadLength: &outPayloadLength)
+                }
+            }
+        }
+
+        func deliver(key: [UInt8], payload: [UInt8]) {
+            key.withUnsafeBufferPointer { keyBuffer in
+                payload.withUnsafeBufferPointer { payloadBuffer in
+                    host_zenoh_set_sample(keyBuffer.baseAddress!, Int32(key.count),
+                                          payloadBuffer.baseAddress!, Int32(payload.count))
+                }
+            }
+        }
+
+        // The carrier subscribes and publishes at the bounds.
+        check(withSpan(boundKey, count: boundKey.count) {
+            carrier.subscribe(topic: $0, deadlineMS: 1_000)
+        }, "subscribe at the key bound")
+        check(withTwoSpans(boundKey, boundPayload) { carrier.publish(topic: $0, payload: $1) },
+              "publish at the bounds")
+        check(host_zenoh_publish_key_length() == UInt32(boundKey.count), "published key length at the bound")
+        check(host_zenoh_publish_payload_length() == UInt32(boundPayload.count), "published payload length at the bound")
+
+        // A frame at the bounds arrives whole through buffers of exactly the bounds.
+        deliver(key: boundKey, payload: boundPayload)
+        check(poll() == 1, "a frame at the bounds is received")
+        check(outKeyLength == Int32(boundKey.count) && outPayloadLength == Int32(boundPayload.count),
+              "frame lengths at the bounds")
+        check(outKey == boundKey && outPayload == boundPayload, "frame bytes at the bounds")
+        check(poll() == 0, "nothing is left queued behind it")
+
+        // The facade may hold a frame the composed bounds do not admit (the
+        // carrier's own queue never does; this fake stands for a facade that
+        // does). The caller's buffers are the bounds, so it cannot be copied
+        // out: it is retained, reported, and blocks until the session ends.
+        if EmbeddedCarrierBounds.maxPayloadSize < Int(AXOLOTY_ZENOH_MAX_PAYLOAD_BYTES) {
+            let tooLarge = [UInt8](repeating: 0x71, count: EmbeddedCarrierBounds.maxPayloadSize + 1)
+            deliver(key: boundKey, payload: tooLarge)
+            check(poll() == -1, "a frame beyond the caller's buffers is reported")
+            check(poll() == -1, "and stays pending: a retry cannot take it either")
+            check(ZenohCarrier.diagnostics.frames_received == 1, "a pending frame is not counted as received")
+            // The application ends its session on this error. Disconnect drops
+            // the pending frame and the new session starts clean.
+            check(carrier.disconnect(), "disconnect discards the pending frame")
+            check(poll() == -2, "poll after disconnect reports closed")
+            check(carrier.connect(deadlineMS: 5_000), "a new session opens")
+            check(withSpan(boundKey, count: boundKey.count) {
+                carrier.subscribe(topic: $0, deadlineMS: 1_000)
+            }, "the new session subscribes")
+            deliver(key: boundKey, payload: boundPayload)
+            check(poll() == 1, "the new session receives a frame at the bounds")
+            check(outPayload == boundPayload, "and its bytes are intact")
+            check(ZenohCarrier.diagnostics.frames_received == 2, "only complete frames count as received")
+        }
+        check(carrier.disconnect(), "teardown after the composed bounds")
+    }
+
     // MARK: - Poll mapping
 
     static func carrierPollMapping() {
@@ -418,8 +502,8 @@ private struct EmbeddedZenohHostTest {
         var carrier = ZenohCarrier()
         check(carrier.connect(deadlineMS: 5_000), "open for poll")
         let key = Array("sample/key".utf8)
-        var outKey = [UInt8](repeating: 0, count: 256)
-        var outPayload = [UInt8](repeating: 0, count: 2_048)
+        var outKey = [UInt8](repeating: 0, count: EmbeddedCarrierBounds.maxTopicLength)
+        var outPayload = [UInt8](repeating: 0, count: EmbeddedCarrierBounds.maxPayloadSize)
         var outKeyLength: Int32 = 0
         var outPayloadLength: Int32 = 0
 
@@ -448,7 +532,7 @@ private struct EmbeddedZenohHostTest {
                     payloadLength: &outPayloadLength) == -1, "zero key capacity")
                 check(carrier.pollOneEvent(
                     topic: keyBuffer.baseAddress!, topicCapacity: Int32(keyBuffer.count), topicLength: &outKeyLength,
-                    payload: payloadBuffer.baseAddress!, payloadCapacity: 2_049,
+                    payload: payloadBuffer.baseAddress!, payloadCapacity: Int32(EmbeddedCarrierBounds.maxPayloadSize + 1),
                     payloadLength: &outPayloadLength) == -1, "oversize payload capacity")
             }
         }
@@ -589,8 +673,8 @@ private struct EmbeddedZenohHostTest {
         check(withSpan(key, count: key.count) {
             carrier.subscribe(topic: $0, deadlineMS: 1_000)
         }, "subscribe for keep-alive")
-        var outKey = [UInt8](repeating: 0, count: 256)
-        var outPayload = [UInt8](repeating: 0, count: 2_048)
+        var outKey = [UInt8](repeating: 0, count: EmbeddedCarrierBounds.maxTopicLength)
+        var outPayload = [UInt8](repeating: 0, count: EmbeddedCarrierBounds.maxPayloadSize)
         var keyLength: Int32 = 0
         var payloadLength: Int32 = 0
         func poll() {
@@ -689,12 +773,12 @@ private struct EmbeddedZenohHostTest {
     static func carrierDiagnostics() {
         let key = Array("sample/key".utf8)
         let payload = Array("sample/payload".utf8)
-        var outKey = [UInt8](repeating: 0, count: 256)
-        var outPayload = [UInt8](repeating: 0, count: 2_048)
+        var outKey = [UInt8](repeating: 0, count: EmbeddedCarrierBounds.maxTopicLength)
+        var outPayload = [UInt8](repeating: 0, count: EmbeddedCarrierBounds.maxPayloadSize)
         var outKeyLength: Int32 = 0
         var outPayloadLength: Int32 = 0
 
-        func poll(_ carrier: inout ZenohCarrier, keyCapacity: Int32 = 256) -> Int32 {
+        func poll(_ carrier: inout ZenohCarrier, keyCapacity: Int32 = Int32(EmbeddedCarrierBounds.maxTopicLength)) -> Int32 {
             outKey.withUnsafeMutableBufferPointer { keyBuffer in
                 outPayload.withUnsafeMutableBufferPointer { payloadBuffer in
                     carrier.pollOneEvent(
@@ -755,7 +839,7 @@ private struct EmbeddedZenohHostTest {
         check(metric(publishAttempts) == 2, "two publish attempts")
         check(metric(publishFailures) == 1, "one publish failure")
         check(metric(sessionFailures) == 2, "open and facade publish failures are session failures")
-        let oversizedPayload = [UInt8](repeating: 0, count: 2_049)
+        let oversizedPayload = [UInt8](repeating: 0, count: EmbeddedCarrierBounds.maxPayloadSize + 1)
         check(!withTwoSpans(key, oversizedPayload) { carrier.publish(topic: $0, payload: $1) },
               "oversized local publication is refused")
         check(metric(publishAttempts) == 3 && metric(publishFailures) == 2,

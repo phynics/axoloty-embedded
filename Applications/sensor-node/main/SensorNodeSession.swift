@@ -39,17 +39,51 @@ enum SensorNodeStage {
 }
 
 /// Counters reported on the metrics line. They survive a session.
+///
+/// The four `Us` fields are plain counters of platform-clock microseconds, with
+/// no sampling buffer: the last and the largest duration of one reading (from
+/// encoding through the carrier publish returning) and of one served inbound
+/// frame (from `runtime.receive` through the Resolve publish returning). They
+/// are zero until one has completed.
 struct SensorNodeCounters {
     var sessions: UInt32 = 0
     var readings: UInt32 = 0
     var resolves: UInt32 = 0
     var rejected: UInt32 = 0
     var publishFailures: UInt32 = 0
+    var readingLastUs: UInt32 = 0
+    var readingMaxUs: UInt32 = 0
+    var frameLastUs: UInt32 = 0
+    var frameMaxUs: UInt32 = 0
+
+    /// Records one completed reading that started at `startUs`.
+    mutating func noteReading(since startUs: UInt64, _ platform: EmbeddedPlatformCapabilities) {
+        readingLastUs = sensorNodeElapsedUs(since: startUs, platform)
+        readingMaxUs = max(readingMaxUs, readingLastUs)
+    }
+
+    /// Records one served frame that started at `startUs`.
+    mutating func noteFrame(since startUs: UInt64, _ platform: EmbeddedPlatformCapabilities) {
+        frameLastUs = sensorNodeElapsedUs(since: startUs, platform)
+        frameMaxUs = max(frameMaxUs, frameLastUs)
+    }
 }
 
 /// Writes one static line to the platform log.
 func sensorNodeLog(_ platform: EmbeddedPlatformCapabilities, _ text: StaticString) {
     _ = try? platform.writeLog(text.utf8Start, length: UInt32(text.utf8CodeUnitCount))
+}
+
+@inline(__always)
+private func sensorNodeNowUS(_ platform: EmbeddedPlatformCapabilities) -> UInt64 {
+    (try? platform.nowMicroseconds()) ?? 0
+}
+
+/// Microseconds since `startUs`, saturating at `UInt32.max`.
+@inline(__always)
+private func sensorNodeElapsedUs(since startUs: UInt64, _ platform: EmbeddedPlatformCapabilities) -> UInt32 {
+    let elapsed = sensorNodeNowUS(platform) &- startUs
+    return elapsed > UInt64(UInt32.max) ? UInt32.max : UInt32(elapsed)
 }
 
 @inline(__always)
@@ -80,11 +114,17 @@ private struct MetricsLine {
     }
 }
 
+/// Bytes of the metrics line buffer. The longest possible line has the fixed
+/// text, thirteen fields, and every value at `UInt32.max` (ten digits): 353
+/// bytes with the closing newline. The buffer holds it with room to spare, and
+/// `MetricsLine` would truncate rather than overflow if a field were added.
+private let sensorNodeMetricsLineCapacity = 384
+
 /// Reports the node's footprint and work counters as one JSON line.
 private func logSensorNodeMetrics(_ platform: EmbeddedPlatformCapabilities, counters: SensorNodeCounters) {
     var metrics = axoloty_platform_metrics_v1()
     guard (try? platform.readMetrics(into: &metrics)) != nil else { return }
-    withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 224) { storage in
+    withUnsafeTemporaryAllocation(of: UInt8.self, capacity: sensorNodeMetricsLineCapacity) { storage in
         var line = MetricsLine(buffer: storage)
         line.append("{\"event\":\"sensor-node-metrics\",\"sessions\":")
         line.append(counters.sessions)
@@ -96,6 +136,14 @@ private func logSensorNodeMetrics(_ platform: EmbeddedPlatformCapabilities, coun
         line.append(counters.rejected)
         line.append(",\"publishFailures\":")
         line.append(counters.publishFailures)
+        line.append(",\"readingLastUs\":")
+        line.append(counters.readingLastUs)
+        line.append(",\"readingMaxUs\":")
+        line.append(counters.readingMaxUs)
+        line.append(",\"frameLastUs\":")
+        line.append(counters.frameLastUs)
+        line.append(",\"frameMaxUs\":")
+        line.append(counters.frameMaxUs)
         line.append(",\"freeHeap\":")
         line.append(metrics.free_internal_heap)
         line.append(",\"minimumFreeHeap\":")
@@ -254,6 +302,7 @@ func runSensorNodeSession(
                     if nowMS >= nextReadingMS {
                         nextReadingMS = nowMS + SensorNodeTiming.readingPeriodMS
                         counters.readings &+= 1
+                        let readingStartUs = sensorNodeNowUS(platform)
                         guard let length = encodeSensorObjectPayload(
                                 into: payloadBase, capacity: payload.count, name: nameSlice,
                                 reading: (sequence: counters.readings, value: Int(counters.readings % 100))
@@ -271,6 +320,7 @@ func runSensorNodeSession(
                             counters.publishFailures &+= 1
                             return reachedNetwork
                         }
+                        counters.noteReading(since: readingStartUs, platform)
                         if counters.readings % SensorNodeTiming.metricsEveryReadings == 0 {
                             logSensorNodeMetrics(platform, counters: counters)
                         }
@@ -296,7 +346,7 @@ func runSensorNodeSession(
                         guard serveSensorFrame(
                             topic: topicBase, topicLength: Int(topicLength), topicCapacity: topic.count,
                             payload: payloadBase, payloadLength: Int(payloadLength), payloadCapacity: payload.count,
-                            name: nameSlice, carrier: carrier, runtime: &runtime, counters: &counters,
+                            name: nameSlice, platform: platform, carrier: carrier, runtime: &runtime, counters: &counters,
                             nowMS: UInt32(truncatingIfNeeded: nowMS)
                         ) else {
                             counters.publishFailures &+= 1
@@ -314,16 +364,22 @@ func runSensorNodeSession(
 /// The request is copied out of the receive buffers before the same buffers
 /// carry the response.
 ///
+/// A frame that earns a Resolve is timed from `runtime.receive` through the
+/// Resolve publish returning, which includes the carrier's call into the network
+/// stack.
+///
 /// - Returns: `false` when an answer could not be published.
 private func serveSensorFrame(
     topic: UnsafeMutablePointer<UInt8>, topicLength: Int, topicCapacity: Int,
     payload: UnsafeMutablePointer<UInt8>, payloadLength: Int, payloadCapacity: Int,
     name: ByteSlice,
+    platform: EmbeddedPlatformCapabilities,
     carrier: EmbeddedCarrierCapabilities,
     runtime: inout SensorNodeRuntime,
     counters: inout SensorNodeCounters,
     nowMS: UInt32
 ) -> Bool {
+    let frameStartUs = sensorNodeNowUS(platform)
     let outcome = runtime.receive(
         topic: ByteSlice(bytes: UnsafePointer(topic), length: topicLength),
         payload: ByteSlice(bytes: UnsafePointer(payload), length: payloadLength),
@@ -343,7 +399,7 @@ private func serveSensorFrame(
         return false
     }
     counters.resolves &+= 1
-    return sendSensorOperation(
+    let sent = sendSensorOperation(
         .resolve(
             sourceID: SensorNodeIdentity.agent,
             correlationID: request,
@@ -353,4 +409,6 @@ private func serveSensorFrame(
         topic: topic, topicCapacity: topicCapacity,
         nowMS: nowMS
     )
+    if sent { counters.noteFrame(since: frameStartUs, platform) }
+    return sent
 }

@@ -5,8 +5,8 @@
   "tier": "device",
   "status": "passed",
   "recordedAt": "2026-11-01",
-  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
-  "firmwareSHA256": "d9c5a073419da1b1e3b21b77af9b3c0fc5473979594f6cd89a2d81b1c25851ce",
+  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8",
+  "firmwareSHA256": "0ea3173a24c6593aa1aa3854c73a1568233103a6254681da5b968afb7d49e291",
   "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
   "protocol": "11 metrics samples over one session, with host-observed Advertise, Resolve and readings",
   "result": "11/11 passed",
@@ -15,9 +15,13 @@
     "samples": 11,
     "readings": 55,
     "resolves": 1,
-    "minimumFreeHeapBytes": 264916,
-    "stackRemainingBytes": 7340,
+    "minimumFreeHeapBytes": 277956,
+    "stackRemainingBytes": 7308,
     "stackSizeBytes": 36864,
+    "readingLastUs": 3544,
+    "readingMaxUs": 5218,
+    "frameLastUs": 3460,
+    "frameMaxUs": 3460,
     "deviceBoots": 1
   },
   "configuration": {
@@ -26,5 +30,5 @@
     "networkConfigured": true,
     "networkPlaceholder": false
   },
-  "firmwareImageBytes": 836928
+  "firmwareImageBytes": 837760
 }

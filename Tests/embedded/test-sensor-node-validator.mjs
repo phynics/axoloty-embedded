@@ -5,6 +5,7 @@ import { bootReasons, createRecordAssembler, evaluateSensorRun, judgeImageReport
 
 const sample = (readings, overrides = {}) => ({
   event: "sensor-node-metrics", sessions: 0, readings, resolves: 1, rejected: 0, publishFailures: 0,
+  readingLastUs: 1200, readingMaxUs: 1500, frameLastUs: 2400, frameMaxUs: 2400,
   freeHeap: 240000, minimumFreeHeap: 230000, stackRemaining: 20000, stackSize: 32768, ...overrides,
 });
 const advertised = { event: "sensor-node-advertised" };
@@ -20,6 +21,19 @@ assert.equal(result.passed, true);
 assert.equal(result.metrics.samples, 3);
 assert.equal(result.metrics.minimumFreeHeapBytes, 230000);
 assert.equal(result.counts.passed, 3);
+
+// The timings are reported: the last sample's last value, and the largest
+// maximum across samples (a later sample may carry a smaller one).
+result = evaluateSensorRun([
+  advertised, sample(5, { readingMaxUs: 9000, frameMaxUs: 0, frameLastUs: 0 }),
+  sample(10, { readingLastUs: 800, readingMaxUs: 7000, frameLastUs: 2500, frameMaxUs: 3100 }),
+  sample(15, { readingLastUs: 1100, readingMaxUs: 1100, frameLastUs: 2600, frameMaxUs: 2600 }),
+]);
+assert.equal(result.passed, true);
+assert.equal(result.metrics.readingLastUs, 1100);
+assert.equal(result.metrics.readingMaxUs, 9000);
+assert.equal(result.metrics.frameLastUs, 2600);
+assert.equal(result.metrics.frameMaxUs, 3100);
 
 // The lowest sample decides.
 result = evaluateSensorRun([advertised, sample(5), sample(10, { stackRemaining: 900 }), sample(15)]);
@@ -42,6 +56,18 @@ fails([advertised, sample(5), sample(10), sample(15, { publishFailures: 1 })], n
 fails([advertised, sample(5), sample(10), sample(15, { rejected: 2 })], null, /rejected/);
 fails([advertised, sample(5, { resolves: 0 }), sample(10, { resolves: 0 }), sample(15, { resolves: 0 })], null, /no Discover/);
 fails([advertised, sample(5), sample(5), sample(15)], null, /did not advance/);
+
+// Every timing field must be a nonnegative integer in every sample.
+for (const field of ["readingLastUs", "readingMaxUs", "frameLastUs", "frameMaxUs"]) {
+  for (const bad of [-1, 1.5, "7", null, undefined, Number.NaN]) {
+    fails([advertised, sample(5), sample(10, { [field]: bad }), sample(15)], null, new RegExp(`invalid ${field}`));
+  }
+  assert.equal(evaluateSensorRun([advertised, sample(5, { [field]: 0 }), sample(10), sample(15)]).passed, true);
+  assert.equal(evaluateSensorRun([advertised, sample(5, { [field]: 4294967295 }), sample(10), sample(15)]).passed, true);
+}
+// A timing is never judged: a large one passes, and a budget cannot name it.
+assert.equal(evaluateSensorRun([advertised, sample(5, { readingMaxUs: 4294967295 }), sample(10), sample(15)], { minimumFreeHeapBytes: 1 }).passed, true);
+fails(healthy, { readingMaxUs: 1 }, /readingMaxUs, which is reported and never budgeted/);
 
 // Runtime budgets are floors.
 assert.equal(evaluateSensorRun(healthy, { minimumFreeHeapBytes: 230000, stackRemainingBytes: 20000 }).passed, true);

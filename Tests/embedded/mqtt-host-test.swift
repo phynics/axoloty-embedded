@@ -135,8 +135,8 @@ private struct EmbeddedMQTTHostTest {
                 precondition(host_mqtt_resubscription_count() == 1)
 
                 // Bounds are enforced before every transport call.
-                let oversizedTopic = [UInt8](repeating: 0, count: 257)
-                let oversizedPayload = [UInt8](repeating: 0, count: 2_049)
+                let oversizedTopic = [UInt8](repeating: 0, count: EmbeddedCarrierBounds.maxTopicLength + 1)
+                let oversizedPayload = [UInt8](repeating: 0, count: EmbeddedCarrierBounds.maxPayloadSize + 1)
                 oversizedTopic.withUnsafeBufferPointer { oversizedTopicBuffer in
                     precondition(!client.publish(
                         topic: Span(_unsafeStart: oversizedTopicBuffer.baseAddress!, count: oversizedTopicBuffer.count),
@@ -150,6 +150,19 @@ private struct EmbeddedMQTTHostTest {
                     ))
                 }
                 precondition(host_mqtt_call_count(3) == 2)
+
+                // A frame at the bounds crosses into the HAL; one byte over does not.
+                let boundTopic = [UInt8](repeating: 0x61, count: EmbeddedCarrierBounds.maxTopicLength)
+                let boundPayload = [UInt8](repeating: 0x62, count: EmbeddedCarrierBounds.maxPayloadSize)
+                boundTopic.withUnsafeBufferPointer { boundTopicBuffer in
+                    boundPayload.withUnsafeBufferPointer { boundPayloadBuffer in
+                        precondition(client.publish(
+                            topic: Span(_unsafeStart: boundTopicBuffer.baseAddress!, count: boundTopicBuffer.count),
+                            payload: Span(_unsafeStart: boundPayloadBuffer.baseAddress!, count: boundPayloadBuffer.count)
+                        ))
+                    }
+                }
+                precondition(host_mqtt_call_count(3) == 3)
 
                 host_mqtt_set_failures(failDisconnect)
                 precondition(!client.disconnect())

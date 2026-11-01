@@ -123,10 +123,17 @@ Carried from `#797`'s qualification, not re-measured here:
   scouting, multicast, and peer mode disabled;
 - serial, Bluetooth, WebSocket, and TLS links disabled;
 - `BATCH_UNICAST_SIZE` reduced from `2048` to `1024`;
-- `FRAG_MAX_SIZE` kept at zenoh-pico's `4096`. It was first reduced to `1024`,
-  which is below the facade's 2,048-byte payload plus 256-byte key, and
-  zenoh-pico silently drops a reassembled message longer than it: the first
-  on-device carrier scenario lost its maximum payload until it was restored;
+- `FRAG_MAX_SIZE` derived from the composed bounds
+  (`Platforms/esp32c6-idf/components/zenoh_pico/fragmentation.cmake`): the
+  payload bound plus the key bound plus a 1 KiB allowance for message headers,
+  rounded up to a whole KiB. That is `4096`, zenoh-pico's own default, for a
+  2,048-byte payload and a 256-byte key, and `2048` for 512 and 128. It was
+  first reduced to `1024`, which is below a 2,048-byte payload plus a 256-byte
+  key, and zenoh-pico silently drops a reassembled message longer than it: the
+  first on-device carrier scenario lost its maximum payload until it was
+  restored. zenoh-pico also reserves this many bytes of heap while a
+  fragmented message arrives, and drops an oversized one without a count, so a
+  frame beyond it never reaches the carrier's own counter;
 - `Z_RUNTIME_MAX_TASKS` reduced from `64` to `8`;
 - `Z_RUNTIME_IDLE_READ_TASK_SLEEP` raised from `0` to `10` ms. At `0` the
   unicast read task spins on an idle socket, which starved the IDLE task on
@@ -146,17 +153,23 @@ and leaves every consumer on `#error "Unknown platform"`.
 ## Bounds
 
 The facade bounds come from Core and are not restated here. The device client's
-own limits mirror the MQTT transport and `AxolotyWire`: a key of at most 256
-bytes and a payload of at most 2048 bytes. The Swift carrier reads these from
-Core's `ZenohFrameStorage`; the bounds are also enforced in
-`zenoh_sample_validation.c` and in the C guard
-`axoloty_zenoh_sample_is_valid` the callback runs, so a future change must move
-all of them. A zero-length payload is a legal sample; a null pointer with a
-non-zero length is not.
+own limits are the composed bounds: the selected application's declared
+`maxTopicLength` and `maxPayloadSize`, never above the facade's 256-byte key and
+2,048-byte payload. They reach the Swift carrier as `EmbeddedCarrierBounds` and
+the C backend as `AXOLOTY_CARRIER_MAX_TOPIC_BYTES` and
+`AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES`, from one generator
+(`Tools/validate-composition.py`); `zenoh_carrier_bounds.h` and
+`zenoh_pico_queue.h` refuse a build where they exceed the facade's. A zero-length
+payload is a legal sample; a null pointer with a non-zero length is not.
+
+The Core-owned `ZenohFrameStorage` the Swift carrier polls into is 256 bytes of
+key and 2,048 bytes of payload whatever the composed bounds are. It is Core's
+fixed inline storage, and it also holds the retained pending frame, so those
+2,304 bytes of `.bss` are not reduced here.
 
 Per subscription, the backend allocates one bounded queue of four frames
-(`AXOLOTY_ZENOH_RECEIVE_QUEUE_CAPACITY` frames of a 256-byte key and a 2048-byte
-payload) when the subscription is declared and releases it on removal. The
+(`AXOLOTY_ZENOH_RECEIVE_QUEUE_CAPACITY` frames, each a key and a payload at the
+composed bounds) when the subscription is declared and releases it on removal. The
 steady state neither allocates nor blocks: the callback copies into that queue
 and returns. A full queue drops the newest frame, an oversized frame is dropped
 rather than truncated, and both counters are cumulative per subscription.

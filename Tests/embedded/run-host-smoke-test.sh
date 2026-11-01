@@ -103,16 +103,20 @@ node "$fixtures_dir/generate-embedded-corpus.mjs" \
     "$fixtures_dir/manifest.json" "$work/GeneratedCorpus.swift"
 
 # The transport's host HAL, the same one the MQTT host seam check uses.
+# The smoke application runs at the smoke bounds; check-profile-composition.sh keeps
+# these checked-in files equal to what the composition writes for the smoke profile.
+bounds_include="$repo_root/Tests/host-carrier-bounds/include"
+bounds_swift="$repo_root/Tests/host-carrier-bounds/Sources/HostCarrierBounds/CarrierBounds.swift"
 platform_main="$repo_root/Platforms/esp32c6-idf/main"
 transport_main="$repo_root/Transports/mqtt-espidf/main"
-clang -std=c11 -O2 -Wall -Wextra -Werror -I "$platform_main" -I "$transport_main" \
+clang -std=c11 -O2 -Wall -Wextra -Werror -I "$platform_main" -I "$transport_main" -I "$bounds_include" \
     -I "$repo_root/Transports/mqtt-espidf/include" -I "$repo_root/Interop" \
     -c "$script_dir/mqtt-host-hal.c" -o "$work/hal.o"
-clang -std=c11 -O2 -Wall -Wextra -Werror -I "$platform_main" -I "$transport_main" \
+clang -std=c11 -O2 -Wall -Wextra -Werror -I "$platform_main" -I "$transport_main" -I "$bounds_include" \
     -c "$transport_main/mqtt_event_validation.c" -o "$work/validation.o"
-clang -std=c11 -O2 -Wall -Wextra -Werror -I "$platform_main" -I "$transport_main" \
+clang -std=c11 -O2 -Wall -Wextra -Werror -I "$platform_main" -I "$transport_main" -I "$bounds_include" \
     -c "$platform_main/runtime_identity.c" -o "$work/identity.o"
-clang -std=c11 -O2 -Wall -Wextra -Werror -I "$platform_main" -I "$transport_main" \
+clang -std=c11 -O2 -Wall -Wextra -Werror -I "$platform_main" -I "$transport_main" -I "$bounds_include" \
     -I "$repo_root/Transports/mqtt-espidf/include" -I "$repo_root/Interop" \
     -c "$transport_main/axoloty_carrier_v1.c" -o "$work/carrier-table.o"
 clang -std=c11 -O2 -Wall -Wextra -Werror -I "$repo_root/Interop" \
@@ -151,6 +155,7 @@ compile_host_app() {
         $(sources "$app_dir") \
         "$transport_main/EmbeddedMQTTClient.swift" \
         "$transport_main/CarrierNetworkProbe.swift" \
+        "$bounds_swift" \
         "$work/GeneratedCorpus.swift" \
         "$seam_dir/HostSmokeSeam.swift" "$seam_dir/HostExchangeTrace.swift" "$seam_dir/HostSmokeMain.swift" \
         "$work"/*.o \

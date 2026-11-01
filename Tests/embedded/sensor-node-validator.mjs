@@ -6,6 +6,14 @@
 /** The fewest metrics lines that count as a soak. */
 export const MINIMUM_SAMPLES = 3;
 
+/**
+ * The timing fields of a metrics line, in microseconds on the platform clock:
+ * the last and the largest duration of one reading (encoding through the carrier
+ * publish returning) and of one served frame (`runtime.receive` through the
+ * Resolve publish returning). They are reported and never budgeted.
+ */
+export const TIMING_FIELDS = ["readingLastUs", "readingMaxUs", "frameLastUs", "frameMaxUs"];
+
 /** The closed set of steps a session-ended record can name. */
 export const SESSION_STAGES = ["network", "last-will", "connect", "subscribe", "advertise", "serving"];
 
@@ -97,7 +105,7 @@ export function evaluateSensorRun(records, budgets = null, options = {}) {
   const samples = records.filter(record => record.event === "sensor-node-metrics");
   const failures = [];
   const fields = ["sessions", "readings", "resolves", "rejected", "publishFailures",
-    "freeHeap", "minimumFreeHeap", "stackRemaining", "stackSize"];
+    ...TIMING_FIELDS, "freeHeap", "minimumFreeHeap", "stackRemaining", "stackSize"];
   const ended = records.filter(record => record.event === "sensor-node-session-ended");
   for (const [index, sample] of samples.entries()) {
     for (const field of fields) {
@@ -142,11 +150,18 @@ export function evaluateSensorRun(records, budgets = null, options = {}) {
     minimumFreeHeapBytes: Math.min(...samples.map(sample => sample.minimumFreeHeap)),
     stackRemainingBytes: Math.min(...samples.map(sample => sample.stackRemaining)),
     stackSizeBytes: last.stackSize,
+    // The device keeps the largest itself, and a session restart does not reset
+    // it, but the maximum across samples is what a reader should trust.
+    readingLastUs: last.readingLastUs,
+    readingMaxUs: Math.max(...samples.map(sample => sample.readingMaxUs)),
+    frameLastUs: last.frameLastUs,
+    frameMaxUs: Math.max(...samples.map(sample => sample.frameMaxUs)),
   };
   if (mode === "recovery") judgeRecovery(records, samples, ended, options.outages ?? (options.outage ? [options.outage] : undefined), metrics, failures);
   if (metrics && budgets) {
     for (const [metric, floor] of Object.entries(budgets)) {
-      if (metrics[metric] === undefined) failures.push(`runtime budget names unknown metric ${metric}`);
+      if (TIMING_FIELDS.includes(metric)) failures.push(`runtime budget names ${metric}, which is reported and never budgeted`);
+      else if (metrics[metric] === undefined) failures.push(`runtime budget names unknown metric ${metric}`);
       else if (!Number.isSafeInteger(floor) || floor < 0) failures.push(`invalid runtime budget ${metric}`);
       else if (!Number.isSafeInteger(metrics[metric])) failures.push(`invalid measurement for ${metric}`);
       else if (metrics[metric] < floor) failures.push(`${metric} is ${metrics[metric]} B against a floor of ${floor} B`);

@@ -2,9 +2,11 @@
 
 #include "zenoh_sample_validation.h"
 
-// Keep these in sync with `WireBufferConfig` in EmbeddedZenohClient.swift.
-#define AXOLOTY_ZENOH_MAX_KEY 257
-#define AXOLOTY_ZENOH_MAX_PAYLOAD 2049
+#include "zenoh_carrier_bounds.h"
+
+// Exclusive upper limits: the composed bound plus one.
+#define AXOLOTY_ZENOH_MAX_KEY (AXOLOTY_CARRIER_MAX_TOPIC_BYTES + 1)
+#define AXOLOTY_ZENOH_MAX_PAYLOAD (AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES + 1)
 
 int axoloty_zenoh_sample_is_valid(
     const void *key, int key_length,

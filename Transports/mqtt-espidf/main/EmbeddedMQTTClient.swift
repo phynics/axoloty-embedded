@@ -2,15 +2,18 @@
 
 #if EMBEDDED_MQTT_HOST_TEST
 import MQTTCarrierInterop
-// Host self-tests compile this firmware-local overlay without resolving the
-// Embedded Swift package graph. Keep the production limits in sync here.
-private enum WireBufferConfig {
-    static let maxTopicLength = 256
-    static let maxPayloadSize = 2_048
-}
-#else
-import AxolotyWire
 #endif
+#if EMBEDDED_MQTT_HOST_PACKAGE
+import HostCarrierBounds
+#endif
+
+/// The bounds this carrier admits: the topic and payload capacities the
+/// composition took from the selected application (`EmbeddedCarrierBounds`),
+/// the same values the C side sizes its buffers to.
+private enum WireBufferConfig {
+    static let maxTopicLength = EmbeddedCarrierBounds.maxTopicLength
+    static let maxPayloadSize = EmbeddedCarrierBounds.maxPayloadSize
+}
 
 /// Bounded, synchronous MQTT operations for the single-device embedded gate.
 ///

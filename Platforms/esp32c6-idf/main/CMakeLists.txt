@@ -122,6 +122,10 @@ set(AXOLOTY_INTEROP_DIR "${AXOLOTY_REPOSITORY_ROOT}/Interop")
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set(AXOLOTY_REQUIREMENTS_SWIFT "${CMAKE_CURRENT_BINARY_DIR}/ManifestRequirements.swift")
+# The selected application's topic and payload capacities, written once for the
+# carrier's C and Swift storage. See Tools/validate-composition.py.
+set(AXOLOTY_CARRIER_BOUNDS_SWIFT "${CMAKE_CURRENT_BINARY_DIR}/CarrierBounds.swift")
+set(AXOLOTY_CARRIER_BOUNDS_HEADER "${CMAKE_CURRENT_BINARY_DIR}/axoloty_carrier_bounds.h")
 set(AXOLOTY_COMPOSITION_INPUTS
     "${AXOLOTY_PROFILE_DIR}/profile.json"
     "${AXOLOTY_APPLICATION_DIR}/app.json"
@@ -144,6 +148,8 @@ execute_process(
         --repo-root "${AXOLOTY_REPOSITORY_ROOT}"
         --profile "${AXOLOTY_PROFILE_DIR}/profile.json"
         --emit-requirements "${AXOLOTY_REQUIREMENTS_SWIFT}"
+        --emit-carrier-bounds-swift "${AXOLOTY_CARRIER_BOUNDS_SWIFT}"
+        --emit-carrier-bounds-header "${AXOLOTY_CARRIER_BOUNDS_HEADER}"
     RESULT_VARIABLE AXOLOTY_COMPOSITION_STATUS
     OUTPUT_VARIABLE AXOLOTY_COMPOSITION_OUTPUT
     ERROR_VARIABLE AXOLOTY_COMPOSITION_ERROR
@@ -152,6 +158,7 @@ if(NOT AXOLOTY_COMPOSITION_STATUS EQUAL 0)
     message(FATAL_ERROR "manifest composition validation/generation failed: ${AXOLOTY_COMPOSITION_ERROR}")
 endif()
 message(STATUS "${AXOLOTY_COMPOSITION_OUTPUT}Generated manifest requirements: ${AXOLOTY_REQUIREMENTS_SWIFT}")
+message(STATUS "Generated carrier bounds: ${AXOLOTY_CARRIER_BOUNDS_SWIFT} ${AXOLOTY_CARRIER_BOUNDS_HEADER}")
 
 set(AXOLOTY_APPLICATION_MANIFEST "${AXOLOTY_APPLICATION_DIR}/app.json")
 if(NOT EXISTS "${AXOLOTY_APPLICATION_MANIFEST}")
@@ -221,6 +228,7 @@ endif()
 set(AXOLOTY_SWIFT_SOURCES
     ${AXOLOTY_APPLICATION_SWIFT_SOURCES}
     ${AXOLOTY_REQUIREMENTS_SWIFT}
+    ${AXOLOTY_CARRIER_BOUNDS_SWIFT}
     ${AXOLOTY_REPOSITORY_ROOT}/Sources/EmbeddedCapabilities/EmbeddedCapabilities.swift
     ${AXOLOTY_REPOSITORY_ROOT}/Sources/EmbeddedCapabilities/EmbeddedApplicationMacro.swift
     ${AXOLOTY_REPOSITORY_ROOT}/Sources/EmbeddedCapabilities/EmbeddedApplicationDefinition.swift

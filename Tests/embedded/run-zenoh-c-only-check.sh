@@ -89,30 +89,33 @@ actual_sha=$(sha256sum "$facade_header" | cut -d' ' -f1)
     exit 1
 }
 facade_include=$(CDPATH='' cd -- "$(dirname -- "$facade_header")" && pwd -P)
+# The scenario runs at the smoke bounds; check-profile-composition.sh keeps this
+# checked-in header equal to what the composition writes for the smoke profile.
+bounds_include="$repo_root/Tests/host-carrier-bounds/include"
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
-    -I "$transport_main" -I "$facade_include" \
+    -I "$transport_main" -I "$bounds_include" -I "$facade_include" \
     -c "$transport_main/carrier_diagnostics.c" -o "$tmp/diagnostics.o"
 # The host fake also carries the shared sample-validation guard vectors, so the
 # one function they need is linked rather than stubbed. No test overlay: the
 # scenario exercises the production sources.
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
-    -I "$transport_main" \
+    -I "$transport_main" -I "$bounds_include" \
     -c "$transport_main/zenoh_sample_validation.c" -o "$tmp/validation.o"
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
-    -I "$transport_main" \
+    -I "$transport_main" -I "$bounds_include" \
     -c "$transport_main/zenoh_carrier_report.c" -o "$tmp/report.o"
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
-    -I "$transport_main" -I "$facade_include" \
+    -I "$transport_main" -I "$bounds_include" -I "$facade_include" \
     -c "$transport_main/zenoh_carrier_scenario.c" -o "$tmp/scenario.o"
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
-    -I "$transport_main" -I "$facade_include" \
+    -I "$transport_main" -I "$bounds_include" -I "$facade_include" \
     -c "$script_dir/zenoh-host-hal.c" -o "$tmp/hal.o"
 "$compiler" -std=c11 -O2 -Wall -Wextra -Werror \
-    -I "$transport_main" -I "$facade_include" \
+    -I "$transport_main" -I "$bounds_include" -I "$facade_include" \
     -c "$script_dir/zenoh-c-only-runner.c" -o "$tmp/runner.o"
 
 "$compiler" "$tmp/diagnostics.o" "$tmp/report.o" "$tmp/scenario.o" "$tmp/validation.o" \

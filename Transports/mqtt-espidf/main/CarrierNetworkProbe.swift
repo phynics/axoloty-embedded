@@ -9,6 +9,10 @@
 // frozen `embedded-swift-smoke-v2` corpus expects. Topic and payload bytes are
 // borrowed from caller storage, consumed synchronously, and never retained.
 
+#if EMBEDDED_MQTT_HOST_PACKAGE
+import HostCarrierBounds
+#endif
+
 /// Runs the credential-backed carrier probe and reports every bounded step.
 ///
 /// The application calls this only after the profile reports that the network
@@ -49,8 +53,8 @@ public func runCarrierNetworkProbe(
         var published = false
         var received = false
         if connected {
-            withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 257) { topic in
-                withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 2_049) { payload in
+            withUnsafeTemporaryAllocation(of: UInt8.self, capacity: EmbeddedCarrierBounds.maxTopicLength + 1) { topic in
+                withUnsafeTemporaryAllocation(of: UInt8.self, capacity: EmbeddedCarrierBounds.maxPayloadSize + 1) { payload in
                     let topicLength = networkCopyTopic(topic.baseAddress!, Int32(topic.count))
                     let payloadLength = networkCopyPayload(payload.baseAddress!, Int32(payload.count))
                     if topicLength > 0, topicLength <= Int32(topic.count),

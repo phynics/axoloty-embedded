@@ -21,11 +21,22 @@
 #include <stdint.h>
 
 #include "axoloty_zenoh.h"
+#include "zenoh_carrier_bounds.h"
+
+// The facade bounds are Core's. The composed bounds may be smaller, never larger.
+#if AXOLOTY_CARRIER_MAX_TOPIC_BYTES > AXOLOTY_ZENOH_MAX_KEY_BYTES
+#error "the composed topic bound exceeds the Zenoh facade key bound"
+#endif
+#if AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES > AXOLOTY_ZENOH_MAX_PAYLOAD_BYTES
+#error "the composed payload bound exceeds the Zenoh facade payload bound"
+#endif
 
 /// The fixed number of inbound frames held per subscription.
 #define ZENOH_PICO_QUEUE_CAPACITY AXOLOTY_ZENOH_RECEIVE_QUEUE_CAPACITY
 
-/// One bounded inbound frame.
+/// One bounded inbound frame, sized to the composed key and payload bounds.
+///
+/// A frame beyond them is dropped and counted as oversized, never truncated.
 ///
 /// `published` is the per-slot publication flag. A producer claims a write
 /// position, fills the slot, and then publishes it; the consumer reads only
@@ -36,8 +47,8 @@ typedef struct {
     uint32_t key_length;
     uint32_t payload_length;
     uint32_t published;
-    uint8_t key[AXOLOTY_ZENOH_MAX_KEY_BYTES];
-    uint8_t payload[AXOLOTY_ZENOH_MAX_PAYLOAD_BYTES];
+    uint8_t key[AXOLOTY_CARRIER_MAX_TOPIC_BYTES];
+    uint8_t payload[AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES];
 } ZenohPicoFrame;
 
 /// One subscription's bounded receive queue and its cumulative counters.

@@ -136,15 +136,19 @@ station MAC addresses. An invalid override fails configuration generation.
 
 The MQTT callback accepts a message only when the first fragment is also the
 complete payload (`current_data_offset == 0` and `data_len == total_data_len`).
-The configured 257-byte topic and 2,049-byte payload buffers cover the approved
-256-byte topic and 2,048-byte payload limits. The firmware rejects fragmented or
-oversized messages before constructing a `BorrowedMessage`.
+The topic and payload buffers hold one byte more than the selected
+application's declared `maxTopicLength` and `maxPayloadSize` (a terminating
+NUL), and ESP-MQTT's receive and send buffers hold the largest legal packet, so
+a frame within those bounds arrives in one event. The firmware drops a
+fragmented or oversized message at its first event, counts it once
+(`axoloty_mqtt_oversized_frame_count`) and logs it at WARN, before constructing
+a `BorrowedMessage`. The frames behind it are unaffected.
 
 `EmbeddedMQTTClient` is the transport-local Swift overlay for bounded QoS 0
 last-will configuration, connect, subscribe, publish, reconnect/resubscribe,
 loopback receipt, and disconnect operations. It enforces operation order and
-the 256-byte topic and 2,048-byte payload limits before entering its narrow C
-bridge. ESP-MQTT handles and callbacks remain C-owned. The bridge copies input
+the composed topic and payload limits (the selected application's declared
+capacities) before entering its narrow C bridge. ESP-MQTT handles and callbacks remain C-owned. The bridge copies input
 bytes synchronously into fixed storage. Callback pointers never enter Swift or
 survive callback return. The host seam test
 `Tests/embedded/run-mqtt-host-test.sh` exercises that API without a
