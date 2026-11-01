@@ -557,11 +557,16 @@ struct ZenohCarrier: ~Copyable {
     /// How long the carrier lets a polled session stay silent before it sends a
     /// keep-alive itself, in milliseconds.
     ///
-    /// The router closes a session that sends nothing for its 10 s lease.
-    /// zenoh-pico's keep-alive task is meant to send every third of the lease,
-    /// but on a session it reopened after a Wi-Fi loss, an idle device sent
-    /// nothing for a full lease and the router closed the session (phynics/
-    /// axoloty-embedded#56). Three seconds is that third.
+    /// The router closes a session that sends nothing for its 10 s lease. This
+    /// works around pinned zenoh-pico 1.10.0 on ESP-IDF (phynics/axoloty-embedded#112):
+    /// `_z_tcp_esp32_open` ignores its `tout` argument, so `recv()` has no receive
+    /// timeout. The read, keep-alive and lease tasks share one executor thread, so
+    /// keep-alive and lease run only after a router message arrives. After a reopen
+    /// the first device keep-alive went out at the router's 10 s lease, and the
+    /// router had closed the session. Sending from the polling thread does not
+    /// depend on that executor. Three seconds is about a third of the lease.
+    ///
+    /// Remove this when the pinned zenoh-pico sets a receive timeout on that socket.
     static let keepAliveIntervalMS: UInt64 = 3_000
 
     /// Sends a keep-alive when the session has been silent for

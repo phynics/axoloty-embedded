@@ -223,6 +223,31 @@ backend; each is visible in the code or in a returned result code.
   synchronization the contract describes. A callback that Zenoh dispatches after
   the undeclare returns is outside what its API can exclude.
 
+## The carrier keep-alive workaround
+
+The carrier sends its own keep-alive from the polling thread every 3 s
+(`keepAliveIntervalMS` in `Transports/zenoh-pico/main/ZenohCarrier.swift`). It
+works around pinned `zenoh-pico 1.10.0` on ESP-IDF
+([#112](https://github.com/phynics/axoloty-embedded/issues/112)):
+
+- `_z_tcp_esp32_open` ignores its `tout` argument, so `recv()` has no receive
+  timeout.
+- The read, keep-alive and lease tasks share one executor thread, so keep-alive
+  and lease run only after a router message arrives.
+- After a reopen, with the workaround disabled, the first device keep-alive went
+  out at the router's 10 s lease. The router expired the session and the client
+  reopened it, repeatedly.
+
+A scratch copy of zenoh-pico that set `SO_RCVTIMEO` from `tout`, also with the
+workaround disabled, gave a keep-alive cadence of about 3.4 s and no lease expiry.
+That was an experiment only: this repository has no patch mechanism for pinned
+source. Remove the workaround when the pinned zenoh-pico sets a receive timeout on
+that socket, and rerun `router-restart` and `wifi-recovery` when you do.
+
+`router_absent_then_present` is unavailable by design in the device carrier
+scenario; `router-restart` and the sensor-node recovery runs cover a router that
+goes away and returns ([#114](https://github.com/phynics/axoloty-embedded/issues/114), closed).
+
 ## What builds, and what is still blocked
 
 - `Tools/verify.sh --tier repo` passes.
