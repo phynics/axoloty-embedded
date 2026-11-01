@@ -205,6 +205,9 @@ if wanted build; then
         'node is not available for the unsupported-status validator check' \
         env AXOLOTY_CORPUS_MANIFEST="$repo_root/Applications/device-smoke-agent/fixtures/manifest.json" \
             node Tests/embedded/test-unsupported-validator.mjs
+    check_script sensor-node-validator \
+        'node is not available for the sensor node validator check' \
+        node Tests/embedded/test-sensor-node-validator.mjs
     # The release manifest is the compatibility certificate. This runs the real
     # generator against tracked-shape fixtures, so a backend that silently takes
     # the SDK version for the wrong transport is observed rather than assumed.
@@ -335,12 +338,15 @@ if wanted device; then
         for profile in $(profiles); do
             printf '\n== device: %s on %s\n' "$profile" "$AXOLOTY_DEVICE_PORT"
             if [ -x "Profiles/$profile/qualify.sh" ]; then
-                if "Profiles/$profile/qualify.sh"; then
-                    record PASS "device:$profile" 'qualification passed'
-                else
-                    record FAIL "device:$profile" 'qualification failed'
-                    failed=1
-                fi
+                status=0
+                "Profiles/$profile/qualify.sh" || status=$?
+                case "$status" in
+                    0) record PASS "device:$profile" 'qualification passed' ;;
+                    # 69 means the capability is absent on this host (for
+                    # example a profile that needs a compiled host peer).
+                    69) unavailable "device:$profile" 'qualification needs a capability this run does not have' ;;
+                    *) record FAIL "device:$profile" 'qualification failed'; failed=1 ;;
+                esac
             else
                 record FAIL "device:$profile" 'the profile declares no executable qualify.sh'
                 failed=1

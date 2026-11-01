@@ -20,7 +20,8 @@ import Darwin
 /// unchanged from the original test.
 ///
 /// Environment:
-/// - `WIRE_EMBEDDED_HOST_DIRECTION`: `host-requester` or `host-responder`.
+/// - `WIRE_EMBEDDED_HOST_DIRECTION`: `host-requester`, `host-responder`, or
+///   `sensor-observer` for the `sensor-node` application.
 /// - `WIRE_BROKER_HOST`, `WIRE_BROKER_PORT`: broker reachability.
 /// - `WIRE_NAMESPACE`: optional; default `axoloty-embedded`.
 /// - `WIRE_READY_FILE`: written once the runtime has started and subscribed.
@@ -33,6 +34,11 @@ struct EmbeddedHostPeer {
     static let embeddedObjectID = "32400000-0000-4000-8000-000000000002"
     static let correlationID = UUID16(parsing: "32400000-0000-4000-8000-000000000004")!
     static let objectType = "coaty.test.Device"
+    static let sensorAgentID = UUID16(parsing: "32400000-0000-4000-8000-000000000101")!
+    static let sensorObjectID = "32400000-0000-4000-8000-000000000102"
+    static let sensorObjectType = "axoloty.sensor.Node"
+    static let sensorChannel = "sensor-readings"
+    static let sensorReadingCount = 3
 
     static func main() async {
         let environment = ProcessInfo.processInfo.environment
@@ -42,9 +48,11 @@ struct EmbeddedHostPeer {
                 try await hostDiscoversEmbeddedAgent(environment)
             case "host-responder":
                 try await embeddedAgentDiscoversHost(environment)
+            case "sensor-observer":
+                try await observeSensorNode(environment)
             default:
                 throw HostPeerError.usage(
-                    "WIRE_EMBEDDED_HOST_DIRECTION must be host-requester or host-responder"
+                    "WIRE_EMBEDDED_HOST_DIRECTION must be host-requester, host-responder, or sensor-observer"
                 )
             }
         } catch {
@@ -197,6 +205,86 @@ struct EmbeddedHostPeer {
             await runtime.stop()
             throw error
         }
+    }
+
+    /// Observes the `sensor-node` application from outside: its Advertise, a
+    /// Resolve for a Discover by type, and readings that keep counting up.
+    static func observeSensorNode(_ environment: [String: String]) async throws(HostPeerError) {
+        let (runtime, advertiseStream, resolveStream, readingStream) = try makeRuntime(
+            environment: environment,
+            selectors: [
+                .advertise(objectType: sensorObjectType),
+                .correlatedResponse(capability: .resolve, correlationID: correlationID),
+                .channel(identifier: sensorChannel),
+            ]
+        )
+        do throws(HostPeerError) {
+            try await start(runtime)
+            try signalReadiness(environment)
+            trace("sensor-observer ready")
+
+            guard let advertiseStream else { throw HostPeerError.missingStream("Advertise") }
+            let advertise = try await nextHostValue(
+                advertiseStream.makeAsyncIterator(), label: "sensor Advertise", runtime: runtime
+            )
+            guard advertise.context.sourceID == sensorAgentID else {
+                throw HostPeerError.mismatch("sensor Advertise sourceID")
+            }
+            _ = try expectSensor(advertise.value)
+            trace("sensor Advertise received")
+
+            let receipt = await runtime.request(.discover(
+                correlationID: correlationID,
+                payload: Array("{\"objectTypes\":[\"\(sensorObjectType)\"]}".utf8),
+                timeoutMS: 60_000
+            ))
+            guard receipt == .accepted else {
+                throw HostPeerError.mismatch("sensor Discover receipt \(receipt)")
+            }
+            guard let resolveStream else { throw HostPeerError.missingStream("Resolve") }
+            let resolve = try await nextHostValue(
+                resolveStream.makeAsyncIterator(), label: "sensor Resolve", runtime: runtime
+            )
+            guard resolve.context.sourceID == sensorAgentID, resolve.context.correlationID == correlationID else {
+                throw HostPeerError.mismatch("sensor Resolve context")
+            }
+            _ = try expectSensor(resolve.value)
+            trace("sensor Resolve received")
+
+            guard let readingStream else { throw HostPeerError.missingStream("Channel") }
+            let readingIterator = readingStream.makeAsyncIterator()
+            var lastSequence = 0
+            for _ in 0..<sensorReadingCount {
+                let reading = try await nextHostValue(readingIterator, label: "sensor reading", runtime: runtime)
+                guard reading.context.sourceID == sensorAgentID else {
+                    throw HostPeerError.mismatch("sensor reading sourceID")
+                }
+                let object = try expectSensor(reading.value)
+                let sequence = object["sequence"] as? Int ?? 0
+                guard sequence > lastSequence else {
+                    throw HostPeerError.mismatch("sensor reading sequence \(sequence) after \(lastSequence)")
+                }
+                lastSequence = sequence
+            }
+            trace("sensor readings received")
+
+            emitState("sensor-observer", sourceID: sensorAgentID)
+            await runtime.stop()
+        } catch {
+            await runtime.stop()
+            throw error
+        }
+    }
+
+    /// Checks the sensor object and returns its members.
+    static func expectSensor(_ payload: [UInt8]) throws(HostPeerError) -> [String: Any] {
+        guard let root = (try? JSONSerialization.jsonObject(with: Data(payload))) as? [String: Any],
+              let object = root["object"] as? [String: Any],
+              object["objectId"] as? String == sensorObjectID,
+              object["objectType"] as? String == sensorObjectType else {
+            throw HostPeerError.mismatch("sensor object")
+        }
+        return object
     }
 
     static func makeRuntime(
