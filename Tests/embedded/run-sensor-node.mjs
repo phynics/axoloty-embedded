@@ -23,7 +23,7 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { captureSerial, drainSerial } from "./serial-tools.mjs";
 import { flashFirmware, runFirmware } from "./esptool-tools.mjs";
-import { bootReasons, evaluateSensorRun, judgeImageReport, judgeRecoveryObservers, parseSensorRecord } from "./sensor-node-validator.mjs";
+import { bootReasons, createRecordAssembler, evaluateSensorRun, judgeImageReport, judgeRecoveryObservers } from "./sensor-node-validator.mjs";
 import { deviceEvidenceRecord, writeDeviceEvidence } from "./write-device-evidence.mjs";
 
 const [device, root, peerPath, esptool, profilePath] = process.argv.slice(2);
@@ -50,6 +50,7 @@ if (mode === "normal" && cycles !== 1) throw new Error("SENSOR_OUTAGE_CYCLES nee
 const deadlineSeconds = Number(process.env.SENSOR_DEADLINE_SECONDS ?? (mode === "recovery" ? 300 + 100 * (cycles - 1) : 120));
 if (!Number.isSafeInteger(deadlineSeconds) || deadlineSeconds < 40 || deadlineSeconds > 1800) throw new Error("invalid SENSOR_DEADLINE_SECONDS");
 const records = [];
+const assembler = createRecordAssembler();
 /** True once outage `index` ended, the node re-advertised and two metrics lines followed. */
 function recoveredEnough(index) {
   const outage = outages[index];
@@ -106,7 +107,7 @@ try {
   await drainSerial(device);
   const capture = captureSerial(device, deadlineSeconds, line => {
     lines.push(line);
-    const record = parseSensorRecord(line);
+    const record = assembler.feed(line);
     if (record) records.push({ ...record, receivedAtMs: Date.now() });
     // Normal mode observes the entire bounded window, including after the host
     // exits. Recovery mode ends once the node is back and has reported twice.

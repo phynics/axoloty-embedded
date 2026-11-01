@@ -21,6 +21,39 @@ export function parseSensorRecord(line) {
 }
 
 /**
+ * Reads sensor-node records line by line, rejoining one that the ESP-IDF
+ * logger cut in two. Both write to the same console from different tasks, so a
+ * log line can land between the start of a record and its end, for example
+ * `{"event":E (65139) wifi:timeout...` followed by `"sensor-node-...","stage":"serving"}`.
+ *
+ * @returns {{ feed(line: string): object|null }} `feed` returns a record when
+ *   the line completes one, or `null`.
+ */
+export function createRecordAssembler() {
+  let pending = null;
+  return {
+    feed(line) {
+      if (pending !== null) {
+        const joined = pending + line.trim();
+        pending = null;
+        try {
+          const record = JSON.parse(joined);
+          if (typeof record?.event === "string" && record.event.startsWith("sensor-node-")) return record;
+        } catch { /* not a continuation: read the line on its own */ }
+      }
+      const record = parseSensorRecord(line);
+      if (record) return record;
+      const start = line.indexOf('{"event":');
+      if (start >= 0) {
+        const logStart = line.slice(start).search(/[EWIDV] \(\d+\) [\w.-]+:/);
+        pending = (logStart > 0 ? line.slice(start, start + logStart) : line.slice(start)).trim();
+      }
+      return null;
+    },
+  };
+}
+
+/**
  * Lists the reset reason of every ROM boot banner in the captured serial lines.
  *
  * A run claims no device restart: it flashes and resets the board once, so it

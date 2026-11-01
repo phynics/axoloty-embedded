@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Atakan DULKER. Licensed under the MIT License.
 
 import assert from "node:assert/strict";
-import { bootReasons, evaluateSensorRun, judgeImageReport, judgeRecoveryObservers, parseSensorRecord } from "./sensor-node-validator.mjs";
+import { bootReasons, createRecordAssembler, evaluateSensorRun, judgeImageReport, judgeRecoveryObservers, parseSensorRecord } from "./sensor-node-validator.mjs";
 
 const sample = (readings, overrides = {}) => ({
   event: "sensor-node-metrics", sessions: 0, readings, resolves: 1, rejected: 0, publishFailures: 0,
@@ -147,5 +147,16 @@ const banner = "rst:0x15 (USB_UART_HPSYS),boot:0xc (SPI_FAST_FLASH_BOOT)";
 assert.deepEqual(bootReasons(["ESP-ROM:esp32c6-20220919", banner, "I (23) boot: ESP-IDF"]), ["USB_UART_HPSYS"]);
 assert.deepEqual(bootReasons([banner, "{}", "rst:0x7 (LP_WDT_SYS),boot:0xc (SPI_FAST_FLASH_BOOT)"]), ["USB_UART_HPSYS", "LP_WDT_SYS"]);
 assert.deepEqual(bootReasons(["no banner here"]), []);
+
+// A record cut in two by an interleaved log line is rejoined; other lines are not records.
+const assembler = createRecordAssembler();
+assert.equal(assembler.feed('{"event":E (65139) wifi:timeout when WiFi un-init, type=5'), null);
+assert.deepEqual(assembler.feed('"sensor-node-session-ended","stage":"serving"}'), { event: "sensor-node-session-ended", stage: "serving" });
+assert.deepEqual(assembler.feed('{"event":"sensor-node-advertised"}'), { event: "sensor-node-advertised" });
+assert.equal(assembler.feed('{"event":E (1) wifi: x'), null);
+assert.equal(assembler.feed("I (2) wifi: something else"), null);
+assert.equal(assembler.feed('"stage":"serving"}'), null);
+assert.equal(assembler.feed('{"event":E (1) wifi: x'), null);
+assert.equal(assembler.feed('"other":1}'), null);
 
 console.log("sensor-node-validator: all cases passed");
