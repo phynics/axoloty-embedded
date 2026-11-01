@@ -38,6 +38,23 @@ expect_bounds esp32c6-zenoh 256 2048
 expect_bounds esp32c6-sensor-node-mqtt 128 512
 expect_bounds esp32c6-sensor-node-zenoh 128 512
 
+# The host package builds the MQTT carrier for the smoke application from files
+# it keeps in the tree. They must say what the generator says for that profile.
+cmp -s "$tmp/bounds-esp32c6-mqtt/bounds.h" "$repo_root/Tests/host-carrier-bounds/include/axoloty_carrier_bounds.h" || {
+    echo "FAIL: Tests/host-carrier-bounds/include/axoloty_carrier_bounds.h differs from the generated smoke bounds" >&2
+    exit 1
+}
+python3 - "$tmp/bounds-esp32c6-mqtt/Bounds.swift" "$repo_root/Tests/host-carrier-bounds/Sources/HostCarrierBounds/CarrierBounds.swift" <<'PY' || {
+import re, sys
+def body(path):
+    text = open(path).read().replace("public ", "")
+    return [line for line in text.splitlines() if not line.startswith("//")]
+sys.exit(0 if body(sys.argv[1]) == body(sys.argv[2]) else 1)
+PY
+    echo "FAIL: Tests/host-carrier-bounds CarrierBounds.swift differs from the generated smoke bounds" >&2
+    exit 1
+}
+
 # An application whose capacity exceeds a transport's fixed ceiling stops the
 # configure step; a capacity equal to the ceiling is accepted.
 ceiling_root="$tmp/ceiling"

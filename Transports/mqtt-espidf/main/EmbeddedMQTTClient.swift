@@ -3,6 +3,9 @@
 #if EMBEDDED_MQTT_HOST_TEST
 import MQTTCarrierInterop
 #endif
+#if EMBEDDED_MQTT_HOST_PACKAGE
+import HostCarrierBounds
+#endif
 
 /// The bounds this carrier admits: the topic and payload capacities the
 /// composition took from the selected application (`EmbeddedCarrierBounds`),

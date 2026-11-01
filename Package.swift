@@ -57,18 +57,27 @@ let package = Package(
                 .swiftLanguageMode(.v5),
             ]
         ),
+        // The carrier takes its topic and payload bounds from the composition.
+        // The host package builds the smoke application's, 256 and 2,048, from
+        // files that Tests/embedded/check-profile-composition.sh keeps equal to
+        // what Tools/validate-composition.py writes for that profile.
+        .target(
+            name: "HostCarrierBounds",
+            path: "Tests/host-carrier-bounds/Sources/HostCarrierBounds"
+        ),
         .target(
             name: "EmbeddedMQTTClient",
-            dependencies: ["MQTTCarrierInterop"],
+            dependencies: ["MQTTCarrierInterop", "HostCarrierBounds"],
             path: "Transports/mqtt-espidf/main",
             sources: ["EmbeddedMQTTClient.swift", "CarrierNetworkProbe.swift"],
-            swiftSettings: [.define("EMBEDDED_MQTT_HOST_TEST")]
+            swiftSettings: [.define("EMBEDDED_MQTT_HOST_TEST"), .define("EMBEDDED_MQTT_HOST_PACKAGE")]
         ),
         .target(
             name: "MQTTCarrierInterop",
             path: "Transports/mqtt-espidf",
             sources: ["main/mqtt_event_validation.c"],
-            publicHeadersPath: "include"
+            publicHeadersPath: "include",
+            cSettings: [.headerSearchPath("../../Tests/host-carrier-bounds/include")]
         ),
         .target(
             name: "DeviceSmokeHostSupport",

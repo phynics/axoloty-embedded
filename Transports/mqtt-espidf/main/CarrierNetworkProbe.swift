@@ -9,6 +9,10 @@
 // frozen `embedded-swift-smoke-v2` corpus expects. Topic and payload bytes are
 // borrowed from caller storage, consumed synchronously, and never retained.
 
+#if EMBEDDED_MQTT_HOST_PACKAGE
+import HostCarrierBounds
+#endif
+
 /// Runs the credential-backed carrier probe and reports every bounded step.
 ///
 /// The application calls this only after the profile reports that the network
