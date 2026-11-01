@@ -5,6 +5,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { writeEvidenceRecord } from "./evidence-record.mjs";
 
 /** Returns the evidence record a passed proof supports; throws otherwise. */
 export function deviceEvidenceRecord(proof, device, { profile, check, cases }) {
@@ -40,13 +41,9 @@ export function deviceEvidenceRecord(proof, device, { profile, check, cases }) {
   };
 }
 
-/** Writes a record atomically and returns its path. */
+/** Writes a record, unless it would replace a passed record, and returns its path. */
 export function writeDeviceEvidence(record, outputPath) {
-  const temporary = `${outputPath}.tmp-${process.pid}`;
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(temporary, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o644 });
-  fs.renameSync(temporary, outputPath);
-  return outputPath;
+  return writeEvidenceRecord(record, outputPath).path;
 }
 
 /**

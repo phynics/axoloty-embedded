@@ -202,7 +202,13 @@ if [ "$monitor_status" -ne 0 ] && [ "$monitor_status" -ne 124 ]; then
     echo "error: ESP-IDF monitor failed with status $monitor_status" >&2
     exit 1
 fi
-node "$script_dir/write-go-proof.mjs" \
-    "$evidence_dir/build-provenance.json" "$smoke_result" \
-    "$evidence_dir/device-manifest.json" "$evidence_dir/go-proof.json" "$artifact"
+# A caller that validates a different protocol than the shared smoke (the C-only
+# carrier scenario) writes its own record and sets EMBEDDED_SKIP_GO_PROOF=1.
+# The GO proof names the shared smoke identity, so writing it for another
+# protocol would fail on that mismatch and print an error for a run that passed.
+if [ "${EMBEDDED_SKIP_GO_PROOF:-0}" != 1 ]; then
+    node "$script_dir/write-go-proof.mjs" \
+        "$evidence_dir/build-provenance.json" "$smoke_result" \
+        "$evidence_dir/device-manifest.json" "$evidence_dir/go-proof.json" "$artifact"
+fi
 echo "Firmware flash and smoke validation passed: $device"
