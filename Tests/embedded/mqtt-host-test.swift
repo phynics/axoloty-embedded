@@ -156,8 +156,10 @@ private struct EmbeddedMQTTHostTest {
                 host_mqtt_set_failures(0)
                 precondition(client.disconnect())
                 precondition(!client.disconnect())
-                precondition(!client.connect(deadlineMS: 1))
-                precondition(host_mqtt_call_count(6) == 2)
+                // A disconnected client takes a new session.
+                precondition(client.connect(deadlineMS: 1))
+                precondition(client.disconnect())
+                precondition(host_mqtt_call_count(6) == 3)
             }
         }
     }

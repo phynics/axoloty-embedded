@@ -32,14 +32,17 @@ public struct EmbeddedMQTTClient {
         topic: Span<UInt8>,
         payload: Span<UInt8>
     ) -> Bool {
-        guard state == .idle, !topic.isEmpty,
+        // A disconnected client starts a new session, so it takes a last will again.
+        guard state == .idle || state == .disconnected, !topic.isEmpty,
               topic.count <= WireBufferConfig.maxTopicLength,
               payload.count <= WireBufferConfig.maxPayloadSize else { return false }
         return axoloty_mqtt_configure_last_will(topic, payload) != 0
     }
 
     public mutating func connect(deadlineMS: UInt32) -> Bool {
-        guard state == .idle, axoloty_mqtt_connect_wait(deadlineMS) != 0 else { return false }
+        // A disconnected client may connect again: a node that lost its broker
+        // reconnects without a restart. Disconnect destroyed the C client.
+        guard state == .idle || state == .disconnected, axoloty_mqtt_connect_wait(deadlineMS) != 0 else { return false }
         state = .connected
         return true
     }
