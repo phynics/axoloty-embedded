@@ -174,7 +174,7 @@ static int queue_tests(void) {
 
     // A frame the bounded-sample guard rejected is counted and never truncated.
     (void)zenoh_pico_queue_admit(queue, sample_key, (uint32_t)strlen(sample_key), sample_payload,
-                                 (uint32_t)AXOLOTY_ZENOH_MAX_PAYLOAD_BYTES + 1u);
+                                 (uint32_t)AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES + 1u);
     (void)zenoh_pico_queue_admit(queue, sample_key, 0u, sample_payload, 0u);
     if (zenoh_pico_queue_oversized(queue) != 2) return 0;
     if (zenoh_pico_queue_depth(queue) != 0) return 0;
@@ -223,4 +223,123 @@ static int queue_tests(void) {
     return 1;
 }
 
-int host_zenoh_queue_tests(void) { return registry_tests() && queue_tests(); }
+// The queue holds frames at the composed bounds, and a frame beyond them is
+// dropped, counted, and reported once, without blocking the frames around it.
+static int bounds_tests(void) {
+    // The storage is sized to the composed bounds, not to the facade's own.
+    _Static_assert(sizeof(((ZenohPicoFrame *)0)->key) == AXOLOTY_CARRIER_MAX_TOPIC_BYTES,
+                   "queue frame key storage follows the composed topic bound");
+    _Static_assert(sizeof(((ZenohPicoFrame *)0)->payload) == AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES,
+                   "queue frame payload storage follows the composed payload bound");
+
+    struct axoloty_zenoh_session *session = zenoh_pico_session_reserve();
+    if (!session) return 0;
+    axoloty_zenoh_subscription_t *handle = NULL;
+    struct axoloty_zenoh_subscription *record = NULL;
+    if (zenoh_pico_subscription_reserve(session, &handle, &record) != AXOLOTY_ZENOH_OK) return 0;
+    ZenohPicoQueue *queue = record->queue;
+
+    static uint8_t bound_key[AXOLOTY_CARRIER_MAX_TOPIC_BYTES + 1];
+    static uint8_t bound_payload[AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES + 1];
+    for (size_t index = 0; index < sizeof(bound_key); ++index) bound_key[index] = (uint8_t)(1u + index % 250u);
+    for (size_t index = 0; index < sizeof(bound_payload); ++index) bound_payload[index] = (uint8_t)(index * 7u);
+
+    static uint8_t out_key[AXOLOTY_CARRIER_MAX_TOPIC_BYTES];
+    static uint8_t out_payload[AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES];
+    uint32_t out_key_length = 0;
+    uint32_t out_payload_length = 0;
+
+    // A frame exactly at both bounds is admitted and polled back intact through
+    // buffers of exactly the bounds.
+    if (!zenoh_pico_queue_admit(queue, bound_key, AXOLOTY_CARRIER_MAX_TOPIC_BYTES, bound_payload,
+                                AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES)) {
+        return 0;
+    }
+    if (zenoh_pico_queue_poll(queue, out_key, sizeof(out_key), &out_key_length, out_payload, sizeof(out_payload),
+                              &out_payload_length) != AXOLOTY_ZENOH_OK) {
+        return 0;
+    }
+    if (out_key_length != AXOLOTY_CARRIER_MAX_TOPIC_BYTES || out_payload_length != AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES) {
+        return 0;
+    }
+    if (memcmp(out_key, bound_key, out_key_length) != 0 || memcmp(out_payload, bound_payload, out_payload_length) != 0) {
+        return 0;
+    }
+    if (zenoh_pico_queue_oversized(queue) != 0) return 0;
+
+    // A frame with an empty payload at the key bound is legal.
+    if (!zenoh_pico_queue_admit(queue, bound_key, AXOLOTY_CARRIER_MAX_TOPIC_BYTES, NULL, 0u)) return 0;
+    if (zenoh_pico_queue_poll(queue, out_key, sizeof(out_key), &out_key_length, out_payload, sizeof(out_payload),
+                              &out_payload_length) != AXOLOTY_ZENOH_OK || out_payload_length != 0u) {
+        return 0;
+    }
+
+    // One byte over the key bound, and one byte over the payload bound, are
+    // dropped and counted, never truncated. A frame at the bounds, queued
+    // before and after them, is delivered in order, and the single pending
+    // notification follows the last of them.
+    if (!zenoh_pico_queue_admit(queue, bound_key, AXOLOTY_CARRIER_MAX_TOPIC_BYTES, bound_payload, 4u)) return 0;
+    if (zenoh_pico_queue_admit(queue, bound_key, AXOLOTY_CARRIER_MAX_TOPIC_BYTES + 1u, bound_payload, 4u)) return 0;
+    if (zenoh_pico_queue_admit(queue, bound_key, 4u, bound_payload, AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES + 1u)) return 0;
+    if (!zenoh_pico_queue_admit(queue, bound_key, AXOLOTY_CARRIER_MAX_TOPIC_BYTES, bound_payload,
+                                AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES)) {
+        return 0;
+    }
+    if (zenoh_pico_queue_oversized(queue) != 2) return 0;
+    if (zenoh_pico_queue_depth(queue) != 2) return 0;
+    if (zenoh_pico_queue_poll(queue, out_key, sizeof(out_key), &out_key_length, out_payload, sizeof(out_payload),
+                              &out_payload_length) != AXOLOTY_ZENOH_OK || out_payload_length != 4u) {
+        return 0;
+    }
+    if (zenoh_pico_queue_poll(queue, out_key, sizeof(out_key), &out_key_length, out_payload, sizeof(out_payload),
+                              &out_payload_length) != AXOLOTY_ZENOH_OK ||
+        out_payload_length != AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES) {
+        return 0;
+    }
+    if (zenoh_pico_queue_poll(queue, out_key, sizeof(out_key), &out_key_length, out_payload, sizeof(out_payload),
+                              &out_payload_length) != AXOLOTY_ZENOH_FRAME_TOO_LARGE) {
+        return 0;
+    }
+    // The notification is one-shot, and the queue carries on.
+    if (zenoh_pico_queue_poll(queue, out_key, sizeof(out_key), &out_key_length, out_payload, sizeof(out_payload),
+                              &out_payload_length) != AXOLOTY_ZENOH_QUEUE_EMPTY) {
+        return 0;
+    }
+    if (!zenoh_pico_queue_admit(queue, bound_key, 4u, bound_payload, 4u)) return 0;
+    if (zenoh_pico_queue_poll(queue, out_key, sizeof(out_key), &out_key_length, out_payload, sizeof(out_payload),
+                              &out_payload_length) != AXOLOTY_ZENOH_OK) {
+        return 0;
+    }
+    if (zenoh_pico_queue_oversized(queue) != 2 || zenoh_pico_queue_dropped(queue) != 0) return 0;
+
+    // Four frames at the bounds fill the queue; the next is a counted drop and
+    // the four already queued are intact.
+    for (uint32_t index = 0; index < ZENOH_PICO_QUEUE_CAPACITY; ++index) {
+        bound_payload[0] = (uint8_t)(0xA0u + index);
+        if (!zenoh_pico_queue_admit(queue, bound_key, AXOLOTY_CARRIER_MAX_TOPIC_BYTES, bound_payload,
+                                    AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES)) {
+            return 0;
+        }
+    }
+    if (zenoh_pico_queue_admit(queue, bound_key, AXOLOTY_CARRIER_MAX_TOPIC_BYTES, bound_payload,
+                               AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES)) {
+        return 0;
+    }
+    for (uint32_t index = 0; index < ZENOH_PICO_QUEUE_CAPACITY; ++index) {
+        if (zenoh_pico_queue_poll(queue, out_key, sizeof(out_key), &out_key_length, out_payload, sizeof(out_payload),
+                                  &out_payload_length) != AXOLOTY_ZENOH_OK || out_payload[0] != (uint8_t)(0xA0u + index)) {
+            return 0;
+        }
+    }
+    if (zenoh_pico_queue_poll(queue, out_key, sizeof(out_key), &out_key_length, out_payload, sizeof(out_payload),
+                              &out_payload_length) != AXOLOTY_ZENOH_QUEUE_FULL) {
+        return 0;
+    }
+    if (zenoh_pico_queue_dropped(queue) != 1) return 0;
+
+    zenoh_pico_subscription_release(record);
+    zenoh_pico_session_release(session);
+    return 1;
+}
+
+int host_zenoh_queue_tests(void) { return registry_tests() && queue_tests() && bounds_tests(); }

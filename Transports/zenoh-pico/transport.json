@@ -2,6 +2,10 @@
   "schemaVersion": 1,
   "name": "zenoh-pico",
   "wireProfile": "axoloty1CBOR",
+  "limits": {
+    "maxTopicLength": 256,
+    "maxPayloadSize": 2048
+  },
   "capabilities": [
     "lastWill",
     "connect",

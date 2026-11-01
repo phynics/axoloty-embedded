@@ -96,13 +96,49 @@ set(ZENOH_PICO_TWEAK 0)
 # numbers. Every token in config.h.in is set so the generated header has no
 # leftover @...@ placeholder.
 #
-# FRAG_MAX_SIZE is the largest message zenoh-pico reassembles from fragments
-# (src/transport/unicast/rx.c drops anything longer). It must hold the
-# facade's largest frame: a 2,048-byte payload, a 256-byte key, and message
-# headers. The 1024 starting point silently lost every frame above about
-# 1 KB on hardware (carrier scenario step maximum_payload), so it stays at
-# zenoh-pico's own default.
-set(FRAG_MAX_SIZE 4096)
+# The composed bounds. The selected application's topic and payload capacities
+# reach this component through the same generator that writes the carrier's C
+# and Swift constants, so this value and the carrier's storage cannot disagree.
+# ESP-IDF's requirements pass does not inherit -D variables, so the profile and
+# repository root come from the environment, exactly as the main component's.
+foreach(AXOLOTY_VARIABLE IN ITEMS AXOLOTY_REPOSITORY_ROOT AXOLOTY_PROFILE_DIR)
+    if(NOT DEFINED ${AXOLOTY_VARIABLE} OR "${${AXOLOTY_VARIABLE}}" STREQUAL "")
+        if(DEFINED ENV{${AXOLOTY_VARIABLE}})
+            set(${AXOLOTY_VARIABLE} "$ENV{${AXOLOTY_VARIABLE}}")
+        endif()
+    endif()
+    if(NOT DEFINED ${AXOLOTY_VARIABLE} OR "${${AXOLOTY_VARIABLE}}" STREQUAL "")
+        message(FATAL_ERROR "${AXOLOTY_VARIABLE} is required; build through Profiles/<name>/build.sh")
+    endif()
+endforeach()
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(AXOLOTY_CARRIER_BOUNDS_CMAKE "${CMAKE_CURRENT_BINARY_DIR}/carrier_bounds.cmake")
+execute_process(
+    COMMAND "${Python3_EXECUTABLE}" "${AXOLOTY_REPOSITORY_ROOT}/Tools/validate-composition.py"
+        --repo-root "${AXOLOTY_REPOSITORY_ROOT}"
+        --profile "${AXOLOTY_PROFILE_DIR}/profile.json"
+        --emit-carrier-bounds-cmake "${AXOLOTY_CARRIER_BOUNDS_CMAKE}"
+    RESULT_VARIABLE AXOLOTY_BOUNDS_STATUS
+    OUTPUT_QUIET
+    ERROR_VARIABLE AXOLOTY_BOUNDS_ERROR
+)
+if(NOT AXOLOTY_BOUNDS_STATUS EQUAL 0)
+    message(FATAL_ERROR "the carrier bounds could not be composed: ${AXOLOTY_BOUNDS_ERROR}")
+endif()
+include("${AXOLOTY_CARRIER_BOUNDS_CMAKE}")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${AXOLOTY_PROFILE_DIR}/profile.json"
+    "${AXOLOTY_REPOSITORY_ROOT}/Tools/validate-composition.py"
+)
+
+# FRAG_MAX_SIZE follows from the composed bounds; fragmentation.cmake states why.
+include("${CMAKE_CURRENT_LIST_DIR}/fragmentation.cmake")
+axoloty_zenoh_pico_frag_max_size(
+    "${AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES}" "${AXOLOTY_CARRIER_MAX_TOPIC_BYTES}" FRAG_MAX_SIZE)
+message(STATUS "zenoh-pico FRAG_MAX_SIZE ${FRAG_MAX_SIZE} for payload ${AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES}, key ${AXOLOTY_CARRIER_MAX_TOPIC_BYTES}")
+# BATCH_UNICAST_SIZE is the transport batch, not a frame bound: a frame larger
+# than one batch is fragmented and reassembled under FRAG_MAX_SIZE. 1 KiB holds
+# a frame at the sensor bounds whole; the smoke bounds fragment, as before.
 set(BATCH_UNICAST_SIZE 1024)
 set(BATCH_MULTICAST_SIZE 2048)
 set(Z_CONFIG_SOCKET_TIMEOUT 100)

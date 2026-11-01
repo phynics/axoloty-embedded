@@ -14,6 +14,7 @@
 // definitions of one type in one program is undefined behavior.
 
 #include "axoloty_zenoh.h"
+#include "zenoh_carrier_bounds.h"
 #include "zenoh_host_test.h"
 #include "zenoh_sample_validation.h"
 
@@ -436,11 +437,13 @@ int host_zenoh_sample_validation_tests(void) {
     if (!axoloty_zenoh_sample_is_valid(key, (int)strlen(key), payload, (int)strlen(payload))) return 0;
     if (axoloty_zenoh_sample_is_valid(NULL, 1, payload, 1)) return 0;
     if (axoloty_zenoh_sample_is_valid(key, 0, payload, 1)) return 0;
-    if (!axoloty_zenoh_sample_is_valid(key, 256, payload, 0)) return 0;
-    if (axoloty_zenoh_sample_is_valid(key, 257, payload, 0)) return 0;
+    // The bounds are the composed ones, inclusive.
+    if (!axoloty_zenoh_sample_is_valid(key, AXOLOTY_CARRIER_MAX_TOPIC_BYTES, payload, 0)) return 0;
+    if (axoloty_zenoh_sample_is_valid(key, AXOLOTY_CARRIER_MAX_TOPIC_BYTES + 1, payload, 0)) return 0;
     if (!axoloty_zenoh_sample_is_valid(key, (int)strlen(key), NULL, 0)) return 0;
-    if (!axoloty_zenoh_sample_is_valid(key, (int)strlen(key), payload, 2048)) return 0;
-    if (axoloty_zenoh_sample_is_valid(key, (int)strlen(key), payload, 2049)) return 0;
+    if (!axoloty_zenoh_sample_is_valid(key, (int)strlen(key), payload, AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES)) return 0;
+    if (axoloty_zenoh_sample_is_valid(key, (int)strlen(key), payload, AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES + 1)) return 0;
+    if (axoloty_zenoh_sample_is_valid(key, (int)strlen(key), payload, -1)) return 0;
     if (axoloty_zenoh_sample_is_valid(key, (int)strlen(key), NULL, 2)) return 0;
     return 1;
 }

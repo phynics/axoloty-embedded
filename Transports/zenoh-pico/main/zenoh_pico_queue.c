@@ -195,11 +195,11 @@ int zenoh_pico_queue_admit(ZenohPicoQueue *queue,
                            const void *key, uint32_t key_length,
                            const void *payload, uint32_t payload_length) {
     if (!queue) return 0;
-    // A frame that cannot fit the fixed receive bounds is dropped, never
+    // A frame that cannot fit the composed receive bounds is dropped, never
     // truncated, and is counted as oversized exactly as the callback-side
     // sample guard counts it.
-    if (!key || key_length == 0u || key_length > AXOLOTY_ZENOH_MAX_KEY_BYTES ||
-        payload_length > AXOLOTY_ZENOH_MAX_PAYLOAD_BYTES || (payload_length > 0u && !payload)) {
+    if (!key || key_length == 0u || key_length > AXOLOTY_CARRIER_MAX_TOPIC_BYTES ||
+        payload_length > AXOLOTY_CARRIER_MAX_PAYLOAD_BYTES || (payload_length > 0u && !payload)) {
         zenoh_pico_queue_note_oversized(queue);
         return 0;
     }

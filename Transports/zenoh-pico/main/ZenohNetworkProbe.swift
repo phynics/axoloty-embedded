@@ -64,8 +64,8 @@ public func runCarrierNetworkProbe(
         var rejectedOversize = false
         var published = false
         if connected {
-            withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 257) { topic in
-                withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 2_049) { payload in
+            withUnsafeTemporaryAllocation(of: UInt8.self, capacity: EmbeddedCarrierBounds.maxTopicLength + 1) { topic in
+                withUnsafeTemporaryAllocation(of: UInt8.self, capacity: EmbeddedCarrierBounds.maxPayloadSize + 1) { payload in
                     let topicLength = networkCopyTopic(topic.baseAddress!, Int32(topic.count))
                     let payloadLength = networkCopyPayload(payload.baseAddress!, Int32(payload.count))
                     if topicLength > 0, topicLength <= Int32(topic.count),

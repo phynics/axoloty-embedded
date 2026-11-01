@@ -4,6 +4,7 @@
 // data while they execute; no callback pointer escapes.
 
 #include "esp_event.h"
+#include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_timer.h"
 #include "mqtt_client.h"
@@ -26,7 +27,8 @@
 static const char axoloty_runtime_identity[] = "";
 #endif
 
-// Carrier buffers hold exactly what the MQTT validator admits.
+// Carrier buffers hold exactly what the MQTT validator admits, which is the
+// topic and payload bound the composition took from the selected application.
 #define NETWORK_MAX_TOPIC AXOLOTY_MQTT_TOPIC_CAPACITY
 #define NETWORK_MAX_PAYLOAD AXOLOTY_MQTT_PAYLOAD_CAPACITY
 #define NETWORK_SUBSCRIPTION_CAPACITY 4
@@ -49,6 +51,9 @@ static NetworkCarrierEvent network_event_staging;
 static esp_mqtt_client_handle_t mqtt_client;
 static AxolotyAtomicUInt network_mqtt_bits;
 static AxolotyAtomicUInt network_connect_count;
+// Inbound messages dropped for exceeding the composed bounds, counted once each.
+static unsigned network_oversized_count;
+static const char network_log_tag[] = "mqtt-carrier";
 static char network_topic[NETWORK_MAX_TOPIC];
 static char network_payload[NETWORK_MAX_PAYLOAD];
 static char network_publish_topic[NETWORK_MAX_TOPIC];
@@ -138,14 +143,22 @@ static void network_mqtt_event(void *handler_args, esp_event_base_t base, int32_
         }
     } else if (event_id == MQTT_EVENT_DATA) {
         // ESP-MQTT may split a PUBLISH across callbacks. This fixed profile has
-        // no reassembly buffer, so reject fragments and copy only complete,
-        // bounded frames into the queue for Swift to process.
-        int valid = axoloty_mqtt_event_data_is_valid(
+        // no reassembly buffer, so a message beyond the composed bounds, or one
+        // split across events, is dropped whole and counted once at its first
+        // event. Only a complete, bounded frame is copied into the queue for
+        // Swift to process.
+        AxolotyMqttEventVerdict verdict = axoloty_mqtt_event_classify(
             event ? event->topic : NULL, event ? event->topic_len : -1,
             event ? event->data : NULL, event ? event->data_len : -1,
             event ? event->total_data_len : -1,
             event ? event->current_data_offset : -1);
-        if (!valid) return;
+        if (verdict == AXOLOTY_MQTT_EVENT_OVERSIZED) {
+            unsigned dropped = __atomic_add_fetch(&network_oversized_count, 1U, __ATOMIC_RELAXED);
+            ESP_LOGW(network_log_tag, "dropped an inbound frame beyond the composed bounds "
+                     "(topic %d, payload %d bytes, %u dropped)",
+                     event->topic_len, event->total_data_len, dropped);
+        }
+        if (verdict != AXOLOTY_MQTT_EVENT_ACCEPT) return;
 
         if (event->topic_len == (int)strlen(network_topic) &&
             event->data_len == (int)network_payload_length &&
@@ -227,6 +240,12 @@ int axoloty_mqtt_connect_wait(unsigned int deadline_ms) {
     esp_mqtt_client_config_t config = { 0 };
     config.broker.address.uri = network_uri;
     config.credentials.client_id = network_client_id;
+    // ESP-MQTT delivers a PUBLISH in one event only when the packet fits its
+    // buffer. Size the receive and send buffers to the composed bounds: the
+    // library default would split, and so lose, a frame the bounds admit, and
+    // would hold memory the bounds never use.
+    config.buffer.size = AXOLOTY_MQTT_PACKET_BUFFER_BYTES;
+    config.buffer.out_size = AXOLOTY_MQTT_PACKET_BUFFER_BYTES;
     if (network_will_configured) {
         config.session.last_will.topic = network_will_topic;
         config.session.last_will.msg = network_will_payload;
@@ -406,6 +425,10 @@ int axoloty_mqtt_poll_one_event(unsigned char *topic, int topic_capacity,
     *topic_length = frame.topic_length;
     *payload_length = frame.payload_length;
     return 1;
+}
+
+unsigned int axoloty_mqtt_oversized_frame_count(void) {
+    return __atomic_load_n(&network_oversized_count, __ATOMIC_RELAXED);
 }
 
 int axoloty_mqtt_disconnect(void) {
