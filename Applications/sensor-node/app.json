@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "name": "sensor-node",
+  "sources": [
+    "main/SensorNodeApplication.swift",
+    "main/SensorNodeMessages.swift",
+    "main/SensorNodeSession.swift"
+  ],
+  "requirements": {
+    "platform": [
+      "clock.monotonicMicroseconds",
+      "scheduler.delayTicks",
+      "device.restart",
+      "console.write",
+      "diagnostics.stack",
+      "network.configuration",
+      "network.bootstrap",
+      "device.displayName"
+    ],
+    "carrier": [
+      "lastWill",
+      "connect",
+      "subscribe",
+      "publish",
+      "poll",
+      "disconnect"
+    ]
+  },
+  "capacities": {
+    "maxTopicLength": 128,
+    "maxPayloadSize": 512,
+    "applicationStateBytes": 7168
+  }
+}
