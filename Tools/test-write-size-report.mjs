@@ -146,6 +146,26 @@ assert.equal(report.enforcement.status, "not-applicable");
 assert.equal(report.budgets, null);
 assert.equal(report.metrics.imageBytes, 952960);
 
+// A smoke profile's budgets exclude the network stack, so its network-configured
+// device variant is reported, not gated; the same budgets still gate the plain image.
+const smokeProfile = structuredClone(profile);
+smokeProfile.budgets.networkStack = false;
+report = buildReport({ ...args, sizeText: ZENOH_SIZE_A, imageBytes: 1137280, partitionBytes: 0x1f0000, profile: smokeProfile, policy, networkState: "configured" });
+assert.equal(report.enforcement.status, "not-applicable");
+assert.match(report.enforcement.reason, /network-configured variant/);
+assert.equal(report.budgets, null);
+assert.equal(report.configuration.networkConfigured, true);
+report = buildReport({ ...args, sizeText: ZENOH_SIZE_A, imageBytes: 1137280, partitionBytes: 0x1f0000, profile: smokeProfile, policy, networkState: "unconfigured" });
+assert.equal(report.enforcement.status, "failed");
+// A profile that budgets the networked image is gated when configured.
+const networked = structuredClone(profile);
+networked.budgets.networkStack = true;
+report = buildReport({ ...args, sizeText: ZENOH_SIZE_A, imageBytes: 1137280, partitionBytes: 0x1f0000, profile: networked, policy, networkState: "configured" });
+assert.equal(report.enforcement.status, "failed");
+const badFlag = structuredClone(profile);
+badFlag.budgets.networkStack = "no";
+assert.throws(() => buildReport({ ...args, sizeText: ZENOH_SIZE_A, imageBytes: 670560, partitionBytes: 0x1f0000, profile: badFlag, policy }), /budgets object/);
+
 // A profile without budgets says so and never claims a pass.
 const unbudgeted = structuredClone(profile);
 delete unbudgeted.budgets;

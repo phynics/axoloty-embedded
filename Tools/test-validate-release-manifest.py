@@ -275,6 +275,52 @@ with tempfile.TemporaryDirectory() as temporary:
         with_report["resources"] = {"available": True, "report": valid_report}
         write_json(manifest, with_report)
         require(run(repo, manifest, "--require-qualified"), 0, "real size report rejected")
+        # The network-configured variant of a smoke profile (#136): the real writer
+        # reports it as not-applicable, and the validator accepts that only on an
+        # unqualified manifest of a profile whose budgets declare networkStack false.
+        net_profile = copy.deepcopy(profile_doc)
+        net_profile["budgets"]["networkStack"] = False
+        write_json(profile_path, net_profile)
+
+        def variant_report_for(state):
+            subprocess.run(["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(policy_path), str(prep_path), str(sdkconfig_path), state, str(output), str(size_tool)], check=True, capture_output=True)
+            return json.loads(output.read_text())
+
+        def variant_manifest(report, status="unqualified"):
+            document = copy.deepcopy(original)
+            document["resources"] = {"available": True, "report": report}
+            document["qualification"]["status"] = status
+            document["compatibility"]["status"] = status
+            return document
+
+        for state in ("configured", "placeholder"):
+            net_report = variant_report_for(state)
+            assert net_report["enforcement"]["status"] == "not-applicable", state
+            assert net_report["configuration"]["networkConfigured"] is True
+            write_json(manifest, variant_manifest(net_report))
+            require(run(repo, manifest), 0, "writer's network variant report rejected (%s)" % state)
+            # Never usable on a certified release image.
+            require(run(repo, manifest, "--require-qualified"), 1, "network variant accepted as a published release")
+            write_json(manifest, variant_manifest(net_report, "qualified"))
+            require(run(repo, manifest), 1, "network variant accepted on a qualified manifest")
+        net_report = variant_report_for("configured")
+        tampered = copy.deepcopy(net_report)
+        tampered["configuration"]["networkConfigured"] = False
+        write_json(manifest, variant_manifest(tampered))
+        require(run(repo, manifest), 1, "network variant accepted for an image without a network stack")
+        tampered = copy.deepcopy(net_report)
+        tampered["enforcement"]["reason"] = "some other reason"
+        write_json(manifest, variant_manifest(tampered))
+        require(run(repo, manifest), 1, "unknown not-applicable reason accepted")
+        # A profile whose budgets do not exclude the network stack cannot use it.
+        write_json(profile_path, profile_doc)
+        write_json(manifest, variant_manifest(net_report))
+        require(run(repo, manifest), 1, "network variant accepted for a profile that budgets the networked image")
+        write_json(profile_path, net_profile)
+        require(run(repo, manifest), 0, "network variant rejected after restoring the profile flag")
+        write_json(profile_path, profile_doc)
+        subprocess.run(["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(policy_path), str(prep_path), str(sdkconfig_path), "configured", str(output), str(size_tool)], check=True, capture_output=True)
+        write_json(manifest, with_report)
         mutations = [
             lambda r: r.update(kind="typo"),
             lambda r: r.update(schemaVersion=2),

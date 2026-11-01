@@ -9,6 +9,7 @@
   },
   "budgets": {
     "basis": "Smoke harness image, not the production application. Measured on 0.10.0-embedded.2 (Core v0.10.0, 2026-10-31) plus 10 percent, rounded up to the next KiB. See docs/resource-budgets.md.",
+    "networkStack": false,
     "build": {
       "imageBytes": 739328,
       "flashTextBytes": 553984,
