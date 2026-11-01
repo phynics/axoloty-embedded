@@ -413,6 +413,10 @@ int axoloty_mqtt_disconnect(void) {
     esp_err_t stop = esp_mqtt_client_stop(mqtt_client);
     esp_err_t destroy = esp_mqtt_client_destroy(mqtt_client);
     mqtt_client = NULL;
+    // The session is over. A later connect starts a clean one: no stale last
+    // will, no subscription from this session counted against the capacity, and
+    // no reconnect baseline from the destroyed client.
+    network_reset_mqtt_state();
     return stop == ESP_OK && destroy == ESP_OK;
 }
 

@@ -160,6 +160,18 @@ private struct EmbeddedMQTTHostTest {
                 precondition(client.connect(deadlineMS: 1))
                 precondition(client.disconnect())
                 precondition(host_mqtt_call_count(6) == 3)
+
+                // More sessions than the carrier's subscription capacity: the
+                // client state machine takes each one. The C carrier's own
+                // state reset on disconnect is not reachable through this
+                // seam, which replaces that carrier.
+                for _ in 0..<6 {
+                    precondition(client.configureLastWill(topic: topicSpan, payload: payloadSpan))
+                    precondition(client.connect(deadlineMS: 1))
+                    precondition(client.subscribe(topic: topicSpan, deadlineMS: 1))
+                    precondition(client.disconnect())
+                }
+                precondition(host_mqtt_call_count(6) == 9)
             }
         }
     }
