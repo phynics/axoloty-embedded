@@ -13,8 +13,8 @@
     "build": {
       "imageBytes": 807936,
       "flashTextBytes": 636928,
-      "staticRamBytes": 154624,
-      "dramBssBytes": 39936
+      "staticRamBytes": 153600,
+      "dramBssBytes": 38912
     },
     "runtime": {
       "minimumFreeHeapBytes": 240640,
