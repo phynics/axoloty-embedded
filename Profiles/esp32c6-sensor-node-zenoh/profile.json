@@ -1,0 +1,21 @@
+{
+  "name": "esp32c6-sensor-node-zenoh",
+  "application": "sensor-node",
+  "platform": "esp32c6-idf",
+  "transport": "zenoh-pico",
+  "board": "ESP32-C6-DevKitC-1",
+  "configuration": "production",
+  "core": {
+    "revision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9"
+  },
+  "qualification": {
+    "requiredChecks": [
+      {
+        "check": "sensor-node-runtime",
+        "artifact": "release",
+        "records": 1,
+        "units": 1
+      }
+    ]
+  }
+}
