@@ -32,7 +32,12 @@ device=${AXOLOTY_DEVICE_PORT:-${EMBEDDED_DEVICE:-}}
 serial_log="$evidence_dir/swift-smoke-log.txt"
 smoke_result="$evidence_dir/swift-smoke-result.json"
 corpus_manifest="${AXOLOTY_CORPUS_MANIFEST:-}"
-deadline=${EMBEDDED_DEADLINE:-120}
+# The monitor ends at the completion record, so the deadline only bounds a run
+# that never finishes. Measured on 2026-11-01 from the monitor start to the
+# completion record: Zenoh network test 59 s, MQTT network test 125 s (its JSON
+# image runs the on-device benchmark before the summary). 240 s leaves the
+# slower run about 1.9 times its need.
+deadline=${EMBEDDED_DEADLINE:-240}
 
 # A direct invocation that names no profile and no explicit workspace would
 # fall back to the legacy shared proof root, which can hold any profile's
