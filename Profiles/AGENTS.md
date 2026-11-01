@@ -22,7 +22,7 @@ under this directory belongs in one of the other three axes.
 ```
 
 Three further top-level keys are optional. `budgets` declares build-stage size
-budgets (see [docs/resource-budgets.md](../docs/resource-budgets.md)).
+budgets and runtime floors (see [docs/resource-budgets.md](../docs/resource-budgets.md)).
 `qualification` declares the required checks for a release. `configuration`
 holds profile-specific build configuration. `Tools/validate-composition.py`
 rejects any top-level key outside `schemaVersion`, `name`, `application`,
