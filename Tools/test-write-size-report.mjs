@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import {
   appPartitionBytes,
+  buildConfiguration,
   buildReport,
   computeMetrics,
   parseSizeA,
@@ -72,7 +73,8 @@ assert.equal(computeMetrics(new Map(), 0).staticRamBytes, 0);
 assert.equal(appPartitionBytes(PARTITIONS), 0x1f0000);
 assert.throws(() => appPartitionBytes("nvs, data, nvs, 0x9000, 0x6000,\n"), /no factory application partition/);
 
-const args = { imageSha256: "a".repeat(64), coreRevision: "b".repeat(40) };
+const SDKCONFIG = "CONFIG_IDF_TARGET=\"esp32c6\"\n";
+const args = { imageSha256: "a".repeat(64), coreRevision: "b".repeat(40), sdkconfigText: SDKCONFIG, networkState: "unconfigured" };
 const policy = { schema: "axoloty.app-static-storage-policy.v1", profile: profile.name, status: "enforced" };
 for (const bad of ["not a section table", ZENOH_SIZE_A.replace(/\.dram0.bss[^\n]*\n/, ""), ZENOH_SIZE_A.replace(/Total[^\n]*\n/, ""), ZENOH_SIZE_A.replace("Total ", ".flash.text 1 0\nTotal "), ZENOH_SIZE_A.replace("Total ", ".bad nope 0\nTotal "), ZENOH_SIZE_A.replace("Total ", ".bad 9007199254740992 0\nTotal "), ZENOH_SIZE_A.replace("6535379", "9007199254740992")]) {
   assert.throws(() => parseSizeA(bad));
@@ -94,6 +96,36 @@ assert.equal(report.enforcement.results.length, 4);
 assert.equal(report.image.partitionHeadroomBytes, 0x1f0000 - 670560);
 assert.equal(report.profile, "esp32c6-zenoh");
 assert.equal(report.coreRevision, args.coreRevision);
+
+// A measurement names its configuration: the profile's, or the platform default.
+assert.equal(report.configuration.name, "default");
+assert.match(report.configuration.sdkconfigSha256, /^[0-9a-f]{64}$/);
+assert.equal(report.configuration.networkConfigured, false);
+assert.equal("networkPlaceholder" in report.configuration, false);
+const production = buildConfiguration({ configuration: "production" }, "CONFIG_X=y\n", "configured");
+assert.equal(production.name, "production");
+assert.notEqual(production.sdkconfigSha256, report.configuration.sdkconfigSha256);
+assert.deepEqual(Object.keys(production), ["name", "sdkconfigSha256", "networkConfigured"]);
+assert.equal(production.networkConfigured, true);
+// A placeholder says so; it is never reported as an operator-configured image.
+const placeholder = buildConfiguration({ configuration: "production" }, "CONFIG_X=y\n", "placeholder");
+assert.equal(placeholder.networkConfigured, true);
+assert.equal(placeholder.networkPlaceholder, true);
+for (const bad of ["", undefined, "yes", "Placeholder"]) assert.throws(() => buildConfiguration({}, "x", bad), /network state/);
+assert.throws(() => buildConfiguration({}, "", "configured"), /sdkconfig/);
+assert.throws(() => buildConfiguration({ configuration: "" }, "x", "configured"), /configuration name/);
+report = buildReport({ ...args, networkState: "placeholder", sizeText: ZENOH_SIZE_A, imageBytes: 670560, partitionBytes: 0x1f0000, profile, policy });
+assert.equal(report.configuration.networkPlaceholder, true);
+
+// Runtime budgets are floors a device run enforces; the writer validates them and ignores them in the build verdict.
+const withRuntime = structuredClone(profile);
+withRuntime.budgets.runtime = { minimumFreeHeapBytes: 242000, stackRemainingBytes: 2000 };
+report = buildReport({ ...args, sizeText: ZENOH_SIZE_A, imageBytes: 670560, partitionBytes: 0x1f0000, profile: withRuntime, policy });
+assert.equal(report.enforcement.results.length, 4);
+for (const bad of [{}, { minimumFreeHeapBytes: 0 }, { stackRemaining: 1 }, { stackRemainingBytes: "5" }, null, []]) {
+  const invalid = structuredClone(profile); invalid.budgets.runtime = bad;
+  assert.throws(() => buildReport({ ...args, sizeText: ZENOH_SIZE_A, imageBytes: 670560, partitionBytes: 0x1f0000, profile: invalid, policy }), /runtime budgets/);
+}
 
 // One metric over budget fails the whole report and names the metric.
 const tight = structuredClone(profile);

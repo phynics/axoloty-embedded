@@ -215,23 +215,25 @@ with tempfile.TemporaryDirectory() as temporary:
         policy_path, prep_path, output = base / "policy.json", base / "prep.json", base / "size.json"
         write_json(policy_path, {"schema": "axoloty.app-static-storage-policy.v1", "profile": "esp32c6-mqtt", "status": "enforced"})
         write_json(prep_path, {"schemaVersion": 1, "status": "prepared", "core": {"sha": LOCK["revision"]}})
+        sdkconfig_path = base / "sdkconfig"
+        sdkconfig_path.write_text('CONFIG_IDF_TARGET="esp32c6"\n')
         size_tool = base / "size-tool"
         size_tool.write_text("#!/bin/sh\nprintf 'section size addr\n.iram0.text 1 1\n.dram0.data 1 1\n.dram0.bss 1 1\n.flash.text 1 1\n.flash.rodata 1 1\nTotal 5\n'\n")
         size_tool.chmod(0o755)
         partition = base / "partitions.csv"
         partition.write_text("factory,app,factory,0,100,\n")
-        subprocess.run(["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(policy_path), str(prep_path), str(output), str(size_tool)], check=True, capture_output=True)
+        subprocess.run(["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(policy_path), str(prep_path), str(sdkconfig_path), "configured", str(output), str(size_tool)], check=True, capture_output=True)
         # Failed runs clear stale output, but never delete an input through an alias.
         bad_policy = base / "bad-policy.json"
         write_json(bad_policy, {"status": "not-applicable"})
-        command = ["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(bad_policy), str(prep_path), str(output), str(size_tool)]
+        command = ["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(bad_policy), str(prep_path), str(sdkconfig_path), "configured", str(output), str(size_tool)]
         assert subprocess.run(command, capture_output=True).returncode != 0 and not output.exists()
-        subprocess.run(["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(policy_path), str(prep_path), str(output), str(size_tool)], check=True, capture_output=True)
+        subprocess.run(["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(policy_path), str(prep_path), str(sdkconfig_path), "configured", str(output), str(size_tool)], check=True, capture_output=True)
         alias = base / "alias"
         os_link = __import__("os").link
         os_link(binary, alias)
         alias_command = command.copy()
-        alias_command[8] = str(alias)
+        alias_command[10] = str(alias)
         assert subprocess.run(alias_command, capture_output=True).returncode != 0
         assert binary.read_bytes() == b"x" and alias.read_bytes() == b"x"
         # Exercise the manifest writer on the report at the artifact's real path.
@@ -253,7 +255,7 @@ with tempfile.TemporaryDirectory() as temporary:
         write_json(profile_path, profile_doc)
         preparation["core"]["sha"] = preview_sha
         write_json(prep_path, preparation)
-        subprocess.run(["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(policy_path), str(prep_path), str(output), str(size_tool)], check=True, capture_output=True)
+        subprocess.run(["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(policy_path), str(prep_path), str(sdkconfig_path), "configured", str(output), str(size_tool)], check=True, capture_output=True)
         preview_report = json.loads(output.read_text())
         assert preview_report["coreRevision"] == preview_sha
         provenance_doc = json.loads(provenance.read_text())
@@ -267,7 +269,7 @@ with tempfile.TemporaryDirectory() as temporary:
         require(run(repo, generated), 1, "preview accepted the declared lock instead of actual Core")
         preparation["core"]["sha"] = LOCK["revision"]
         write_json(prep_path, preparation)
-        subprocess.run(["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(policy_path), str(prep_path), str(output), str(size_tool)], check=True, capture_output=True)
+        subprocess.run(["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(policy_path), str(prep_path), str(sdkconfig_path), "configured", str(output), str(size_tool)], check=True, capture_output=True)
         valid_report = json.loads(output.read_text())
         with_report = copy.deepcopy(original)
         with_report["resources"] = {"available": True, "report": valid_report}
@@ -287,6 +289,13 @@ with tempfile.TemporaryDirectory() as temporary:
             lambda r: r["enforcement"]["results"][0].update(passed=False),
             lambda r: r["enforcement"].update(results=[]),
             lambda r: r["metrics"].update(imageBytes=True),
+            lambda r: r.pop("configuration"),
+            lambda r: r["configuration"].update(name="production"),
+            lambda r: r["configuration"].update(sdkconfigSha256="z"),
+            lambda r: r["configuration"].update(networkConfigured="yes"),
+            lambda r: r["configuration"].update(networkPlaceholder=True, networkConfigured=False),
+            lambda r: r["configuration"].update(networkPlaceholder=False),
+            lambda r: r["configuration"].update(extra=1),
             lambda r: r.update(enforcement={"status": "not-configured", "reason": "the profile declares no build budgets"}, budgets=None),
         ]
         for mutate in mutations:
@@ -311,6 +320,16 @@ with tempfile.TemporaryDirectory() as temporary:
         assert module.validate_size_report(variant["resources"]["report"], variant, variant_profile) == []
         variant["qualification"]["status"] = "qualified"
         assert module.validate_size_report(variant["resources"]["report"], variant, variant_profile)
+        # A placeholder-built report is valid and says so; runtime budgets are declared floors.
+        placeholder_doc = copy.deepcopy(with_report)
+        placeholder_doc["resources"]["report"]["configuration"].update(networkPlaceholder=True)
+        assert module.validate_size_report(placeholder_doc["resources"]["report"], placeholder_doc, profile_doc) == []
+        runtime_profile = copy.deepcopy(profile_doc)
+        runtime_profile["budgets"]["runtime"] = {"minimumFreeHeapBytes": 242000, "stackRemainingBytes": 2000}
+        assert module.validate_size_report(with_report["resources"]["report"], with_report, runtime_profile) == []
+        for bad_runtime in ({}, {"minimumFreeHeap": 1}, {"stackRemainingBytes": 0}, {"stackRemainingBytes": "5"}, []):
+            runtime_profile["budgets"]["runtime"] = bad_runtime
+            assert module.validate_size_report(with_report["resources"]["report"], with_report, runtime_profile)
         corrupt = copy.deepcopy(with_report)
         corrupt["resources"]["report"]["metrics"]["staticRamBytes"] = 0
         write_json(manifest, corrupt)

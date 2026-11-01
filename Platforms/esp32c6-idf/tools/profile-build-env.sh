@@ -27,14 +27,17 @@
 #       AXOLOTY_APPLICATION_DIR or AXOLOTY_TRANSPORT_DIR, remove the whole
 #       build directory so the next configure starts from the current
 #       selection, and say so. A matching cache is left untouched.
-#   axoloty_stage_network_config_header <header-or-empty> <project_dir>
+#   axoloty_stage_network_config_header <header-or-empty> <project_dir> [placeholder]
 #       Stage the private network header (or a non-secret unconfigured header)
 #       into a freshly copied platform project and refresh only its timestamp.
 #       The selected C consumers declare it as an OBJECT_DEPENDS input because
 #       __has_include cannot record a dependency on a header that was absent.
 #       Keeping the path present and refreshing its timestamp handles absent,
 #       changed, and removed private configuration without storing a
-#       secret-derived key.
+#       secret-derived key. With no header and the third argument
+#       `placeholder`, it stages a non-secret sizing-only header instead, so the
+#       image links the Wi-Fi and TCP/IP stack. It sets AXOLOTY_NETWORK_STATE
+#       to configured, placeholder, or unconfigured.
 
 axoloty_default_proof_root() {
     scratch=${1:-}
@@ -135,6 +138,8 @@ axoloty_clear_stale_profile_cache() {
 axoloty_stage_network_config_header() {
     config_header=${1:-}
     project_dir=${2:-}
+    mode=${3:-}
+    AXOLOTY_NETWORK_STATE=unconfigured
     if [ -z "$project_dir" ]; then
         echo "error: axoloty_stage_network_config_header requires the staged project directory" >&2
         return 64
@@ -151,14 +156,45 @@ axoloty_stage_network_config_header() {
             return 64
         fi
         cp "$config_header" "$staged_header"
+        AXOLOTY_NETWORK_STATE=configured
         echo "network config: private header injected into the build project"
     else
         # A prior depfile may still name this file. Keep it present so both
         # Make and Ninja can rebuild cleanly when private configuration goes
         # away; this default contains no operator data.
-        printf '%s\n' \
-            '#define AXOLOTY_NETWORK_CONFIGURED 0' \
-            '#define axoloty_runtime_identity ""' > "$staged_header"
+        if [ "$mode" = placeholder ]; then
+            # A sizing-only header. It makes the Wi-Fi and TCP/IP stack and the
+            # carrier link, so the size gate measures an image that can run on
+            # a network. Every value is in a documentation range and is not a
+            # secret. The image joins no real network, and no harness uses it
+            # as evidence: the device harnesses always supply a real header.
+            printf '%s\n' \
+                '// Sizing-only placeholder; documentation-range values, not a secret.' \
+                '#ifndef AXOLOTY_NETWORK_CONFIG_H' \
+                '#define AXOLOTY_NETWORK_CONFIG_H' \
+                '#include <stddef.h>' \
+                '#define AXOLOTY_NETWORK_CONFIGURED 1' \
+                '#define AXOLOTY_NETWORK_PLACEHOLDER 1' \
+                'static const unsigned char axoloty_wifi_ssid[] = "sizing-only";' \
+                'static const size_t axoloty_wifi_ssid_length = sizeof(axoloty_wifi_ssid) - 1;' \
+                'static const unsigned char axoloty_wifi_password[] = "sizing-only-placeholder";' \
+                'static const size_t axoloty_wifi_password_length = sizeof(axoloty_wifi_password) - 1;' \
+                'static const char axoloty_mqtt_host[] = "192.0.2.1";' \
+                'static const unsigned int axoloty_mqtt_port = 1883U;' \
+                'static const char axoloty_zenoh_host[] = "192.0.2.1";' \
+                'static const unsigned int axoloty_zenoh_port = 1883U;' \
+                'static const unsigned int axoloty_device_role = 0U;' \
+                'static const unsigned int axoloty_agent_scenario = 0U;' \
+                'static const char axoloty_runtime_identity[] = "";' \
+                '#endif' > "$staged_header"
+            AXOLOTY_NETWORK_STATE=placeholder
+            echo "network config: sizing-only placeholder header staged; the image is not device evidence"
+        else
+            printf '%s\n' \
+                '#define AXOLOTY_NETWORK_CONFIGURED 0' \
+                '#define axoloty_runtime_identity ""' > "$staged_header"
+            AXOLOTY_NETWORK_STATE=unconfigured
+        fi
     fi
     # The build project is a timestamp-preserving copy of tracked sources. The
     # CMake OBJECT_DEPENDS entries make consumers observe this input even when
