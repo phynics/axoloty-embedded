@@ -214,6 +214,9 @@ if wanted build; then
         'node is not available for the unsupported-status validator check' \
         env AXOLOTY_CORPUS_MANIFEST="$repo_root/Applications/device-smoke-agent/fixtures/manifest.json" \
             node Tests/embedded/test-unsupported-validator.mjs
+    check_script sample-encoding \
+        'node is not available for the sample encoding check' \
+        node Tests/embedded/test-sample-encoding.mjs
     check_script sensor-node-validator \
         'node is not available for the sensor node validator check' \
         node Tests/embedded/test-sensor-node-validator.mjs
