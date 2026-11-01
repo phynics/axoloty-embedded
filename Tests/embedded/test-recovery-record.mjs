@@ -22,7 +22,7 @@ const runLog = [
   "10:00:30.000 [host] step: host Deadvertise echo received",
 ].join("\n");
 const hostRecord = {
-  status: "passed", device: "ESP32-C6 test unit", firmwareSHA256: "a".repeat(64),
+  status: "passed", device: "ESP32-C6 test unit", firmwareSHA256: "a".repeat(64), firmwareRevision: "c".repeat(40),
   coreRevision: "b".repeat(40), result: "10/10 passed",
 };
 const input = (routerLines, overrides = {}) => ({
@@ -34,6 +34,7 @@ const passed = recoveryRecord(input([accept(2, 5001), open(2), reset(5, 5001), a
 assert.equal(passed.status, "passed");
 assert.equal(passed.check, "wifi-recovery");
 assert.equal(passed.firmwareSHA256, hostRecord.firmwareSHA256);
+assert.equal(passed.firmwareRevision, hostRecord.firmwareRevision);
 assert.match(passed.result, /same client returned in 4 s, 0 lease expiries/);
 
 // The recovered session expired by lease: a failed record, not a pass.

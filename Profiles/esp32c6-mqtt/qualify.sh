@@ -94,6 +94,9 @@ const device = JSON.parse(fs.readFileSync(process.env.DEVICE_MANIFEST, "utf8"));
 if (proof.result !== "passed" || proof.smoke?.validation?.passed !== true) {
   throw new Error("refusing to write qualification evidence from a failed proof");
 }
+if (!/^[0-9a-f]{40}$/.test(proof.firmware?.revision ?? "")) {
+  throw new Error("refusing to write qualification evidence without the firmware revision of the build");
+}
 const counts = proof.smoke.validation.counts ?? {};
 const passed = Number.isInteger(counts.passed) ? counts.passed : 0;
 const unit = device.chipDescription
@@ -108,6 +111,7 @@ const record = {
   recordedAt: new Date().toISOString().slice(0, 10),
   device: unit,
   firmwareSHA256: proof.firmwareSha256,
+  firmwareRevision: proof.firmware.revision,
   coreRevision: proof.coreSha,
   protocol: `${passed} deterministic cases over serial JSON Lines`,
   result: `${passed}/${passed} passed`,

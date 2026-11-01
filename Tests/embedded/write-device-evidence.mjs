@@ -12,6 +12,12 @@ export function deviceEvidenceRecord(proof, device, { profile, check, cases }) {
   if (proof.result !== "passed" || proof.smoke?.validation?.passed !== true) {
     throw new Error("refusing to write device evidence from a failed proof");
   }
+  // The firmware commit the image was built from. A variant image has its own
+  // checksum, so this is what ties its record to a certificate.
+  const firmwareRevision = proof.firmware?.revision ?? proof.firmwareRevision;
+  if (!/^[0-9a-f]{40}$/.test(firmwareRevision ?? "")) {
+    throw new Error("refusing to write device evidence without the firmware revision of the build");
+  }
   const counts = proof.smoke.validation.counts ?? {};
   const passed = Number.isInteger(counts.passed) ? counts.passed : 0;
   // Declared-unsupported capabilities are neither passes nor failures. Name
@@ -29,6 +35,7 @@ export function deviceEvidenceRecord(proof, device, { profile, check, cases }) {
     recordedAt: new Date().toISOString().slice(0, 10),
     device: unit,
     firmwareSHA256: proof.firmwareSha256,
+    firmwareRevision,
     coreRevision: proof.coreSha,
     protocol: `${passed} ${cases}`,
     result: `${passed}/${passed} passed` + (unsupported > 0 ? `, ${unsupported} declared unsupported` : ""),
@@ -58,6 +65,7 @@ export function writePassedDeviceEvidence({ evidenceDir, devicePath, validation,
     result: "passed",
     smoke: { validation },
     firmwareSha256: provenance.artifact.sha256,
+    firmwareRevision: provenance.firmware?.revision,
     coreSha: provenance.core.sha,
   };
   writeDeviceEvidence(deviceEvidenceRecord(proof, device, { profile, check, cases }), output);
