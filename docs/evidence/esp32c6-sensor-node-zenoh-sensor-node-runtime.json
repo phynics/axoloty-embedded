@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "profile": "esp32c6-sensor-node-zenoh",
+  "check": "sensor-node-runtime",
+  "tier": "device",
+  "status": "passed",
+  "recordedAt": "2026-11-01",
+  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
+  "firmwareSHA256": "c656316e000ead1c0367abf7c7670d8024479a5e6d8dca7308ab155949dd3558",
+  "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+  "protocol": "11 metrics samples over one session, with host-observed Advertise, Resolve and readings",
+  "result": "11/11 passed",
+  "runtimeResourceMetrics": {
+    "mode": "normal",
+    "samples": 11,
+    "readings": 55,
+    "resolves": 1,
+    "minimumFreeHeapBytes": 269436,
+    "stackRemainingBytes": 7732,
+    "stackSizeBytes": 36864,
+    "deviceBoots": 1
+  },
+  "configuration": {
+    "name": "production",
+    "sdkconfigSha256": "3e14e6acd8df3ff2a35dd6d13aeba1a687787f388a71d0b85765e787e82378bc",
+    "networkConfigured": true,
+    "networkPlaceholder": false
+  },
+  "firmwareImageBytes": 734416
+}

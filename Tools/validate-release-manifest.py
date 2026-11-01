@@ -170,6 +170,7 @@ def load_revocation(repo_root, manifest_path):
 SIZE_METRICS = ("imageBytes", "flashTextBytes", "flashRodataBytes", "iramTextBytes",
                 "initializedDataBytes", "dramBssBytes", "staticRamBytes")
 BUDGET_METRICS = ("imageBytes", "flashTextBytes", "staticRamBytes", "dramBssBytes")
+RUNTIME_METRICS = ("minimumFreeHeapBytes", "stackRemainingBytes")
 MAX_SAFE_INTEGER = 9007199254740991
 
 
@@ -185,7 +186,18 @@ def validate_size_report(report, manifest, profile):
             problems.append("resources.report." + message)
     if not isinstance(report, dict):
         return ["resources.report must be an object"]
-    check(set(report) == {"schemaVersion", "kind", "profile", "application", "platform", "transport", "coreRevision", "metrics", "image", "budgets", "enforcement"}, "has invalid fields")
+    check(set(report) == {"schemaVersion", "kind", "profile", "application", "platform", "transport", "coreRevision", "configuration", "metrics", "image", "budgets", "enforcement"}, "has invalid fields")
+    configuration = report.get("configuration")
+    expected_name = profile.get("configuration", "default") if isinstance(profile, dict) else None
+    valid_configuration = (isinstance(configuration, dict)
+                           and set(configuration) in ({"name", "sdkconfigSha256", "networkConfigured"},
+                                                      {"name", "sdkconfigSha256", "networkConfigured", "networkPlaceholder"})
+                           and is_nonempty_string(configuration.get("name")) and configuration.get("name") == expected_name
+                           and isinstance(configuration.get("sdkconfigSha256"), str) and bool(HEX64.fullmatch(configuration["sdkconfigSha256"]))
+                           and type(configuration.get("networkConfigured")) is bool
+                           and ("networkPlaceholder" not in configuration
+                                or (configuration["networkPlaceholder"] is True and configuration["networkConfigured"] is True)))
+    check(valid_configuration, "configuration is invalid or does not match profile")
     check(type(report.get("schemaVersion")) is int and report.get("schemaVersion") == 1 and report.get("kind") == "build-size", "has invalid schema or kind")
     for field, expected in (("profile", manifest.get("profile")), ("application", manifest.get("application")),
                             ("platform", manifest.get("platform")), ("transport", (manifest.get("transport") if isinstance(manifest.get("transport"), dict) else {}).get("name")),
@@ -218,7 +230,10 @@ def validate_size_report(report, manifest, profile):
     declared = profile.get("budgets", {}) if isinstance(profile, dict) else {}
     declared_build = declared.get("build") if isinstance(declared, dict) else None
     if isinstance(profile, dict) and "budgets" in profile:
-        check(isinstance(declared, dict) and set(declared) <= {"basis", "build"} and ("basis" not in declared or is_nonempty_string(declared["basis"])), "profile budgets are invalid")
+        check(isinstance(declared, dict) and set(declared) <= {"basis", "build", "runtime"} and ("basis" not in declared or is_nonempty_string(declared["basis"])), "profile budgets are invalid")
+    declared_runtime = declared.get("runtime") if isinstance(declared, dict) else None
+    if isinstance(declared, dict) and "runtime" in declared:
+        check(isinstance(declared_runtime, dict) and bool(declared_runtime) and set(declared_runtime) <= set(RUNTIME_METRICS) and all(safe_integer(v, 1) for v in declared_runtime.values()), "profile runtime budgets are invalid")
     if isinstance(declared, dict) and "build" in declared:
         check(isinstance(declared_build, dict) and bool(declared_build) and set(declared_build) <= set(BUDGET_METRICS) and all(safe_integer(v, 1) for v in declared_build.values()), "profile build budgets are invalid")
     if status in ("passed", "failed"):

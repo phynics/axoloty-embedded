@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "profile": "esp32c6-sensor-node-mqtt",
+  "check": "sensor-node-recovery",
+  "tier": "device",
+  "status": "passed",
+  "recordedAt": "2026-11-01",
+  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
+  "firmwareSHA256": "d9c5a073419da1b1e3b21b77af9b3c0fc5473979594f6cd89a2d81b1c25851ce",
+  "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+  "protocol": "4 metrics samples across 1 carrier outage in one boot, with host-observed Advertise, Resolve and readings before the first and after each",
+  "result": "4/4 passed",
+  "runtimeResourceMetrics": {
+    "mode": "recovery",
+    "samples": 4,
+    "readings": 20,
+    "resolves": 2,
+    "minimumFreeHeapBytes": 262868,
+    "stackRemainingBytes": 7340,
+    "stackSizeBytes": 36864,
+    "recovery": {
+      "outageMs": 20405,
+      "sessionEndedAfterMs": 5273,
+      "sessionEndedStages": [
+        "serving"
+      ],
+      "readvertisedAfterMs": 2006,
+      "sessions": 1
+    },
+    "deviceBoots": 1
+  },
+  "configuration": {
+    "name": "production",
+    "sdkconfigSha256": "3e14e6acd8df3ff2a35dd6d13aeba1a687787f388a71d0b85765e787e82378bc",
+    "networkConfigured": true,
+    "networkPlaceholder": false
+  },
+  "firmwareImageBytes": 836928
+}

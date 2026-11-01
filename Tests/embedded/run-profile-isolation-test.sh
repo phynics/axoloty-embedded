@@ -283,6 +283,62 @@ else
     failures=$((failures + 1))
 fi
 
+# A changed or removed configuration selection must clear a reused build
+# directory even when sdkconfig is newer than every defaults file.
+defaults_dir="$tmp/defaults"
+mkdir -p "$defaults_dir"
+printf 'CONFIG_A=y\n' > "$defaults_dir/sdkconfig.defaults"
+printf 'CONFIG_B=y\n' > "$defaults_dir/sdkconfig.production"
+base_list="$defaults_dir/sdkconfig.defaults"
+layered_list="$base_list;$defaults_dir/sdkconfig.production"
+reuse_dir="$tmp/reuse-build"
+mkdir -p "$reuse_dir"
+: > "$reuse_dir/sdkconfig"
+sleep 1
+: > "$reuse_dir/marker"
+axoloty_record_sdkconfig_defaults_signature "$reuse_dir" "$layered_list"
+touch "$reuse_dir/sdkconfig"
+axoloty_clear_stale_sdkconfig_defaults "$reuse_dir" "$layered_list" >/dev/null
+if [ ! -e "$reuse_dir/marker" ]; then
+    echo "FAIL: the recorded defaults list cleared the build directory" >&2
+    failures=$((failures + 1))
+fi
+axoloty_clear_stale_sdkconfig_defaults "$reuse_dir" "$base_list" >/dev/null
+if [ ! -e "$reuse_dir" ]; then
+    echo "ok: a removed configuration selection clears the reused build directory"
+else
+    echo "FAIL: a removed configuration selection kept the reused build directory" >&2
+    failures=$((failures + 1))
+fi
+mkdir -p "$reuse_dir"
+: > "$reuse_dir/sdkconfig"
+: > "$reuse_dir/marker"
+axoloty_record_sdkconfig_defaults_signature "$reuse_dir" "$layered_list"
+axoloty_clear_stale_sdkconfig_defaults "$reuse_dir" "$layered_list" >/dev/null
+if [ -e "$reuse_dir/marker" ]; then
+    echo "ok: an unchanged defaults list keeps the reused build directory"
+else
+    echo "FAIL: an unchanged defaults list cleared the build directory" >&2
+    failures=$((failures + 1))
+fi
+printf 'CONFIG_B=n\n' > "$defaults_dir/sdkconfig.production"
+axoloty_clear_stale_sdkconfig_defaults "$reuse_dir" "$layered_list" >/dev/null
+if [ ! -e "$reuse_dir" ]; then
+    echo "ok: changed defaults contents clear the reused build directory"
+else
+    echo "FAIL: changed defaults contents kept the reused build directory" >&2
+    failures=$((failures + 1))
+fi
+mkdir -p "$reuse_dir"
+: > "$reuse_dir/sdkconfig"
+axoloty_clear_stale_sdkconfig_defaults "$reuse_dir" "$layered_list" >/dev/null
+if [ ! -e "$reuse_dir" ]; then
+    echo "ok: a build directory with no recorded signature is cleared"
+else
+    echo "FAIL: a build directory with no recorded signature was reused" >&2
+    failures=$((failures + 1))
+fi
+
 if [ "$failures" -ne 0 ]; then
     echo "profile isolation tests failed: $failures failure(s)" >&2
     exit 1

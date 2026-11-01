@@ -4,19 +4,26 @@
 // profile's build budgets. The report lands beside the artifact as `size.json`,
 // where the release manifest generator picks it up as `resources`.
 //
-// Usage: write-size-report.mjs <elf> <bin> <partitions.csv> <profile.json> <policy.json> <preparation.json> <output> [size-tool]
+// Usage: write-size-report.mjs <elf> <bin> <partitions.csv> <profile.json> <policy.json> <preparation.json> <sdkconfig> <network-state> <output> [size-tool]
+//
+// <network-state> is `configured`, `placeholder`, or `unconfigured`: whether the
+// image was built with an operator network header, with the sizing-only
+// placeholder, or without one (and so without the network stack).
 //
 // Exit status: 0 within budget or not applicable, 1 a budget was exceeded or
 // the inputs are unusable, 64 bad usage.
 
 import { execFileSync } from "node:child_process";
-import fs from "node:fs";
 import crypto from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** The metrics a profile may budget, in report order. */
 export const BUDGET_METRICS = ["imageBytes", "flashTextBytes", "staticRamBytes", "dramBssBytes"];
+
+/** The runtime floors a profile may declare; a device run enforces them, not the build. */
+export const RUNTIME_METRICS = ["minimumFreeHeapBytes", "stackRemainingBytes"];
 
 /** Parses `size -A` output into a map from section name to byte size. */
 export function parseSizeA(text) {
@@ -97,6 +104,27 @@ export function verdicts(metrics, budgets) {
   }));
 }
 
+/** The network states a build can report. */
+export const NETWORK_STATES = ["configured", "placeholder", "unconfigured"];
+
+/**
+ * Identifies the build configuration a measurement belongs to: the profile's
+ * named configuration, or `default`, the checksum of the resolved sdkconfig,
+ * and whether the image links the network stack. A placeholder image is sized
+ * with a non-secret stand-in header and is never device evidence.
+ */
+export function buildConfiguration(profile, sdkconfigText, networkState) {
+  if (!NETWORK_STATES.includes(networkState)) throw new Error("invalid network state");
+  if (typeof sdkconfigText !== "string" || !sdkconfigText) throw new Error("sdkconfig is required");
+  if (profile.configuration !== undefined && (typeof profile.configuration !== "string" || !profile.configuration.trim())) throw new Error("invalid configuration name");
+  return {
+    name: profile.configuration ?? "default",
+    sdkconfigSha256: crypto.createHash("sha256").update(sdkconfigText).digest("hex"),
+    networkConfigured: networkState !== "unconfigured",
+    ...(networkState === "placeholder" ? { networkPlaceholder: true } : {}),
+  };
+}
+
 /** Finds the toolchain's `size` program. */
 function locateSizeTool(explicit) {
   if (explicit) return explicit;
@@ -113,7 +141,7 @@ function locateSizeTool(explicit) {
 }
 
 /** Builds the report for one image. */
-export function buildReport({ sizeText, imageBytes, imageSha256, partitionBytes, profile, policy, coreRevision }) {
+export function buildReport({ sizeText, sdkconfigText, networkState, imageBytes, imageSha256, partitionBytes, profile, policy, coreRevision }) {
   for (const [name, value] of Object.entries({ imageBytes, partitionBytes })) {
     if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${name} must be a positive safe integer`);
   }
@@ -122,7 +150,9 @@ export function buildReport({ sizeText, imageBytes, imageSha256, partitionBytes,
   if (!["name", "application", "platform", "transport"].every(key => typeof profile[key] === "string" && profile[key].trim())) throw new Error("profile identity is incomplete");
   if (!policy || policy.schema !== "axoloty.app-static-storage-policy.v1" || policy.profile !== profile.name || !["enforced", "not-configured", "not-applicable"].includes(policy.status) || (policy.status === "not-applicable" && policy.reason !== "configured C-only carrier qualification image")) throw new Error("invalid static storage policy");
   if (profile.budgets !== undefined && (profile.budgets === null || typeof profile.budgets !== "object" || Array.isArray(profile.budgets))) throw new Error("invalid budgets object");
-  if (profile.budgets && (Object.keys(profile.budgets).some(key => !["basis", "build"].includes(key)) || (profile.budgets.basis !== undefined && (typeof profile.budgets.basis !== "string" || !profile.budgets.basis.trim())))) throw new Error("invalid budgets object");
+  if (profile.budgets && (Object.keys(profile.budgets).some(key => !["basis", "build", "runtime"].includes(key)) || (profile.budgets.basis !== undefined && (typeof profile.budgets.basis !== "string" || !profile.budgets.basis.trim())))) throw new Error("invalid budgets object");
+  const runtime = profile.budgets?.runtime;
+  if (runtime !== undefined && (runtime === null || typeof runtime !== "object" || Array.isArray(runtime) || !Object.keys(runtime).length || Object.entries(runtime).some(([key, value]) => !RUNTIME_METRICS.includes(key) || !Number.isSafeInteger(value) || value <= 0))) throw new Error("invalid runtime budgets");
   const build = profile.budgets?.build;
   if (build !== undefined && (build === null || typeof build !== "object" || Array.isArray(build) || !Object.keys(build).length || Object.entries(build).some(([key, value]) => !BUDGET_METRICS.includes(key) || !Number.isSafeInteger(value) || value <= 0))) throw new Error("invalid build budgets");
   if (policy.status === "not-applicable" && profile.transport !== "zenoh-pico") throw new Error("C-only qualification requires zenoh-pico");
@@ -132,6 +162,7 @@ export function buildReport({ sizeText, imageBytes, imageSha256, partitionBytes,
     platform: profile.platform,
     transport: profile.transport,
     coreRevision,
+    configuration: buildConfiguration(profile, sdkconfigText, networkState),
   };
   const metrics = computeMetrics(parseSizeA(sizeText), imageBytes);
   if (Object.values(metrics).some(value => !Number.isSafeInteger(value) || value < 0)) throw new Error("unsafe metric");
@@ -178,13 +209,13 @@ export function buildReport({ sizeText, imageBytes, imageSha256, partitionBytes,
 }
 
 function main() {
-  const [elf, bin, partitions, profilePath, policyPath, preparationPath, output, explicitTool] = process.argv.slice(2);
-  if (![elf, bin, partitions, profilePath, policyPath, preparationPath, output].every(Boolean)) {
-    console.error("usage: write-size-report.mjs elf bin partitions.csv profile.json policy.json preparation.json output [size-tool]");
+  const [elf, bin, partitions, profilePath, policyPath, preparationPath, sdkconfig, networkState, output, explicitTool] = process.argv.slice(2);
+  if (![elf, bin, partitions, profilePath, policyPath, preparationPath, sdkconfig, networkState, output].every(Boolean)) {
+    console.error("usage: write-size-report.mjs elf bin partitions.csv profile.json policy.json preparation.json sdkconfig network-state output [size-tool]");
     process.exit(64);
   }
   // Never truncate or remove an input through a path, symlink, or hard-link alias.
-  const inputs = [elf, bin, partitions, profilePath, policyPath, preparationPath, ...(explicitTool ? [explicitTool] : [])];
+  const inputs = [elf, bin, partitions, profilePath, policyPath, preparationPath, sdkconfig, ...(explicitTool ? [explicitTool] : [])];
   const outputResolved = path.resolve(output);
   const outputStat = fs.existsSync(output) ? fs.statSync(output) : null;
   for (const input of inputs) {
@@ -203,6 +234,8 @@ function main() {
   const sizeText = execFileSync(locateSizeTool(explicitTool), ["-A", elf], { encoding: "utf8" });
   const report = buildReport({
     sizeText,
+    sdkconfigText: fs.readFileSync(sdkconfig, "utf8"),
+    networkState,
     imageBytes: fs.statSync(bin).size,
     imageSha256: crypto.createHash("sha256").update(fs.readFileSync(bin)).digest("hex"),
     coreRevision: preparation.core?.sha,

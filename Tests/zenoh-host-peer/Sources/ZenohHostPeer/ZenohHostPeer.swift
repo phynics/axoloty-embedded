@@ -18,7 +18,8 @@ import Darwin
 /// `AxolotyWire` codec the firmware writes them with.
 ///
 /// Environment:
-/// - `WIRE_EMBEDDED_HOST_DIRECTION`: `host-requester` or `host-responder`.
+/// - `WIRE_EMBEDDED_HOST_DIRECTION`: `host-requester`, `host-responder`, or
+///   `sensor-observer` for the `sensor-node` application.
 /// - `WIRE_ZENOH_ENDPOINT`: the router, for example `tcp/192.0.2.1:7447`.
 /// - `WIRE_NAMESPACE`: optional; default `axoloty-embedded`.
 /// - `WIRE_READY_FILE`: written once the runtime has started and subscribed.
@@ -31,6 +32,11 @@ struct ZenohHostPeer {
     static let embeddedObjectID = UUID16(parsing: "32400000-0000-4000-8000-000000000002")!
     static let correlationID = UUID16(parsing: "32400000-0000-4000-8000-000000000004")!
     static let objectType = "coaty.test.Device"
+    static let sensorAgentID = UUID16(parsing: "32400000-0000-4000-8000-000000000101")!
+    static let sensorObjectID = UUID16(parsing: "32400000-0000-4000-8000-000000000102")!
+    static let sensorObjectType: StaticString = "axoloty.sensor.Node"
+    static let sensorChannel = "sensor-readings"
+    static let sensorReadingCount = 3
 
     static func main() async {
         let environment = ProcessInfo.processInfo.environment
@@ -46,8 +52,10 @@ struct ZenohHostPeer {
                 try await hostDiscoversEmbeddedAgent(environment)
             case "host-responder":
                 try await embeddedAgentDiscoversHost(environment)
+            case "sensor-observer":
+                try await observeSensorNode(environment)
             default:
-                fail("WIRE_EMBEDDED_HOST_DIRECTION must be host-requester or host-responder")
+                fail("WIRE_EMBEDDED_HOST_DIRECTION must be host-requester, host-responder, or sensor-observer")
             }
         } catch {
             fail(error.description)
@@ -127,6 +135,77 @@ struct ZenohHostPeer {
 
         emitPassed("host-responder")
         await runtime.stop()
+    }
+
+    /// Observes the `sensor-node` application from outside: its Advertise, a
+    /// Resolve for a Discover by type, and readings that keep counting up.
+    static func observeSensorNode(_ environment: [String: String]) async throws(PeerFailure) {
+        let (runtime, streams) = try makeRuntime(environment, selectors: [
+            .advertise(objectType: sensorObjectType.description),
+            .correlatedResponse(capability: .resolve, correlationID: correlationID),
+            .channel(identifier: sensorChannel),
+        ])
+        try await start(runtime)
+        try signalReadiness(environment)
+        trace("sensor-observer ready")
+
+        let advertise = try await next(streams[0], label: "sensor Advertise")
+        try expect(advertise.context.sourceID == sensorAgentID, "sensor Advertise sourceID")
+        try expectSensor(advertise.value)
+        trace("sensor Advertise received")
+
+        let receipt = await runtime.request(.discover(
+            correlationID: correlationID,
+            payload: try envelope("objectTypes", [0x81, 0x73] + Array(sensorObjectType.description.utf8)),
+            timeoutMS: 60_000
+        ))
+        try expect(receipt == .accepted, "sensor Discover receipt \(receipt)")
+        let resolve = try await next(streams[1], label: "sensor Resolve")
+        try expect(resolve.context.sourceID == sensorAgentID, "sensor Resolve sourceID")
+        try expect(resolve.context.correlationID == correlationID, "sensor Resolve correlationID")
+        try expectSensor(resolve.value)
+        trace("sensor Resolve received")
+
+        var lastSequence = 0
+        for _ in 0..<sensorReadingCount {
+            let reading = try await next(streams[2], label: "sensor reading")
+            try expect(reading.context.sourceID == sensorAgentID, "sensor reading sourceID")
+            try expectSensor(reading.value)
+            let sequence = sensorSequence(reading.value)
+            try expect(sequence > lastSequence, "sensor reading sequence \(sequence) after \(lastSequence)")
+            lastSequence = sequence
+        }
+        trace("sensor readings received")
+
+        emitPassed("sensor-observer")
+        await runtime.stop()
+    }
+
+    /// Checks the sensor object through the production CBOR reader.
+    static func expectSensor(_ payload: [UInt8]) throws(PeerFailure) {
+        let codec = WireCodec(profile: .axoloty1CBOR)
+        let matched = payload.withUnsafeBufferPointer { bytes -> Bool in
+            let envelope = codec.reader(bytes: bytes.baseAddress!, length: bytes.count)
+            guard (try? envelope.validate()) != nil, let object = envelope.readField("object") else { return false }
+            return object.withBytes { pointer, length in
+                let reader = codec.reader(bytes: pointer.assumingMemoryBound(to: UInt8.self), length: length)
+                return reader.readUUID("objectId") == sensorObjectID
+                    && reader.readString("objectType")?.equals(sensorObjectType) == true
+            }
+        }
+        try expect(matched, "sensor object")
+    }
+
+    /// Reads a reading's sequence number, or zero when it has none.
+    static func sensorSequence(_ payload: [UInt8]) -> Int {
+        let codec = WireCodec(profile: .axoloty1CBOR)
+        return payload.withUnsafeBufferPointer { bytes -> Int in
+            let envelope = codec.reader(bytes: bytes.baseAddress!, length: bytes.count)
+            guard let object = envelope.readField("object") else { return 0 }
+            return object.withBytes { pointer, length in
+                codec.reader(bytes: pointer.assumingMemoryBound(to: UInt8.self), length: length).readInt("sequence") ?? 0
+            }
+        }
     }
 
     static func makeRuntime(

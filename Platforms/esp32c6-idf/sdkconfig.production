@@ -1,0 +1,32 @@
+# Production build configuration, layered over sdkconfig.defaults for a profile
+# that selects "configuration": "production". The smoke profiles do not select
+# it: their budgets describe the harness configuration.
+
+# Size over speed, silent assertions, and warnings only at run time.
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_SILENT=y
+CONFIG_LOG_DEFAULT_LEVEL_WARN=y
+
+# No TLS on the device in v1: no CA bundle and no secured carrier transport.
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=n
+CONFIG_MQTT_TRANSPORT_SSL=n
+CONFIG_MQTT_TRANSPORT_WEBSOCKET=n
+CONFIG_MQTT_TRANSPORT_WEBSOCKET_SECURE=n
+
+# Station-only Wi-Fi with WPA2 personal.
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
+CONFIG_ESP_WIFI_ENABLE_WPA3_SAE=n
+CONFIG_ESP_WIFI_ENABLE_WPA3_OWE_STA=n
+CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT=n
+
+# No allocator instrumentation in a production image.
+CONFIG_HEAP_TRACING_STANDALONE=n
+CONFIG_HEAP_TRACING_OFF=y
+
+# The application's main task runs in this stack. The measured peak was 29.8 KB
+# (first inbound frame inside Core's receive path) with 22.9 KB already used
+# during network preparation, so 32 KB left 3.2 KB. 36 KiB keeps about 7 KB
+# free. The 16 KB target in #63 is not reachable without changing Core's
+# receive path and the platform Wi-Fi bring-up; docs/resource-budgets.md records
+# the stage table.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=36864

@@ -253,13 +253,16 @@ private struct EmbeddedZenohHostTest {
         check(host_zenoh_publish_key_length() == UInt32(key.count), "publish key length")
         check(host_zenoh_publish_payload_length() == UInt32(payload.count), "publish payload length")
 
-        // Teardown is terminal: a reported close failure still closes.
+        // A reported close failure still closes. Closed is not a dead end: the
+        // carrier takes a new session, so a node that lost its router recovers.
         host_zenoh_set_failures(UInt32(HOST_ZENOH_FAIL_CLOSE))
         check(!carrier.disconnect(), "failed close reports failure")
         host_zenoh_set_failures(0)
         check(!carrier.disconnect(), "second disconnect is rejected")
-        check(!carrier.connect(deadlineMS: 5_000), "reconnect after close is rejected")
-        check(!carrier.waitForReconnect(deadlineMS: 100), "reconnect after close is rejected")
+        check(!carrier.waitForReconnect(deadlineMS: 100), "waiting for a reconnect on a closed carrier is rejected")
+        check(carrier.connect(deadlineMS: 5_000), "a closed carrier opens a new session")
+        check(!carrier.waitForReconnect(deadlineMS: 100), "a connected carrier without subscriptions has nothing to wait for")
+        check(carrier.disconnect(), "the new session closes")
     }
 
     // MARK: - Key-expression grammar

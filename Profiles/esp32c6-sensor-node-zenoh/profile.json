@@ -1,0 +1,34 @@
+{
+  "name": "esp32c6-sensor-node-zenoh",
+  "application": "sensor-node",
+  "platform": "esp32c6-idf",
+  "transport": "zenoh-pico",
+  "board": "ESP32-C6-DevKitC-1",
+  "configuration": "production",
+  "core": {
+    "revision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9"
+  },
+  "budgets": {
+    "basis": "production reference application sensor-node, build configuration production, measured with the network stack linked (sizing-only placeholder header) on Core 087bd9bb1bfb; build budgets are measured plus 10 percent rounded up to the next KiB, runtime floors are the lowest of the normal and recovery runs minus 10 percent rounded down to the next KiB",
+    "build": {
+      "imageBytes": 807936,
+      "flashTextBytes": 636928,
+      "staticRamBytes": 154624,
+      "dramBssBytes": 39936
+    },
+    "runtime": {
+      "minimumFreeHeapBytes": 240640,
+      "stackRemainingBytes": 6144
+    }
+  },
+  "qualification": {
+    "requiredChecks": [
+      {
+        "check": "sensor-node-runtime",
+        "artifact": "release",
+        "records": 1,
+        "units": 1
+      }
+    ]
+  }
+}

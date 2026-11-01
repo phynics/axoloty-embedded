@@ -114,13 +114,35 @@ report=$(realpath -e -- "$evidence_dir/preparation.json")
 # each file's mode from the source through the umask, so execute bits survive.
 cp -R --preserve=timestamps "$platform_dir/." "$build_project_dir/"
 
-# IDF applies sdkconfig.defaults only when it first writes sdkconfig. An
-# existing sdkconfig silently keeps the old defaults, so a changed default
-# looked applied while the build kept using the previous value. Drop the
-# whole build directory when the tracked defaults are newer.
-if [ -f "$sdkconfig" ] && [ "$build_project_dir/sdkconfig.defaults" -nt "$sdkconfig" ]; then
-    rm -rf "$build_dir"
+# A profile may name a build configuration, layered over the platform defaults
+# from the tracked file sdkconfig.<configuration>. IDF reads the list in order,
+# and a later file overrides an earlier one.
+build_configuration=$(node -e 'const p = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(typeof p.configuration === "string" ? p.configuration : "");' \
+    "$AXOLOTY_PROFILE_DIR/profile.json")
+sdkconfig_defaults="$build_project_dir/sdkconfig.defaults"
+if [ -n "$build_configuration" ]; then
+    if [ ! -f "$build_project_dir/sdkconfig.$build_configuration" ]; then
+        echo "error: profile selects build configuration '$build_configuration', but the platform has no sdkconfig.$build_configuration" >&2
+        exit 64
+    fi
+    sdkconfig_defaults="$sdkconfig_defaults;$build_project_dir/sdkconfig.$build_configuration"
 fi
+export SDKCONFIG_DEFAULTS="$sdkconfig_defaults"
+
+# IDF applies these defaults only when it first writes sdkconfig. An existing
+# sdkconfig silently keeps the old defaults, so a changed default looked applied
+# while the build kept using the previous value. Drop the whole build directory
+# when a tracked defaults file is newer.
+if [ -f "$sdkconfig" ]; then
+    if [ "$build_project_dir/sdkconfig.defaults" -nt "$sdkconfig" ] ||
+        { [ -n "$build_configuration" ] && [ "$build_project_dir/sdkconfig.$build_configuration" -nt "$sdkconfig" ]; }; then
+        rm -rf "$build_dir"
+    fi
+fi
+# The timestamps above miss a changed or removed configuration selection: the
+# sdkconfig is newer than the checkout. Compare a recorded signature of the
+# resolved defaults list and its contents as well.
+axoloty_clear_stale_sdkconfig_defaults "$build_dir" "$sdkconfig_defaults"
 # A non-empty build directory without a CMake cache is the remains of a
 # failed configure. IDF refuses to clean it and reports an error about the
 # directory, so clear it here rather than making the retry fail the same way.
@@ -137,12 +159,21 @@ fi
 axoloty_clear_stale_profile_cache "$build_dir"
 mkdir -p "$build_dir"
 
+# A production configuration is sized with the network stack linked: without a
+# network header no Wi-Fi or TCP/IP code is built, and the size would not be a
+# working node's. With no operator header, such a build stages a sizing-only
+# placeholder (see profile-build-env.sh).
+network_mode=""
+if [ "$build_configuration" = production ]; then
+    network_mode=placeholder
+fi
+
 # Operator network configuration is a private build input: SSID, password,
 # broker host, role, and scenario live in a generated header, never in the
 # repository. The caller (a device-test harness) generates it into scratch.
 # Stage it and invalidate only the staged bootstrap object so absent, changed,
 # and removed headers are all reflected without retaining credential metadata.
-axoloty_stage_network_config_header "${AXOLOTY_NETWORK_CONFIG_HEADER:-}" "$build_project_dir"
+axoloty_stage_network_config_header "${AXOLOTY_NETWORK_CONFIG_HEADER:-}" "$build_project_dir" "$network_mode"
 
 idf_path=${IDF_PATH:-/opt/esp/idf}
 if [ ! -f "$idf_path/export.sh" ]; then
@@ -220,6 +251,9 @@ if [ ! -f "$build_dir/CMakeCache.txt" ] ||
         set-target esp32c6 >> "$evidence_dir/build.log" 2>&1
 fi
 
+# Record the selection once the directory holds a CMake cache: IDF refuses to
+# clean a directory that has files but no cache.
+axoloty_record_sdkconfig_defaults_signature "$build_dir" "$sdkconfig_defaults"
 echo "== build firmware =="
 echo "application: $AXOLOTY_APPLICATION_DIR"
 echo "transport: $AXOLOTY_TRANSPORT_DIR"
@@ -284,7 +318,7 @@ cp "$artifact" "$evidence_dir/axoloty-swift.bin"
 # but not gated, matching the static-storage policy receipt.
 node "$script_dir/write-size-report.mjs" "$build_dir/axoloty-swift.elf" "$artifact" \
     "$platform_dir/partitions.csv" "$AXOLOTY_PROFILE_DIR/profile.json" \
-    "$evidence_dir/static-storage-policy.json" "$report" "$build_dir/size.json"
+    "$evidence_dir/static-storage-policy.json" "$report" "$sdkconfig" "$AXOLOTY_NETWORK_STATE" "$build_dir/size.json"
 
 node "$script_dir/write-provenance.mjs" \
     "$report" "$artifact" "$evidence_dir/build-provenance.json" \
