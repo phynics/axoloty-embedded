@@ -178,6 +178,10 @@ def safe_integer(value, minimum=0):
     return type(value) is int and minimum <= value <= MAX_SAFE_INTEGER
 
 
+C_ONLY_REASON = "configured C-only carrier qualification image"
+NETWORK_VARIANT_REASON = "network-configured variant of an image whose budgets exclude the network stack"
+
+
 def validate_size_report(report, manifest, profile):
     """Check the complete writer contract and bind measurements to this manifest."""
     problems = []
@@ -248,12 +252,27 @@ def validate_size_report(report, manifest, profile):
             expected = [dict(metric=k, measured=metrics[k], budget=build[k], headroomBytes=build[k]-metrics[k], passed=metrics[k] <= build[k]) for k in BUDGET_METRICS if k in build] if valid_metrics else None
             check(set(enforcement) == {"status", "results"} and type(enforcement.get("results")) is list and json.dumps(enforcement.get("results"), sort_keys=True) == json.dumps(expected, sort_keys=True) and expected is not None and all(x["passed"] for x in expected) == (status == "passed"), "verdicts are inconsistent")
     elif status in ("not-applicable", "not-configured"):
-        reason = "configured C-only carrier qualification image" if status == "not-applicable" else "the profile declares no build budgets"
+        # `not-applicable` has two reasons, each with its own conditions; the
+        # reason in the report must be one of them and the conditions must hold.
+        # Neither is allowed on a qualified manifest: a certified release image
+        # is gated against its budgets.
+        if status == "not-applicable":
+            reason = enforcement.get("reason")
+            check(reason in (C_ONLY_REASON, NETWORK_VARIANT_REASON), "not-applicable reason is not recognized")
+        else:
+            reason = "the profile declares no build budgets"
         check(report.get("budgets") is None and enforcement == {"status": status, "reason": reason}, "enforcement is inconsistent")
         if status == "not-applicable":
             qualification = manifest.get("qualification")
+            unqualified = isinstance(qualification, dict) and qualification.get("status") == "unqualified"
             requirements = (profile.get("qualification") or {}).get("requiredChecks", []) if isinstance(profile, dict) and isinstance(profile.get("qualification"), dict) else []
-            check(isinstance(qualification, dict) and qualification.get("status") == "unqualified" and isinstance(profile, dict) and profile.get("transport") == "zenoh-pico" and isinstance(requirements, list) and any(isinstance(r, dict) and r.get("check") == "c-only-carrier-scenario" and r.get("artifact") == "variant" for r in requirements), "C-only report requires the unqualified Zenoh qualification variant")
+            if reason == C_ONLY_REASON:
+                check(unqualified and isinstance(profile, dict) and profile.get("transport") == "zenoh-pico" and isinstance(requirements, list) and any(isinstance(r, dict) and r.get("check") == "c-only-carrier-scenario" and r.get("artifact") == "variant" for r in requirements), "C-only report requires the unqualified Zenoh qualification variant")
+            elif reason == NETWORK_VARIANT_REASON:
+                check(unqualified
+                      and isinstance(declared, dict) and declared.get("networkStack") is False and isinstance(declared_build, dict)
+                      and isinstance(configuration, dict) and configuration.get("networkConfigured") is True,
+                      "network variant report requires an unqualified manifest, a profile whose budgets declare networkStack false, and a network-configured image")
         if status == "not-configured":
             check(declared_build is None, "not-configured contradicts profile budgets")
     return problems

@@ -69,7 +69,11 @@ resetting the budgets with new evidence.
   which links Wi-Fi and TCP/IP and is larger (the Zenoh image is 1.1 MB against a
   738 KB budget). The report records that image with `enforcement.status`
   `not-applicable` and gates nothing; it is evidence for a device run, never a
-  release artifact. The sensor-node profiles budget the networked image and are
+  release artifact. `Tools/validate-release-manifest.py` accepts that report only
+  on an unqualified manifest, for a profile whose budgets declare
+  `networkStack: false`, and for an image whose configuration is network-configured
+  (the plain image is still gated); a published or `--require-qualified` manifest
+  cannot carry it. The sensor-node profiles budget the networked image and are
   gated in both states.
 - **Configured qualification variants.** The C-only carrier scenario image is
   larger and is reported but not gated, following the static-storage policy
