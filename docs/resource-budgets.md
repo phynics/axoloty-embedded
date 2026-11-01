@@ -143,12 +143,12 @@ Embedded Swift 6.4, ESP-IDF 5.4.
 | Flash text, measured (placeholder) | | | 648,362 | 578,220 |
 | Static RAM, measured | | | 155,448 | 140,288 |
 | `.bss`, measured | | | 50,339 | 35,675 |
-| Minimum free heap, measured (normal, recovery) | | | 264,920, 263,216 | 269,116, 268,144 |
+| Minimum free heap, measured (normal, recovery) | | | 264,916, 262,868 | 269,436, 267,656 |
 | Minimum free heap floor | | | 236,544 | 240,640 |
-| Main stack remaining, measured (normal, recovery) | | | 7,340, 7,340 of 36,864 | 7,592, 7,732 of 36,864 |
+| Main stack remaining, measured (normal, recovery) | | | 7,340, 7,340 of 36,864 | 7,732, 7,732 of 36,864 |
 | Main stack remaining floor | | | 6,144 | 6,144 |
-| Recovery from a 20 s carrier outage | | | session ended 5.2 s after the stop; advertised again 2.1 s after the carrier returned | session ended 1.9 s after the stop; advertised again 0.5 s after the carrier returned |
-| Six outages in one boot: slowest re-advertise; free heap after the first and the sixth | | | 2.2 s; 269,744 and 268,060 | 2.9 s; 272,848 and 272,268 |
+| Recovery from a 20 s carrier outage | | | session ended 5.3 s after the stop; advertised again 2.0 s after the carrier returned | session ended 1.9 s after the stop; advertised again 1.3 s after the carrier returned |
+| Six outages in one boot: slowest re-advertise; free heap after the first and the sixth | | | 2.6 s; 269,684 and 268,072 | 2.9 s; 272,836 and 272,208 |
 | Firmware SHA-256 (credentialed image) | | | `d9c5a073419da1b1e3b21b77af9b3c0fc5473979594f6cd89a2d81b1c25851ce` | `c656316e000ead1c0367abf7c7670d8024479a5e6d8dca7308ab155949dd3558` |
 
 The smoke columns are build budgets set from the smoke images (see above), not
@@ -197,8 +197,8 @@ boot works. The evidence is in `docs/evidence/<profile>-sensor-node-recovery.jso
 the MQTT carrier. The node ended its session, advertised again after every
 outage with no device restart, and a second host observer completed a Discover
 and read three readings after each return. Free heap after each cycle stayed flat
-(MQTT 269,744 to 268,060 B; Zenoh 272,848 to 272,268 B), so no leak shows, and the
-minimum free heap (262,872 and 265,428 B) and stack remaining (7,340 and
+(MQTT 269,684 to 268,072 B; Zenoh 272,836 to 272,208 B), so no leak shows, and the
+minimum free heap (263,140 and 259,892 B) and stack remaining (7,340 and
 7,732 B) stayed above the floors. The evidence is in
 `docs/evidence/<profile>-sensor-node-recovery-cycles.json`. The MQTT carrier now
 also resets its will, subscriptions and reconnect baseline on disconnect.
