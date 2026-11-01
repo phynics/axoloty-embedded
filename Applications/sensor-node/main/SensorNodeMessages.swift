@@ -70,13 +70,37 @@ private func writeSensorObject(
     return writer.position
 }
 
+/// The size of the largest legal sensor object in JSON, the larger encoding.
+///
+/// Every term is a worst case, in bytes:
+///
+/// - Fixed fields and punctuation: `{"coreType":"CoatyObject","objectId":"<36>",`
+///   `"objectType":"axoloty.sensor.Node","name":` and the quotes around the name
+///   come to 120.
+/// - The name: `SensorNodeTiming.nameCapacity` (48) bytes, each of which the JSON
+///   writer may escape to a six-byte `\u00XX`, so 288.
+/// - `,"sequence":` is 12, and the largest `UInt32` (4294967295) is 10 digits.
+/// - `,"value":` is 9, and the widest `Int` is `-9223372036854775808`, 20.
+/// - The closing brace is 1.
+///
+/// 120 + 288 + 12 + 10 + 9 + 20 + 1 = 460. The earlier 192-byte buffer failed at
+/// a 48-byte name with a large reading.
+enum SensorObjectBound {
+    static let fixedFieldBytes = 120
+    static let nameBytes = SensorNodeTiming.nameCapacity * 6
+    static let sequenceBytes = 12 + 10
+    static let valueBytes = 9 + 20
+    static let closingBytes = 1
+    static let maximumJSONBytes = fixedFieldBytes + nameBytes + sequenceBytes + valueBytes + closingBytes
+}
+
 /// Encodes `{"object": <sensor object>}`, the body of Advertise, Resolve, and
 /// Channel, and returns its length.
 func encodeSensorObjectPayload(
     into payload: UnsafeMutablePointer<UInt8>, capacity: Int,
     name: ByteSlice, reading: (sequence: UInt32, value: Int)? = nil
 ) -> Int? {
-    withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 192) { object -> Int? in
+    withUnsafeTemporaryAllocation(of: UInt8.self, capacity: SensorObjectBound.maximumJSONBytes) { object -> Int? in
         guard let length = writeSensorObject(
             into: object.baseAddress!, capacity: object.count, name: name, reading: reading
         ) else { return nil }
