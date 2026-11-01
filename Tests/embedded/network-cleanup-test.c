@@ -28,6 +28,9 @@ static struct { esp_event_handler_t handler; esp_event_base_t base; } handlers[4
 static EventGroupHandle_t group;
 static int associated, started, initialized;
 static int connect_calls, wait_calls, deinit_pending_at_call = -1, force_deinit_failure;
+static int silent_disconnect, silent_stop, ip_never_arrives;
+static int64_t now_ms;
+static TickType_t waited_ticks;
 static char order[512];
 static char warning[160];
 
@@ -52,7 +55,7 @@ static void pump(void) {
     }
 }
 
-int64_t esp_timer_get_time(void) { return 0; }
+int64_t esp_timer_get_time(void) { return now_ms * 1000; }
 void vTaskDelay(TickType_t ticks) { (void)ticks; }
 void stub_log_warning(const char *tag, const char *format, ...) {
     (void)tag;
@@ -89,11 +92,24 @@ esp_err_t esp_wifi_deinit(void) {
 esp_err_t esp_wifi_set_mode(int mode) { (void)mode; return ESP_OK; }
 esp_err_t esp_wifi_set_config(int interface, wifi_config_t *config) { (void)interface; (void)config; return ESP_OK; }
 esp_err_t esp_wifi_start(void) { started = 1; post(WIFI_EVENT, WIFI_EVENT_STA_START); return ESP_OK; }
-esp_err_t esp_wifi_stop(void) { note("stop"); started = 0; post(WIFI_EVENT, WIFI_EVENT_STA_STOP); return ESP_OK; }
-esp_err_t esp_wifi_connect(void) { ++connect_calls; associated = 1; post(IP_EVENT, IP_EVENT_STA_GOT_IP); return ESP_OK; }
+esp_err_t esp_wifi_stop(void) {
+    note("stop");
+    started = 0;
+    if (!silent_stop) post(WIFI_EVENT, WIFI_EVENT_STA_STOP);
+    return ESP_OK;
+}
+esp_err_t esp_wifi_connect(void) {
+    ++connect_calls;
+    associated = 1;
+    if (!ip_never_arrives) post(IP_EVENT, IP_EVENT_STA_GOT_IP);
+    return ESP_OK;
+}
 esp_err_t esp_wifi_disconnect(void) {
     note("disconnect");
-    if (associated) { associated = 0; post(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED); }
+    if (associated) {
+        associated = 0;
+        if (!silent_disconnect) post(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED);
+    }
     return ESP_OK;
 }
 esp_err_t esp_wifi_sta_get_ap_info(wifi_ap_record_t *record) { (void)record; return associated ? ESP_OK : ESP_FAIL; }
@@ -108,6 +124,11 @@ EventBits_t xEventGroupWaitBits(EventGroupHandle_t handle, EventBits_t bits, int
     ++wait_calls;
     pump();
     EventBits_t seen = handle->bits & bits;
+    if (seen == 0) {
+        // Nothing reported: the caller waits out its whole timeout.
+        now_ms += ticks;
+        waited_ticks += ticks;
+    }
     if (clear) handle->bits &= ~bits;
     return seen;
 }
@@ -120,6 +141,8 @@ static void reset(void) {
     memset(handlers, 0, sizeof(handlers));
     queued = 0; associated = started = initialized = 0;
     connect_calls = wait_calls = 0; deinit_pending_at_call = -1; force_deinit_failure = 0;
+    silent_disconnect = silent_stop = ip_never_arrives = 0;
+    now_ms = 1000; waited_ticks = 0;
     order[0] = '\0'; warning[0] = '\0';
 }
 static void bring_up(void) {
@@ -127,6 +150,7 @@ static void bring_up(void) {
     if (axoloty_network_prepare(10000) != 3U) fail("the stub network did not come up");
     order[0] = '\0';
     connect_calls = 0;
+    waited_ticks = 0;
 }
 
 int main(void) {
@@ -153,6 +177,38 @@ int main(void) {
     force_deinit_failure = 1;
     if (axoloty_network_cleanup() != 0U) fail("a failed deinit reported success");
     if (strstr(warning, "deinit=-1") == NULL) fail("a failed deinit was not logged");
+
+    // A report that never comes is a failed cleanup, returned and logged, and the
+    // driver is still deinitialized. Both waits share one budget.
+    bring_up();
+    silent_disconnect = 1;
+    if (axoloty_network_cleanup() != 0U) fail("a missing disconnect report reported success");
+    if (strstr(warning, "disconnect_reported=0") == NULL) fail("a missing disconnect report was not logged");
+    if (strstr(order, "deinit") == NULL) fail("a missing report skipped deinit");
+    bring_up();
+    silent_stop = 1;
+    if (axoloty_network_cleanup() != 0U) fail("a missing stop report reported success");
+    if (strstr(warning, "stop_reported=0") == NULL) fail("a missing stop report was not logged");
+    bring_up();
+    silent_disconnect = silent_stop = 1;
+    if (axoloty_network_cleanup() != 0U) fail("two missing reports reported success");
+    if (waited_ticks != 2000U) { fprintf(stderr, "waited %u ms\n", (unsigned)waited_ticks); fail("the two waits did not share one 2 s budget"); }
+
+    // A session that came up keeps that budget after its overall deadline expired:
+    // the deadline bounds bring-up, and on the sensor node it passes long before a
+    // session ends. Without the wait the teardown race comes back.
+    bring_up();
+    now_ms += 60000;
+    if (axoloty_network_deadline_remaining_ms() != 0U) fail("the fixture deadline did not expire");
+    if (axoloty_network_cleanup() != 1U) fail("a session past its bring-up deadline did not wait for the reports");
+
+    // A bring-up that failed is bounded by what remains of its overall deadline.
+    reset();
+    ip_never_arrives = 1;
+    silent_disconnect = silent_stop = 1;
+    if (axoloty_network_prepare(500) != 0U) fail("a bring-up with no address succeeded");
+    if (waited_ticks != 500U) { fprintf(stderr, "waited %u ms\n", (unsigned)waited_ticks); fail("a failed bring-up spent time after its overall deadline"); }
+    if (strstr(warning, "stop_reported=0") == NULL) fail("a failed bring-up did not log its incomplete cleanup");
 
     // Reconnection while running is unchanged: a lost association is retried.
     bring_up();
