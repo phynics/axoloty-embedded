@@ -156,8 +156,10 @@ if command -v script >/dev/null 2>&1; then
         if [ "$seen_ip" = 0 ] && grep -q '"caseId":"network:ip"' "$serial_log" 2>/dev/null; then seen_ip=1; echo "== monitor +${now}s: network:ip"; fi
         if [ "$seen_disconnect" = 0 ] && grep -q '"caseId":"network:disconnect"' "$serial_log" 2>/dev/null; then seen_disconnect=1; echo "== monitor +${now}s: network:disconnect"; fi
         if [ "$seen_summary" = 0 ] && grep -q '"caseId":"summary"' "$serial_log" 2>/dev/null; then seen_summary=1; echo "== monitor +${now}s: summary record"; fi
-        if grep -Eq '"caseId":"completion".*\}[[:space:]]*$' "$serial_log" 2>/dev/null; then
-            echo "== monitor +${now}s: completion record; stopping the monitor"
+        # The smoke protocol ends with its completion record; the C-only carrier
+        # scenario stream ends with its summary step.
+        if grep -Eq '("caseId":"completion"|"scenario":"axoloty-zenoh-carrier","step":"summary").*\}[[:space:]]*$' "$serial_log" 2>/dev/null; then
+            echo "== monitor +${now}s: final record; stopping the monitor"
             monitor_end=completed
             # The record's last fields can still be in flight; let the line land.
             sleep 2
