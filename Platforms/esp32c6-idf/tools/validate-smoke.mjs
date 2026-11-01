@@ -100,7 +100,9 @@ export const expectedEmbeddedSwiftTests = new Set([
     corpusOperations.map(operation => `corpus:${id}:${operation}`)),
 ]);
 
-const fatalFragments = ["Guru Meditation", "Task watchdog got triggered", "abort()", "Backtrace:"];
+// `axoloty:application-entry-failed` is the line app_main prints when the application
+// entry returns a nonzero status; without it the stream is silent after the bootloader.
+const fatalFragments = ["Guru Meditation", "Task watchdog got triggered", "abort()", "Backtrace:", "axoloty:application-entry-failed"];
 const recordStages = new Set(["boot", "execute", "summary", "completion"]);
 
 /** Computes the FNV-1a rolling checksum used by the firmware evidence protocol. */
