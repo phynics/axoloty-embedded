@@ -375,7 +375,9 @@ struct ZenohCarrier: ~Copyable {
     /// attempt itself stays bounded by the contract.
     mutating func connect(deadlineMS: UInt32) -> Bool {
         _ = deadlineMS
-        guard phase == .idle else { return false }
+        // A closed carrier may open a new session: a node that lost its router
+        // reconnects without a restart. The close released every declaration.
+        guard phase == .idle || phase == .disconnected else { return false }
         var opened = false
         withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 513) { buffer in
             guard let base = buffer.baseAddress else { return }
@@ -719,7 +721,8 @@ struct ZenohCarrier: ~Copyable {
         }
     }
 
-    /// Removes every declaration and closes the session. Close is terminal.
+    /// Removes every declaration and closes the session. A closed carrier accepts
+    /// a new `connect`; nothing else is accepted until then.
     ///
     /// Unsubscribe failures do not stop teardown: the facade releases every
     /// declaration for every close outcome, so the close is the cleanup.
