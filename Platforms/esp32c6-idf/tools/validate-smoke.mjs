@@ -147,6 +147,21 @@ export function failureResult(stage, reason) {
   return { passed: false, stage: stableStage, diagnostic, reason: diagnostic };
 }
 
+/**
+ * Tells a deadline expiry from a device failure. A stream that ended because the
+ * monitor deadline passed, and failed only because a record has not arrived yet
+ * ("missing ..."), is a deadline expiry: the device may still have been well. A
+ * failure the device reported itself (a failed record, a bad checksum) is
+ * returned unchanged, whatever the monitor did.
+ */
+export function classifyDeadlineExpiry(validation, monitor) {
+  if (validation.passed || monitor?.end !== "deadline" || !/^missing /.test(validation.diagnostic ?? "")) {
+    return validation;
+  }
+  const diagnostic = boundedDiagnostic(`monitor deadline of ${monitor.deadlineSeconds} s expired before the device finished: ${validation.diagnostic}`);
+  return { ...validation, diagnostic, reason: diagnostic, deadlineExpired: true };
+}
+
 /** Validates structured JSON Lines emitted by the Embedded Swift smoke firmware. */
 export function createEmbeddedSwiftSmokeValidator(expectedTests = expectedSmokeTests, unsupportedTestsAllowed = new Set(), runId = expectedRunId) {
   const seenTests = new Set();
@@ -292,12 +307,20 @@ async function runCLI() {
       : validator.observe(rawLine);
     if (done) break;
   }
-  const validation = validator.result();
+  // flash.sh says how the monitor ended and how long it ran; a bare invocation
+  // knows neither.
+  const end = process.env.EMBEDDED_MONITOR_END;
+  const elapsed = Number(process.env.EMBEDDED_MONITOR_ELAPSED);
+  const monitor = ["completed", "deadline", "failed"].includes(end)
+    ? { end, deadlineSeconds: Number(deadline), ...(Number.isFinite(elapsed) && process.env.EMBEDDED_MONITOR_ELAPSED ? { elapsedSeconds: elapsed } : {}) }
+    : undefined;
+  const validation = classifyDeadlineExpiry(validator.result(), monitor);
   const output = {
     schemaVersion,
     runId,
     device,
     deadlineSeconds: Number(deadline),
+    ...(monitor ? { monitor } : {}),
     linesCaptured: lines.filter(line => line.length > 0).length,
     validation,
   };

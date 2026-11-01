@@ -77,6 +77,19 @@ Those fields are what make the claim checkable by someone who was not there.
 `tier` defaults to `device` when absent, because a device claim is the stricter
 one and should never be the accidental default.
 
+## The monitor deadline
+
+`flash.sh` reads the serial stream until the device prints its completion record,
+then stops, and gives up after `EMBEDDED_DEADLINE` seconds (default 240). The
+result records `monitor.end` (`completed`, `deadline`, or `failed`) and the
+seconds the run used. A stream cut off by the deadline fails with
+`monitor deadline of N s expired before the device finished: missing ...`, which
+is a different statement from a failure the device reported. A passed network
+device record carries `monitorDeadlineSeconds` and `monitorElapsedSeconds`, so a
+run that needed most of its deadline can be seen as such. The measured needs on
+2026-11-01 were 59 s (Zenoh network test) and 125 s (MQTT network test, which
+runs the on-device benchmark before its summary).
+
 ## Firmware resource comparisons
 
 A build record may include `firmwareSizeBytes`, `previousFirmwareSizeBytes`,
