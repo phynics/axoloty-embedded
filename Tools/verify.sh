@@ -53,8 +53,15 @@ record() {
 "
 }
 
+# A required tier also covers its `tier:detail` entries: `--require device`
+# fails when `device:<profile>` is unavailable. An entry such as
+# `build:mqtt-host-seam` stays exact and covers only itself.
 is_required() {
-    case " $required_tiers " in *" $1 "*) return 0 ;; *) return 1 ;; esac
+    local word
+    for word in $required_tiers; do
+        case "$1" in "$word"|"$word":*) return 0 ;; esac
+    done
+    return 1
 }
 
 unavailable() {
@@ -97,6 +104,8 @@ if wanted repo; then
     # The smoke case set is pinned separately: a validator that expects fewer
     # cases still reports a clean pass on a board, so nothing downstream can
     # catch it shrinking.
+    printf '\n== repo: required-tier matching\n'
+    bash Tools/test-verify-is-required.sh || repo_failed=1
     printf '\n== repo: smoke case coverage\n'
     bash Tools/check-smoke-coverage.sh || repo_failed=1
     Tests/embedded/check-profile-composition.sh || repo_failed=1
