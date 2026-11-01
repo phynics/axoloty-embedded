@@ -256,9 +256,10 @@ declares 128 and 512 in `Applications/sensor-node/app.json`.
   events, is dropped at its first event, counted once
   (`axoloty_mqtt_oversized_frame_count`) and logged at WARN. The session and the
   frames behind it are unaffected. For Zenoh, a frame beyond the composed bounds
-  is dropped in the sample guard and counted; the carrier reports it as its
-  one-shot error, which ends the application session, and the node advertises
-  again.
+  is dropped in the sample guard before it is queued and counted
+  (`framesOversized`); the facade reports it once, the carrier counts it and keeps
+  polling, and the session, the subscriptions and the frames behind it are
+  unaffected. A peer that sends oversized frames cannot force a reconnect.
 - The metrics line carries `readingLastUs`, `readingMaxUs`, `frameLastUs` and
   `frameMaxUs`. They are reported, never budgeted.
 - `Tests/embedded/run-largest-frame.sh` proves on a board that the carrier moves
@@ -266,8 +267,10 @@ declares 128 and 512 in `Applications/sensor-node/app.json`.
   byte more of either without losing the next frame. Records:
   `docs/evidence/<profile>-sensor-node-largest-frame.json`. MQTT: both oversize
   frames dropped and counted (2), no session end. Zenoh: the two oversize frames are not
-  delivered; each ends the session (2 session ends), the node advertises again
-  (2 Advertises) and then answers a short Discover.
+  delivered, the session does not end, and the node answers a short Discover
+  afterwards. (The records dated before this change show 2 session ends and 2
+  Advertises for Zenoh; they describe the previous behaviour until the
+  sensor-node evidence is rerun.)
 
 ### Before and after
 

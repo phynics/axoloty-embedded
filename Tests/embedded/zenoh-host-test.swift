@@ -874,11 +874,19 @@ private struct EmbeddedZenohHostTest {
         // An over-bound frame is counted separately from a drop: they are
         // different faults and a reader must be able to tell them apart.
         host_zenoh_set_failures(UInt32(HOST_ZENOH_REPORT_FRAME_TOO_LARGE))
-        check(poll(&carrier) == -1, "an oversize frame surfaces as an error to the caller")
+        check(poll(&carrier) == 0, "an oversize frame is counted and polling goes on (no error to the caller)")
         host_zenoh_set_failures(0)
         check(metric(framesOversized) == 1, "one oversized frame")
         check(metric(framesDropped) == 1, "an oversize frame is not a drop")
         check(metric(pollErrors) == 0, "an oversize frame is not a poll error")
+        check(metric(framesReceived) == 1, "an oversize frame is not a received frame")
+        // The session survives it: the notification is reported once and the next
+        // legal frame is delivered by the next poll.
+        check(poll(&carrier) == 0, "the oversize notification is not reported twice")
+        check(metric(framesOversized) == 1, "the oversize notification is counted once")
+        queueSample()
+        check(poll(&carrier) == 1, "a legal frame after an oversize frame is delivered")
+        check(metric(framesReceived) == 2, "the frame after an oversize frame is received")
 
         // A genuine transport failure during receive is its own counter.
         let errorsBefore = metric(pollErrors)
@@ -887,7 +895,7 @@ private struct EmbeddedZenohHostTest {
         check(poll(&carrier) == -1, "carrier poll failure")
         host_zenoh_set_failures(0)
         check(metric(pollErrors) == errorsBefore + 1, "one poll error")
-        check(metric(framesReceived) == 1, "a failed poll is not a received frame")
+        check(metric(framesReceived) == 2, "a failed poll is not a received frame")
 
         // Reconnect is counted only for a loss this carrier actually observed.
         // An already-usable session satisfies the connectivity wait and must not
@@ -935,7 +943,7 @@ private struct EmbeddedZenohHostTest {
         }
         check(text.hasPrefix("{") && text.hasSuffix("}"), "the report is one JSON object")
         check(!text.contains("\n"), "the report carries no newline")
-        check(text.contains("\"framesReceived\":1"), "the report carries the counted frames")
+        check(text.contains("\"framesReceived\":2"), "the report carries the counted frames")
         check(text.contains("\"framesDropped\":1"), "the report carries the counted drops")
         check(text.contains("\"sessionOpens\":1"), "the report carries the counted opens")
 

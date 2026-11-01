@@ -619,6 +619,14 @@ struct ZenohCarrier: ~Copyable {
                     continue
                 case .notOpen:
                     return .closed
+                case .frameTooLarge:
+                    // The sample guard dropped the frame before it reached the
+                    // queue, and the facade reports that once, when the queue
+                    // is drained. Nothing is left to consume, so the next poll
+                    // cannot see it again. Counted above; the session is sound,
+                    // so keep polling instead of ending it. The MQTT carrier
+                    // does the same for an oversized message.
+                    continue
                 default:
                     // Drop notifications and transport failures surface as an
                     // error, matching the sibling transport's overflow code.
