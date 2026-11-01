@@ -16,7 +16,8 @@
 // with a placeholder or without a real network header. A host that cannot supply them
 // exits 69, "capability absent". A passing run writes a device evidence record
 // to docs/evidence/<profile>-sensor-node-runtime.json, or
-// <profile>-sensor-node-recovery.json in recovery mode.
+// <profile>-sensor-node-recovery.json in recovery mode, or
+// <profile>-sensor-node-recovery-cycles.json when SENSOR_OUTAGE_CYCLES is above 1.
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -183,7 +184,7 @@ function writeEvidence() {
   const provenance = JSON.parse(fs.readFileSync(path.join(evidence, "build-provenance.json"), "utf8"));
   const device = JSON.parse(fs.readFileSync(path.join(evidence, "device-manifest.json"), "utf8"));
   const size = JSON.parse(fs.readFileSync(path.join(root, "build", "size.json"), "utf8"));
-  const check = mode === "recovery" ? "sensor-node-recovery" : "sensor-node-runtime";
+  const check = mode === "recovery" ? (cycles > 1 ? "sensor-node-recovery-cycles" : "sensor-node-recovery") : "sensor-node-runtime";
   const proof = {
     result: "passed",
     smoke: { validation },
