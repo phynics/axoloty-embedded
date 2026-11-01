@@ -6,7 +6,14 @@
 // SENSOR_MODE=recovery adds an outage during the soak: the runner runs
 // SENSOR_OUTAGE_STOP_COMMAND, waits SENSOR_OUTAGE_SECONDS (default 20), then runs
 // SENSOR_OUTAGE_START_COMMAND. The commands stop and restart the broker or
-// router; the runner holds no knowledge of how. A host that cannot supply them
+// router; the runner holds no knowledge of how. SENSOR_OUTAGE_CYCLES (default 1,
+// at most 20) repeats the outage in one boot: after each return the node must
+// advertise again and report twice before the next outage starts, with no
+// device restart. A second host observer starts as each carrier returns and
+// must finish cleanly.
+//
+// The runner reads build/size.json before flashing and refuses an image built
+// with a placeholder or without a real network header. A host that cannot supply them
 // exits 69, "capability absent". A passing run writes a device evidence record
 // to docs/evidence/<profile>-sensor-node-runtime.json, or
 // <profile>-sensor-node-recovery.json in recovery mode.
@@ -15,7 +22,7 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { captureSerial, drainSerial } from "./serial-tools.mjs";
 import { flashFirmware, runFirmware } from "./esptool-tools.mjs";
-import { evaluateSensorRun, parseSensorRecord } from "./sensor-node-validator.mjs";
+import { evaluateSensorRun, judgeImageReport, judgeRecoveryObservers, parseSensorRecord } from "./sensor-node-validator.mjs";
 import { deviceEvidenceRecord, writeDeviceEvidence } from "./write-device-evidence.mjs";
 
 const [device, root, peerPath, esptool, profilePath] = process.argv.slice(2);
@@ -34,15 +41,18 @@ if (mode === "recovery" && (!stopCommand || !startCommand)) {
 }
 const evidence = path.join(root, "working-evidence");
 const ready = path.join(root, "sensor-observer.ready");
-const recoveryReady = path.join(root, "sensor-observer-recovery.ready");
 fs.mkdirSync(evidence, { recursive: true });
 fs.rmSync(ready, { force: true });
-const deadlineSeconds = Number(process.env.SENSOR_DEADLINE_SECONDS ?? (mode === "recovery" ? 300 : 120));
+const cycles = Number(process.env.SENSOR_OUTAGE_CYCLES ?? 1);
+if (!Number.isSafeInteger(cycles) || cycles < 1 || cycles > 20) throw new Error("invalid SENSOR_OUTAGE_CYCLES");
+if (mode === "normal" && cycles !== 1) throw new Error("SENSOR_OUTAGE_CYCLES needs SENSOR_MODE=recovery");
+const deadlineSeconds = Number(process.env.SENSOR_DEADLINE_SECONDS ?? (mode === "recovery" ? 300 + 100 * (cycles - 1) : 120));
 if (!Number.isSafeInteger(deadlineSeconds) || deadlineSeconds < 40 || deadlineSeconds > 1800) throw new Error("invalid SENSOR_DEADLINE_SECONDS");
 const records = [];
-/** True once the node re-advertised after the outage and two metrics lines followed. */
-function recoveredEnough() {
-  if (outage.endMs === null) return false;
+/** True once outage `index` ended, the node re-advertised and two metrics lines followed. */
+function recoveredEnough(index) {
+  const outage = outages[index];
+  if (!outage || outage.endMs === null) return false;
   const again = records.findIndex(record => record.event === "sensor-node-advertised" && record.receivedAtMs >= outage.endMs);
   return again >= 0 && records.slice(again).filter(record => record.event === "sensor-node-metrics").length >= 2;
 }
@@ -80,13 +90,16 @@ const lines = [];
 const hostOutput = [];
 const controller = new AbortController();
 let peer;
-let recoveryPeer = null;
+const recoveryPeers = [];
+const recoveryExits = [];
 let hostExit = null;
-const outage = { startMs: null, endMs: null };
-let recoveryHostExit = null;
+const outages = [];
 let failure = null;
 let validation = null;
 try {
+  // Refuse a placeholder or unconfigured image before anything reaches the board.
+  const imageProblem = judgeImageReport(JSON.parse(fs.readFileSync(path.join(root, "build", "size.json"), "utf8")));
+  if (imageProblem) throw new Error(`refusing to flash: ${imageProblem}`);
   flashFirmware(esptool, device, root);
   await drainSerial(device);
   const capture = captureSerial(device, deadlineSeconds, line => {
@@ -95,7 +108,7 @@ try {
     if (record) records.push({ ...record, receivedAtMs: Date.now() });
     // Normal mode observes the entire bounded window, including after the host
     // exits. Recovery mode ends once the node is back and has reported twice.
-    return mode === "recovery" && recoveredEnough();
+    return mode === "recovery" && outages.length === cycles && recoveredEnough(cycles - 1);
   }, controller.signal);
   const first = spawnPeer(ready);
   peer = first.child;
@@ -111,17 +124,27 @@ try {
       await waitFor(() => hostExit !== null, 90_000, "the host observer did not finish before the outage");
       if (hostExit.code !== 0) throw new Error(`host=${JSON.stringify(hostExit)} before the outage`);
       await waitFor(() => records.filter(record => record.event === "sensor-node-metrics").length >= 2, 60_000, "no steady state before the outage");
-      outage.startMs = Date.now();
-      runOutageCommand(stopCommand);
-      await new Promise(resolve => setTimeout(resolve, outageSeconds * 1000));
-      outage.endMs = Date.now();
-      runOutageCommand(startCommand);
-      // A second observer, started as the carrier returns, may miss the
-      // node's new Advertise if the node is faster; the result is recorded, not required.
-      fs.rmSync(recoveryReady, { force: true });
-      const second = spawnPeer(recoveryReady);
-      recoveryPeer = second.child;
-      second.exited.then(value => { recoveryHostExit = value; });
+      for (let cycle = 0; cycle < cycles; cycle += 1) {
+        const outage = { startMs: Date.now(), endMs: null };
+        outages.push(outage);
+        runOutageCommand(stopCommand);
+        await new Promise(resolve => setTimeout(resolve, outageSeconds * 1000));
+        outage.endMs = Date.now();
+        runOutageCommand(startCommand);
+        // A second observer, started as the carrier returns, must complete a
+        // Discover and see readings from the node that came back.
+        const lateReady = path.join(root, `sensor-observer-recovery-${cycle + 1}.ready`);
+        fs.rmSync(lateReady, { force: true });
+        const late = spawnPeer(lateReady);
+        recoveryPeers.push(late.child);
+        recoveryExits[cycle] = null;
+        late.exited.then(value => { recoveryExits[cycle] = value; });
+        await waitFor(() => recoveredEnough(cycle), 150_000, `the node did not recover from outage ${cycle + 1}`);
+        await waitFor(() => recoveryExits[cycle] !== null, 90_000, `recovery observer ${cycle + 1} did not finish`);
+        fs.rmSync(lateReady, { force: true });
+        const observerProblems = judgeRecoveryObservers(recoveryExits.slice(0, cycle + 1));
+        if (observerProblems.length > 0) throw new Error(observerProblems.join("; "));
+      }
     })().catch(error => { orchestrationError = error; controller.abort(); });
   }
   await capture;
@@ -130,21 +153,23 @@ try {
   if (!hostExit) {
     await Promise.race([exit, new Promise(resolve => setTimeout(resolve, 1000))]);
   }
-  if (recoveryPeer && recoveryHostExit === null) await new Promise(resolve => setTimeout(resolve, 3000));
   validation = evaluateSensorRun(records, JSON.parse(fs.readFileSync(profilePath)).budgets?.runtime ?? null,
-    { mode, outage: mode === "recovery" ? outage : undefined });
-  if (hostExit?.code !== 0 || !validation.passed) throw new Error(`host=${JSON.stringify(hostExit)}; ${validation.reason ?? "host did not finish"}`);
+    { mode, outages: mode === "recovery" ? outages : undefined });
+  const observerProblems = mode === "recovery"
+    ? judgeRecoveryObservers(Array.from({ length: cycles }, (_, index) => recoveryExits[index] ?? null)) : [];
+  if (hostExit?.code !== 0 || !validation.passed || observerProblems.length > 0) {
+    throw new Error(`host=${JSON.stringify(hostExit)}; ${[validation.reason, ...observerProblems].filter(Boolean).join("; ") || "host did not finish"}`);
+  }
 } catch (error) {
   failure = error.message;
 } finally {
   controller.abort();
   if (peer && hostExit === null) peer.kill("SIGTERM");
-  if (recoveryPeer && recoveryHostExit === null) recoveryPeer.kill("SIGTERM");
+  recoveryPeers.forEach((child, index) => { if (recoveryExits[index] === null) child.kill("SIGTERM"); });
   fs.writeFileSync(path.join(evidence, "sensor-serial.log"), `${lines.join("\n")}\n`);
   fs.writeFileSync(path.join(evidence, "sensor-host.log"), hostOutput.join(""));
-  fs.writeFileSync(path.join(evidence, "sensor-result.json"), `${JSON.stringify({ passed: failure === null, failure, mode, outage: mode === "recovery" ? outage : undefined, hostExit, hostAfterRecovery: mode === "recovery" ? recoveryHostExit : undefined, validation }, null, 2)}\n`);
+  fs.writeFileSync(path.join(evidence, "sensor-result.json"), `${JSON.stringify({ passed: failure === null, failure, mode, outages: mode === "recovery" ? outages : undefined, hostExit, hostAfterRecovery: mode === "recovery" ? recoveryExits : undefined, validation }, null, 2)}\n`);
   fs.rmSync(ready, { force: true });
-  fs.rmSync(recoveryReady, { force: true });
 }
 if (failure) { console.error(`sensor-node: ${failure}`); process.exitCode = 1; }
 else {
@@ -166,7 +191,7 @@ function writeEvidence() {
     coreSha: provenance.core.sha,
   };
   const cases = mode === "recovery"
-    ? "metrics samples across a carrier outage, with host-observed Advertise, Resolve and readings before it"
+    ? `metrics samples across ${cycles} carrier outage${cycles === 1 ? "" : "s"} in one boot, with host-observed Advertise, Resolve and readings before the first and after each`
     : "metrics samples over one session, with host-observed Advertise, Resolve and readings";
   const record = deviceEvidenceRecord(proof, device, { profile: profileName, check, cases });
   record.runtimeResourceMetrics = { mode, ...validation.metrics };

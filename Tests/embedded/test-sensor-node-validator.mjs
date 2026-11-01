@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Atakan DULKER. Licensed under the MIT License.
 
 import assert from "node:assert/strict";
-import { evaluateSensorRun, parseSensorRecord } from "./sensor-node-validator.mjs";
+import { evaluateSensorRun, judgeImageReport, judgeRecoveryObservers, parseSensorRecord } from "./sensor-node-validator.mjs";
 
 const sample = (readings, overrides = {}) => ({
   event: "sensor-node-metrics", sessions: 0, readings, resolves: 1, rejected: 0, publishFailures: 0,
@@ -98,5 +98,48 @@ recoveryFails(recovered.map(({ receivedAtMs, ...record }) => record), /host rece
 // Budgets hold across the outage: the lowest sample decides.
 assert.equal(evaluateSensorRun(recovered, { stackRemainingBytes: 20000 }, recoveryOptions).passed, true);
 assert.equal(evaluateSensorRun(recovered.map(record => record.receivedAtMs === 140_000 ? at(140_000, sample(15, { sessions: 2, publishFailures: 1, stackRemaining: 3000 })) : record), { stackRemainingBytes: 5000 }, recoveryOptions).passed, false);
+
+// Several outages in one boot: every one must be reported, recovered and followed by samples.
+const cycle = (base, readings, index, freeHeap = 240000) => [
+  at(base + 1_000, { event: "sensor-node-session-ended", stage: "serving" }),
+  at(base + 31_000, advertised),
+  at(base + 40_000, sample(readings, { sessions: index + 1, publishFailures: index + 1, freeHeap })),
+  at(base + 50_000, sample(readings + 5, { sessions: index + 1, publishFailures: index + 1, freeHeap })),
+];
+const outages = [0, 1, 2, 3, 4, 5].map(index => ({ startMs: 100_000 + index * 100_000, endMs: 120_000 + index * 100_000 }));
+const manyBefore = [at(10_000, advertised), at(20_000, sample(1)), at(90_000, sample(2))];
+const many = [...manyBefore, ...outages.flatMap((outageWindow, index) => cycle(outageWindow.startMs, 10 + index * 10, index, 240000 - index * 100))];
+const manyOptions = { mode: "recovery", outages };
+result = evaluateSensorRun(many, null, manyOptions);
+assert.equal(result.passed, true, result.reason);
+assert.equal(result.metrics.recovery.cycles, 6);
+assert.equal(result.metrics.recovery.outages.length, 6);
+assert.equal(result.metrics.recovery.freeHeapAfterEachCycleBytes[5], 239500);
+assert.equal(result.metrics.recovery.maximumReadvertisedAfterMs, 11_000);
+// One cycle that never recovers fails the run and names the outage.
+const dropped = many.filter(record => !(record.receivedAtMs === 331_000));
+let verdict = evaluateSensorRun(dropped, null, manyOptions);
+assert.equal(verdict.passed, false);
+assert.match(verdict.reason, /did not advertise again after the outage \(outage 3\)/);
+verdict = evaluateSensorRun(many.filter(record => !(record.receivedAtMs > 441_000 && record.receivedAtMs < 460_000)), null, manyOptions);
+assert.match(verdict.reason, /outage 4/);
+verdict = evaluateSensorRun([...many, at(255_000, { event: "sensor-node-session-ended", stage: "serving" })], null, manyOptions);
+assert.match(verdict.reason, /a session ended after the node re-advertised \(outage 2\)/);
+assert.equal(evaluateSensorRun(many, null, { mode: "recovery", outages: [{ startMs: 5, endMs: 9 }, { startMs: 7, endMs: 12 }] }).passed, false);
+
+// An image built with a placeholder or without a real network header is never flashed.
+assert.equal(judgeImageReport({ configuration: { networkConfigured: true } }), null);
+assert.match(judgeImageReport({ configuration: { networkConfigured: true, networkPlaceholder: true } }), /placeholder/);
+assert.match(judgeImageReport({ configuration: { networkConfigured: false } }), /without a real network header/);
+assert.match(judgeImageReport({ configuration: {} }), /without a real network header/);
+assert.match(judgeImageReport({}), /no configuration/);
+assert.match(judgeImageReport(null), /no configuration/);
+
+// The second observer of each recovery gates the run.
+assert.deepEqual(judgeRecoveryObservers([{ code: 0, signal: null }, { code: 0, signal: null }]), []);
+assert.match(judgeRecoveryObservers([{ code: 0 }, { code: 1, signal: null }])[0], /observer 2 exited/);
+assert.match(judgeRecoveryObservers([{ code: null, signal: "SIGTERM" }])[0], /observer 1 exited/);
+assert.match(judgeRecoveryObservers([null])[0], /observer 1 did not finish/);
+assert.match(judgeRecoveryObservers([{ error: "spawn failed" }])[0], /observer 1 exited/);
 
 console.log("sensor-node-validator: all cases passed");
