@@ -139,6 +139,10 @@ if [ -f "$sdkconfig" ]; then
         rm -rf "$build_dir"
     fi
 fi
+# The timestamps above miss a changed or removed configuration selection: the
+# sdkconfig is newer than the checkout. Compare a recorded signature of the
+# resolved defaults list and its contents as well.
+axoloty_clear_stale_sdkconfig_defaults "$build_dir" "$sdkconfig_defaults"
 # A non-empty build directory without a CMake cache is the remains of a
 # failed configure. IDF refuses to clean it and reports an error about the
 # directory, so clear it here rather than making the retry fail the same way.
@@ -154,6 +158,7 @@ fi
 # it every switch, loudly.
 axoloty_clear_stale_profile_cache "$build_dir"
 mkdir -p "$build_dir"
+axoloty_record_sdkconfig_defaults_signature "$build_dir" "$sdkconfig_defaults"
 
 # A production configuration is sized with the network stack linked: without a
 # network header no Wi-Fi or TCP/IP code is built, and the size would not be a

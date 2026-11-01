@@ -27,6 +27,17 @@
 #       AXOLOTY_APPLICATION_DIR or AXOLOTY_TRANSPORT_DIR, remove the whole
 #       build directory so the next configure starts from the current
 #       selection, and say so. A matching cache is left untouched.
+#   axoloty_sdkconfig_defaults_signature <defaults-list>
+#       Print a SHA-256 over a semicolon-separated SDKCONFIG_DEFAULTS list: the
+#       file names in order and the bytes of each file. A missing file fails.
+#   axoloty_clear_stale_sdkconfig_defaults <build_dir> <defaults-list>
+#       Remove <build_dir> when the signature of the defaults list differs
+#       from the one recorded there, or none is recorded for an existing
+#       sdkconfig. IDF applies defaults only when it first writes sdkconfig, so
+#       a changed or removed configuration selection must start a clean build.
+#       File timestamps cannot show this: sdkconfig is newer than the checkout.
+#   axoloty_record_sdkconfig_defaults_signature <build_dir> <defaults-list>
+#       Record the signature in <build_dir> after the clean-up steps ran.
 #   axoloty_stage_network_config_header <header-or-empty> <project_dir> [placeholder]
 #       Stage the private network header (or a non-secret unconfigured header)
 #       into a freshly copied platform project and refresh only its timestamp.
@@ -112,6 +123,45 @@ axoloty_cached_selection() {
     variable=${2:-}
     [ -n "$cache_file" ] && [ -f "$cache_file" ] || return 1
     sed -n "s/^$variable:[^=]*=//p" "$cache_file" | head -1
+}
+
+axoloty_sdkconfig_defaults_signature() {
+    defaults_list=${1:-}
+    [ -n "$defaults_list" ] || return 64
+    (
+        old_ifs=$IFS
+        IFS=';'
+        # shellcheck disable=SC2086
+        set -- $defaults_list
+        IFS=$old_ifs
+        for defaults_file in "$@"; do
+            [ -f "$defaults_file" ] || exit 66
+            printf 'file %s\n' "$(basename -- "$defaults_file")"
+            cat -- "$defaults_file"
+        done
+    ) | { sha256sum 2>/dev/null || shasum -a 256; } | sed 's/ .*//'
+}
+
+axoloty_clear_stale_sdkconfig_defaults() {
+    build_dir=${1:-}
+    defaults_list=${2:-}
+    [ -n "$build_dir" ] && [ -d "$build_dir" ] || return 0
+    [ -f "$build_dir/sdkconfig" ] || return 0
+    current=$(axoloty_sdkconfig_defaults_signature "$defaults_list") || return 64
+    recorded=$(cat "$build_dir/.axoloty-sdkconfig-defaults" 2>/dev/null || true)
+    if [ "$recorded" != "$current" ]; then
+        echo "sdkconfig defaults changed (recorded: ${recorded:-none}; selected: $current); cleared stale build directory $build_dir"
+        rm -rf -- "$build_dir"
+    fi
+    return 0
+}
+
+axoloty_record_sdkconfig_defaults_signature() {
+    build_dir=${1:-}
+    defaults_list=${2:-}
+    [ -n "$build_dir" ] && [ -d "$build_dir" ] || return 0
+    signature=$(axoloty_sdkconfig_defaults_signature "$defaults_list") || return 64
+    printf '%s\n' "$signature" > "$build_dir/.axoloty-sdkconfig-defaults"
 }
 
 axoloty_clear_stale_profile_cache() {
