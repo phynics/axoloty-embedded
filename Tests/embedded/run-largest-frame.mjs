@@ -14,9 +14,9 @@
 // - a Discover one byte over the payload bound, and a frame on a topic one byte
 //   over the topic bound, are not delivered; the carrier drops them, and the
 //   node answers a short Discover afterwards;
-// - MQTT counts and logs each drop and keeps its session; Zenoh reports the
-//   drop as the carrier's one-shot error, which ends the application's session,
-//   and the node advertises again.
+// - Both carriers count each drop and keep the session: MQTT logs it, Zenoh
+//   counts it in the carrier diagnostics (the seam test covers the counter).
+//   Neither session ends and the node does not advertise again.
 //
 // The runner reads build/size.json first and refuses a placeholder image.
 // A passing run writes docs/evidence/<profile>-sensor-node-largest-frame.json.
@@ -119,14 +119,14 @@ try {
   if (after.rejected - before.rejected !== 1) problems.push(`the application rejected ${after.rejected - before.rejected} frames, expected the one at the topic bound`);
   if (step("payloadOneOver")?.answered !== false || step("payloadOneOver")?.responsive !== true) problems.push("a payload one byte over was answered, or the node did not answer afterwards");
   if (step("topicOneOver")?.responsive !== true) problems.push("the node did not answer after a topic one byte over");
+  // Neither carrier may end the session on an oversized frame, or a peer could
+  // force a reconnect loop (#133).
+  if (endedSinceProbe.length !== 0) problems.push("the session ended during the probe");
+  if (advertisedSinceProbe.length !== 0) problems.push("the node advertised again during the probe");
   if (wire === "mqtt") {
     if (dropLines.length !== 2) problems.push(`the carrier logged ${dropLines.length} drops, expected 2`);
     if (!dropLines.some(line => line.includes(`payload ${bounds.payload + 1} bytes`))) problems.push("no drop line names the payload one byte over");
     if (!dropLines.some(line => line.includes(`topic ${bounds.topic + 1},`))) problems.push("no drop line names the topic one byte over");
-    if (endedSinceProbe.length !== 0) problems.push("the session ended during the probe");
-  } else {
-    if (endedSinceProbe.length < 2) problems.push(`the session ended ${endedSinceProbe.length} times for 2 dropped frames`);
-    if (advertisedSinceProbe.length < endedSinceProbe.length) problems.push("the node did not advertise again after each session end");
   }
   if (boots.length !== 1) problems.push(`the device booted ${boots.length} times in one run`);
   summary = {
