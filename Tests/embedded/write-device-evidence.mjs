@@ -31,6 +31,12 @@ export function deviceEvidenceRecord(proof, device, { profile, check, cases }) {
     coreRevision: proof.coreSha,
     protocol: `${passed} ${cases}`,
     result: `${passed}/${passed} passed` + (unsupported > 0 ? `, ${unsupported} declared unsupported` : ""),
+    // The monitor deadline the run had and how long it needed (#116), so a
+    // result near its deadline can be read as such.
+    ...(Number.isFinite(proof.smoke?.monitor?.deadlineSeconds)
+      ? { monitorDeadlineSeconds: proof.smoke.monitor.deadlineSeconds } : {}),
+    ...(Number.isFinite(proof.smoke?.monitor?.elapsedSeconds)
+      ? { monitorElapsedSeconds: proof.smoke.monitor.elapsedSeconds } : {}),
   };
 }
 

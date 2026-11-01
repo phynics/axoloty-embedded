@@ -49,6 +49,7 @@ const output = {
     device: smoke.device,
     validation: smoke.validation,
     linesCaptured: smoke.linesCaptured,
+    ...(smoke.monitor ? { monitor: smoke.monitor } : {}),
   },
   checks: {
     ...provenance.checks,
