@@ -26,7 +26,7 @@ import { captureSerial, drainSerial } from "./serial-tools.mjs";
 import { flashFirmware, runFirmware } from "./esptool-tools.mjs";
 import { bootReasons, createRecordAssembler, judgeImageReport } from "./sensor-node-validator.mjs";
 import { deviceEvidenceRecord, writeDeviceEvidence } from "./write-device-evidence.mjs";
-import { openMqttBus, openZenohBus, runFrameProbe } from "./frame-probe.mjs";
+import { judgeSampleEncodings, openMqttBus, openZenohBus, runFrameProbe } from "./frame-probe.mjs";
 
 const [device, root, esptool, profilePath] = process.argv.slice(2);
 if (!device || !root || !esptool || !profilePath) throw new Error("usage: run-largest-frame.mjs DEVICE ROOT ESPTOOL PROFILE");
@@ -86,7 +86,7 @@ try {
     : await openZenohBus({
       helper: process.env.FRAME_IO_HELPER, endpoint: `tcp/${process.env.AXOLOTY_ZENOH_HOST}:${process.env.AXOLOTY_ZENOH_PORT ?? "7447"}`,
       filter: `axoloty/1/axoloty-embedded/RSV/**`,
-      onMessage: (topic, payload) => messages.push({ topic, payload }),
+      onMessage: (topic, payload, encoding) => messages.push({ topic, payload, encoding }),
     });
   const before = records.filter(record => record.event === "sensor-node-metrics").at(-1);
   probeStartMs = Date.now();
@@ -128,6 +128,8 @@ try {
     if (!dropLines.some(line => line.includes(`payload ${bounds.payload + 1} bytes`))) problems.push("no drop line names the payload one byte over");
     if (!dropLines.some(line => line.includes(`topic ${bounds.topic + 1},`))) problems.push("no drop line names the topic one byte over");
   }
+  // Every sample the device published must carry the CBOR label (#128).
+  if (wire === "zenoh") problems.push(...judgeSampleEncodings(messages));
   if (boots.length !== 1) problems.push(`the device booted ${boots.length} times in one run`);
   summary = {
     wire, bounds, results, rejectedBefore: before.rejected, rejectedAfter: after.rejected,

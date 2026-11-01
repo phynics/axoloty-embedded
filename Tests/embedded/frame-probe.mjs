@@ -122,6 +122,23 @@ export async function openMqttBus({ host, port, filter, onMessage }) {
   };
 }
 
+/**
+ * Judges the encoding labels of the samples the device published. Core labels
+ * every sample `application/cbor` and its binding accepts an unlabeled one, so no
+ * exchange fails on a missing label; this does (#128). Returns the problems found:
+ * none observed, or a sample with another label.
+ */
+export function judgeSampleEncodings(messages, expected = "application/cbor") {
+  const problems = [];
+  if (messages.length === 0) problems.push("no device sample was observed, so its encoding label was not checked");
+  const wrong = messages.filter(message => message.encoding !== expected);
+  if (wrong.length > 0) {
+    const labels = [...new Set(wrong.map(message => message.encoding ?? "none"))].join(", ");
+    problems.push(`${wrong.length} of ${messages.length} device samples carry the encoding ${labels}, expected ${expected}`);
+  }
+  return problems;
+}
+
 /** A Zenoh client through the zenoh-c helper `zenoh-frame-io`. */
 export async function openZenohBus({ helper, endpoint, filter, onMessage }) {
   const child = spawn(helper, [endpoint, filter], { stdio: ["pipe", "pipe", "inherit"] });
@@ -130,8 +147,8 @@ export async function openZenohBus({ helper, endpoint, filter, onMessage }) {
   const started = new Promise((resolve, reject) => { ready = resolve; child.once("exit", code => reject(new Error(`helper exited ${code}`))); });
   lines.on("line", line => {
     if (line === "ready") ready();
-    const match = /^rx (\S+) ([0-9a-f]*)$/.exec(line);
-    if (match) onMessage(match[1], Buffer.from(match[2], "hex"));
+    const match = /^rx (\S+) (\S+) ([0-9a-f]*)$/.exec(line);
+    if (match) onMessage(match[1], Buffer.from(match[3], "hex"), match[2]);
   });
   await started;
   await new Promise(resolve => setTimeout(resolve, 500));
