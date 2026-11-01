@@ -158,7 +158,6 @@ fi
 # it every switch, loudly.
 axoloty_clear_stale_profile_cache "$build_dir"
 mkdir -p "$build_dir"
-axoloty_record_sdkconfig_defaults_signature "$build_dir" "$sdkconfig_defaults"
 
 # A production configuration is sized with the network stack linked: without a
 # network header no Wi-Fi or TCP/IP code is built, and the size would not be a
@@ -252,6 +251,9 @@ if [ ! -f "$build_dir/CMakeCache.txt" ] ||
         set-target esp32c6 >> "$evidence_dir/build.log" 2>&1
 fi
 
+# Record the selection once the directory holds a CMake cache: IDF refuses to
+# clean a directory that has files but no cache.
+axoloty_record_sdkconfig_defaults_signature "$build_dir" "$sdkconfig_defaults"
 echo "== build firmware =="
 echo "application: $AXOLOTY_APPLICATION_DIR"
 echo "transport: $AXOLOTY_TRANSPORT_DIR"
