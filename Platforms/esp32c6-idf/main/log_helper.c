@@ -47,6 +47,7 @@ unsigned int axoloty_reset_reason(void) {
     return (unsigned int)esp_reset_reason();
 }
 
+#if CONFIG_HEAP_TRACING_STANDALONE
 static heap_trace_record_t axoloty_heap_records[128];
 
 int32_t axoloty_heap_trace_begin(void) {
@@ -72,3 +73,15 @@ int32_t axoloty_heap_trace_end(uint32_t *out_allocations) {
     *out_allocations = (uint32_t)summary.total_allocations;
     return AXOLOTY_ABI_STATUS_OK;
 }
+#else
+// A production configuration links no allocator instrumentation. A trace request
+// fails here rather than reporting a clean allocation count.
+int32_t axoloty_heap_trace_begin(void) {
+    return AXOLOTY_ABI_STATUS_FAILED;
+}
+
+int32_t axoloty_heap_trace_end(uint32_t *out_allocations) {
+    (void)out_allocations;
+    return AXOLOTY_ABI_STATUS_FAILED;
+}
+#endif

@@ -249,3 +249,12 @@ target_compile_definitions(${COMPONENT_LIB} PUBLIC
     ZENOH_C_STANDARD=11
     Z_BUILD_LOG=0
 )
+
+# The production configuration builds at -Os, where GCC 14 reports
+# `sleeping_idx` in `_z_executor_get_next_fut` as maybe uninitialized. It is a
+# false positive: the queue pop that writes it follows a non-empty peek, and the
+# compiler cannot see that across the call. Keep the warning for this one file
+# of pinned upstream source, without failing the build on it.
+set_source_files_properties("${AXOLOTY_ZENOH_PICO_DIR}/src/runtime/executor.c"
+    PROPERTIES COMPILE_OPTIONS "-Wno-error=maybe-uninitialized"
+)

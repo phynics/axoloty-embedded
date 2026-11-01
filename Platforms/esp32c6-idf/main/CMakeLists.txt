@@ -248,26 +248,30 @@ if(AXOLOTY_HEAP_TRACE_CALIBRATION)
     )
 endif()
 
-set(AXOLOTY_CORPUS_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/GeneratedCorpus.swift")
+# An application that carries a test corpus keeps its generator under fixtures/.
+# A production application has none and compiles only its declared sources.
 set(AXOLOTY_CORPUS_FIXTURE_DIR "${AXOLOTY_APPLICATION_DIR}/fixtures")
 set(AXOLOTY_CORPUS_GENERATOR "${AXOLOTY_CORPUS_FIXTURE_DIR}/generate-embedded-corpus.mjs")
-set(AXOLOTY_CORPUS_MANIFEST "${AXOLOTY_CORPUS_FIXTURE_DIR}/manifest.json")
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    ${AXOLOTY_CORPUS_GENERATOR}
-    ${AXOLOTY_CORPUS_MANIFEST}
-    ${AXOLOTY_CORPUS_FIXTURE_DIR}/payloads/*.json
-)
-execute_process(
-    COMMAND node
+if(EXISTS "${AXOLOTY_CORPUS_GENERATOR}")
+    set(AXOLOTY_CORPUS_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/GeneratedCorpus.swift")
+    set(AXOLOTY_CORPUS_MANIFEST "${AXOLOTY_CORPUS_FIXTURE_DIR}/manifest.json")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
         ${AXOLOTY_CORPUS_GENERATOR}
         ${AXOLOTY_CORPUS_MANIFEST}
-        ${AXOLOTY_CORPUS_SOURCE}
-    RESULT_VARIABLE AXOLOTY_CORPUS_GENERATION_RESULT
-)
-if(NOT AXOLOTY_CORPUS_GENERATION_RESULT EQUAL 0)
-    message(FATAL_ERROR "Failed to generate Embedded Swift corpus vectors")
+        ${AXOLOTY_CORPUS_FIXTURE_DIR}/payloads/*.json
+    )
+    execute_process(
+        COMMAND node
+            ${AXOLOTY_CORPUS_GENERATOR}
+            ${AXOLOTY_CORPUS_MANIFEST}
+            ${AXOLOTY_CORPUS_SOURCE}
+        RESULT_VARIABLE AXOLOTY_CORPUS_GENERATION_RESULT
+    )
+    if(NOT AXOLOTY_CORPUS_GENERATION_RESULT EQUAL 0)
+        message(FATAL_ERROR "Failed to generate Embedded Swift corpus vectors")
+    endif()
+    list(APPEND AXOLOTY_SWIFT_SOURCES ${AXOLOTY_CORPUS_SOURCE})
 endif()
-list(APPEND AXOLOTY_SWIFT_SOURCES ${AXOLOTY_CORPUS_SOURCE})
 if(AXOLOTY_SWIFT_UNICODE_LINKER_PROBE)
     list(APPEND AXOLOTY_SWIFT_SOURCES
         ${CMAKE_CURRENT_LIST_DIR}/UnicodeLinkerProbe.swift
