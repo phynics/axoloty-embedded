@@ -20,6 +20,22 @@ export function parseSensorRecord(line) {
   }
 }
 
+/**
+ * Lists the reset reason of every ROM boot banner in the captured serial lines.
+ *
+ * A run claims no device restart: it flashes and resets the board once, so it
+ * must see exactly one banner. A second one is a brownout, a watchdog or a
+ * crash, whatever the application reported.
+ */
+export function bootReasons(lines) {
+  const reasons = [];
+  for (const line of lines) {
+    const match = /\brst:0x[0-9a-f]+ \(([A-Z0-9_]+)\),boot:0x[0-9a-f]+/i.exec(line);
+    if (match) reasons.push(match[1]);
+  }
+  return reasons;
+}
+
 /** The modes a run can be judged in. */
 export const SENSOR_MODES = ["normal", "recovery"];
 

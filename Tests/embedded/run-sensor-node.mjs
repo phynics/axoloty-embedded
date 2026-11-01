@@ -23,7 +23,7 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { captureSerial, drainSerial } from "./serial-tools.mjs";
 import { flashFirmware, runFirmware } from "./esptool-tools.mjs";
-import { evaluateSensorRun, judgeImageReport, judgeRecoveryObservers, parseSensorRecord } from "./sensor-node-validator.mjs";
+import { bootReasons, evaluateSensorRun, judgeImageReport, judgeRecoveryObservers, parseSensorRecord } from "./sensor-node-validator.mjs";
 import { deviceEvidenceRecord, writeDeviceEvidence } from "./write-device-evidence.mjs";
 
 const [device, root, peerPath, esptool, profilePath] = process.argv.slice(2);
@@ -97,6 +97,7 @@ let hostExit = null;
 const outages = [];
 let failure = null;
 let validation = null;
+let boots = [];
 try {
   // Refuse a placeholder or unconfigured image before anything reaches the board.
   const imageProblem = judgeImageReport(JSON.parse(fs.readFileSync(path.join(root, "build", "size.json"), "utf8")));
@@ -156,6 +157,8 @@ try {
   }
   validation = evaluateSensorRun(records, JSON.parse(fs.readFileSync(profilePath)).budgets?.runtime ?? null,
     { mode, outages: mode === "recovery" ? outages : undefined });
+  boots = bootReasons(lines);
+  if (boots.length !== 1) throw new Error(`the device booted ${boots.length} times in one run (${boots.join(", ") || "no banner seen"}), at most one reset is expected`);
   const observerProblems = mode === "recovery"
     ? judgeRecoveryObservers(Array.from({ length: cycles }, (_, index) => recoveryExits[index] ?? null)) : [];
   if (hostExit?.code !== 0 || !validation.passed || observerProblems.length > 0) {
@@ -171,6 +174,12 @@ try {
   fs.writeFileSync(path.join(evidence, "sensor-host.log"), hostOutput.join(""));
   fs.writeFileSync(path.join(evidence, "sensor-result.json"), `${JSON.stringify({ passed: failure === null, failure, mode, outages: mode === "recovery" ? outages : undefined, hostExit, hostAfterRecovery: mode === "recovery" ? recoveryExits : undefined, validation }, null, 2)}\n`);
   fs.rmSync(ready, { force: true });
+  // A failed run keeps its logs under a name no later run overwrites.
+  if (failure) {
+    const kept = path.join(evidence, `failed-${new Date().toISOString().replace(/[:.]/g, "-")}`);
+    fs.mkdirSync(kept, { recursive: true });
+    for (const name of ["sensor-serial.log", "sensor-host.log", "sensor-result.json"]) fs.copyFileSync(path.join(evidence, name), path.join(kept, name));
+  }
 }
 if (failure) { console.error(`sensor-node: ${failure}`); process.exitCode = 1; }
 else {
@@ -195,7 +204,7 @@ function writeEvidence() {
     ? `metrics samples across ${cycles} carrier outage${cycles === 1 ? "" : "s"} in one boot, with host-observed Advertise, Resolve and readings before the first and after each`
     : "metrics samples over one session, with host-observed Advertise, Resolve and readings";
   const record = deviceEvidenceRecord(proof, device, { profile: profileName, check, cases });
-  record.runtimeResourceMetrics = { mode, ...validation.metrics };
+  record.runtimeResourceMetrics = { mode, ...validation.metrics, deviceBoots: boots.length };
   record.configuration = {
     name: size.configuration.name,
     sdkconfigSha256: size.configuration.sdkconfigSha256,

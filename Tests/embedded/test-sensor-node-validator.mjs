@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Atakan DULKER. Licensed under the MIT License.
 
 import assert from "node:assert/strict";
-import { evaluateSensorRun, judgeImageReport, judgeRecoveryObservers, parseSensorRecord } from "./sensor-node-validator.mjs";
+import { bootReasons, evaluateSensorRun, judgeImageReport, judgeRecoveryObservers, parseSensorRecord } from "./sensor-node-validator.mjs";
 
 const sample = (readings, overrides = {}) => ({
   event: "sensor-node-metrics", sessions: 0, readings, resolves: 1, rejected: 0, publishFailures: 0,
@@ -141,5 +141,11 @@ assert.match(judgeRecoveryObservers([{ code: 0 }, { code: 1, signal: null }])[0]
 assert.match(judgeRecoveryObservers([{ code: null, signal: "SIGTERM" }])[0], /observer 1 exited/);
 assert.match(judgeRecoveryObservers([null])[0], /observer 1 did not finish/);
 assert.match(judgeRecoveryObservers([{ error: "spawn failed" }])[0], /observer 1 exited/);
+
+// One ROM banner per run: a second one is a device restart.
+const banner = "rst:0x15 (USB_UART_HPSYS),boot:0xc (SPI_FAST_FLASH_BOOT)";
+assert.deepEqual(bootReasons(["ESP-ROM:esp32c6-20220919", banner, "I (23) boot: ESP-IDF"]), ["USB_UART_HPSYS"]);
+assert.deepEqual(bootReasons([banner, "{}", "rst:0x7 (LP_WDT_SYS),boot:0xc (SPI_FAST_FLASH_BOOT)"]), ["USB_UART_HPSYS", "LP_WDT_SYS"]);
+assert.deepEqual(bootReasons(["no banner here"]), []);
 
 console.log("sensor-node-validator: all cases passed");
