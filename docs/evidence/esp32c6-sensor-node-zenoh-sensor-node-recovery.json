@@ -6,30 +6,31 @@
   "status": "passed",
   "recordedAt": "2026-11-01",
   "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc",
-  "firmwareSHA256": "987c28cc893c8c30b944f894ae42c10c947956146ecf134f74749a744eff0575",
+  "firmwareSHA256": "c656316e000ead1c0367abf7c7670d8024479a5e6d8dca7308ab155949dd3558",
   "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
-  "protocol": "4 metrics samples across a carrier outage, with host-observed Advertise, Resolve and readings before it",
+  "protocol": "4 metrics samples across 1 carrier outage in one boot, with host-observed Advertise, Resolve and readings before the first and after each",
   "result": "4/4 passed",
   "runtimeResourceMetrics": {
     "mode": "recovery",
     "samples": 4,
     "readings": 20,
     "resolves": 2,
-    "minimumFreeHeapBytes": 266076,
+    "minimumFreeHeapBytes": 267656,
     "stackRemainingBytes": 7732,
     "stackSizeBytes": 36864,
     "recovery": {
-      "outageMs": 20632,
-      "sessionEndedAfterMs": 1953,
+      "outageMs": 20613,
+      "sessionEndedAfterMs": 1914,
       "sessionEndedStages": [
         "serving",
         "connect",
         "connect",
         "connect"
       ],
-      "readvertisedAfterMs": 750,
+      "readvertisedAfterMs": 1251,
       "sessions": 4
-    }
+    },
+    "deviceBoots": 1
   },
   "configuration": {
     "name": "production",
@@ -37,5 +38,5 @@
     "networkConfigured": true,
     "networkPlaceholder": false
   },
-  "firmwareImageBytes": 734400
+  "firmwareImageBytes": 734416
 }
