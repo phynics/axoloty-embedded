@@ -131,7 +131,12 @@ in `qualification.requiredChecks` names a `check`, an `artifact`, `records`, and
   embeds network configuration or a role. The record must name that image's
   checksum and the locked Core revision. Nothing ties a variant image to the
   firmware commit being released, so rerun variant checks after a firmware
-  change that can affect them.
+  change that can affect them. This is accepted, not open: a variant image is a
+  different build of the same sources, and the record proves that image. A
+  requalification reruns every required check on the release commit, and the
+  record then names it (`firmwareSHA256` for the image, `coreRevision` for the
+  lock). Binding variants to the release commit would need a firmware revision
+  in each device record; it has not been worth the schema change.
 - `records` is the number of passed records the check needs, for example one per
   role.
 - `units` is the number of distinct boards those records must name.

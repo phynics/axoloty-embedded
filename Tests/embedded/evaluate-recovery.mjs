@@ -6,6 +6,7 @@
 // from the router log, never from the device.
 
 import fs from "node:fs";
+import { writeEvidenceRecord } from "./evidence-record.mjs";
 import { analyzeRecovery, analyzeRouterRestart, parseRouterLog } from "./router-session-analyzer.mjs";
 
 const SCENARIOS = {
@@ -107,9 +108,7 @@ function runCLI() {
     recordedAt: new Date().toISOString().slice(0, 10),
     coreRevision: hostRecord?.coreRevision,
   });
-  const temporary = `${outputPath}.tmp-${process.pid}`;
-  fs.writeFileSync(temporary, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o644 });
-  fs.renameSync(temporary, outputPath);
+  writeEvidenceRecord(record, outputPath);
   console.log(`${record.status}: ${record.result ?? record.reason}`);
   process.exit(record.status === "passed" ? 0 : 1);
 }

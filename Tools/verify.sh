@@ -230,7 +230,7 @@ if wanted build; then
     # and the evidence writer on log lines in zenohd's shape, no router needed.
     check_script recovery-evidence \
         'node is not available for the recovery evidence checks' \
-        sh -c 'node Tests/embedded/test-router-session-analyzer.mjs && node Tests/embedded/test-recovery-record.mjs'
+        sh -c 'node Tests/embedded/test-router-session-analyzer.mjs && node Tests/embedded/test-recovery-record.mjs && node Tests/embedded/test-evidence-record.mjs'
     check_script zenoh-host-seam \
         'swiftc or a host C compiler is not available for the Zenoh seam check' \
         Tests/embedded/run-zenoh-host-test.sh

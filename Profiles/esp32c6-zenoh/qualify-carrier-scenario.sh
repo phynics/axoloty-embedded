@@ -50,8 +50,9 @@ evidence_out="$repo_root/docs/evidence/esp32c6-zenoh-c-only-carrier-scenario.jso
 write_unexecuted() {
     reason="$1"
     mkdir -p "$(dirname -- "$evidence_out")"
-    REASON="$reason" EVIDENCE_OUT="$evidence_out" CORE_REVISION="$core_revision" node --input-type=module <<'JS'
-import fs from "node:fs";
+    REASON="$reason" EVIDENCE_OUT="$evidence_out" CORE_REVISION="$core_revision" REPO_ROOT="$repo_root" node --input-type=module <<'JS'
+import path from "node:path";
+const { writeEvidenceRecord } = await import(path.join(process.env.REPO_ROOT, "Tests", "embedded", "evidence-record.mjs"));
 const record = {
   schemaVersion: 1,
   profile: "esp32c6-zenoh",
@@ -62,10 +63,8 @@ const record = {
   coreRevision: process.env.CORE_REVISION,
   reason: process.env.REASON,
 };
-const temporary = `${process.env.EVIDENCE_OUT}.tmp-${process.pid}`;
-fs.writeFileSync(temporary, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o644 });
-fs.renameSync(temporary, process.env.EVIDENCE_OUT);
-console.log(`unexecuted evidence written: ${process.env.EVIDENCE_OUT}`);
+const { written, path: target } = writeEvidenceRecord(record, process.env.EVIDENCE_OUT);
+if (written) console.log(`unexecuted evidence written: ${target}`);
 JS
 }
 
@@ -141,6 +140,7 @@ fi
 # failed step. flash.sh writes the result JSON even when validation fails.
 flash_status=0
 AXOLOTY_CORPUS_MANIFEST="$corpus_manifest" \
+    EMBEDDED_SKIP_GO_PROOF=1 \
     EMBEDDED_VALIDATOR="$repo_root/Tests/embedded/carrier-validator.mjs" \
     EMBEDDED_VALIDATOR_FACTORY=createEmbeddedCarrierScenarioValidator \
     AXOLOTY_DEVICE_PORT="$AXOLOTY_DEVICE_PORT" \
@@ -149,11 +149,6 @@ AXOLOTY_CORPUS_MANIFEST="$corpus_manifest" \
     EMBEDDED_BUILD_DIR="$build_dir" \
     EMBEDDED_EVIDENCE_DIR="$evidence_dir" \
     "$repo_root/Platforms/esp32c6-idf/tools/flash.sh" || flash_status=$?
-
-# flash.sh labels its GO proof with the shared smoke identity. This gate writes
-# its own carrier device record, so drop the mislabeled proof rather than leave
-# a reviewer a record that names the wrong protocol.
-rm -f "$evidence_dir/go-proof.json"
 
 if [ ! -f "$smoke_result" ]; then
     write_unexecuted "the board was named, but the flash and capture step produced no carrier scenario stream (flash exit $flash_status)"
@@ -169,9 +164,12 @@ RESULT_PATH="$smoke_result" \
     PROVENANCE="$evidence_dir/build-provenance.json" \
     EVIDENCE_OUT="$evidence_out" \
     CORE_REVISION="$core_revision" \
+    FLASH_STATUS="$flash_status" \
+    REPO_ROOT="$repo_root" \
     node --input-type=module <<'JS'
 import fs from "node:fs";
 import path from "node:path";
+const { writeEvidenceRecord } = await import(path.join(process.env.REPO_ROOT, "Tests", "embedded", "evidence-record.mjs"));
 
 function read(file) {
   try {
@@ -196,12 +194,16 @@ const unavailable = Number.isInteger(counts.unavailable) ? counts.unavailable : 
 const unit = device?.chipDescription
   ? `${device.chipDescription}${device.mac ? `, MAC ${device.mac}` : ""}`
   : device?.device ?? "unknown ESP32-C6";
+// A stream that validated is not a pass when the flash step itself failed, for
+// example because the monitor died; the record must not say more than the run.
+const flashFailed = process.env.FLASH_STATUS !== "0";
+const ok = validation.passed && !flashFailed;
 const record = {
   schemaVersion: 1,
   profile: "esp32c6-zenoh",
   check: "c-only-carrier-scenario",
   tier: "device",
-  status: validation.passed ? "passed" : "failed",
+  status: ok ? "passed" : "failed",
   recordedAt: new Date().toISOString().slice(0, 10),
   device: unit,
   firmwareSHA256: provenance?.artifact?.sha256 ?? provenance?.firmwareSha256,
@@ -209,20 +211,19 @@ const record = {
   protocol: "13-step C-only carrier scenario over serial JSON Lines",
   result: `${passed} passed, ${unavailable} unavailable, ${failed} failed`,
 };
-if (!validation.passed) {
-  record.reason = typeof validation.reason === "string" && validation.reason.length > 0
-    ? validation.reason
-    : "the carrier scenario stream did not validate";
+if (!ok) {
+  record.reason = !validation.passed
+    ? (typeof validation.reason === "string" && validation.reason.length > 0
+        ? validation.reason
+        : "the carrier scenario stream did not validate")
+    : `the stream validated, but the flash and capture step exited ${process.env.FLASH_STATUS}`;
 }
 if (Array.isArray(validation.unavailableSteps) && validation.unavailableSteps.length > 0) {
   record.unavailableSteps = validation.unavailableSteps;
 }
-const temporary = `${process.env.EVIDENCE_OUT}.tmp-${process.pid}`;
-fs.mkdirSync(path.dirname(process.env.EVIDENCE_OUT), { recursive: true });
-fs.writeFileSync(temporary, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o644 });
-fs.renameSync(temporary, process.env.EVIDENCE_OUT);
-process.stdout.write(`device evidence written: ${process.env.EVIDENCE_OUT} (${record.status})\n`);
-process.exit(validation.passed ? 0 : 1);
+const { written, path: target } = writeEvidenceRecord(record, process.env.EVIDENCE_OUT);
+process.stdout.write(`device evidence ${written ? "written" : "withheld"}: ${target} (${record.status})\n`);
+process.exit(ok ? 0 : 1);
 JS
 record_status=$?
 set -e

@@ -93,6 +93,19 @@ MAC (for example `ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:4d:8c:e8`).
 A path such as `/dev/ttyACM0` renumbers and identifies nothing; it belongs in
 the run log, not in the claim.
 
+## A tracked record is the last pass
+
+A record under `docs/evidence/` is the last result that passed. A run that fails
+or does not run says nothing about the image that record names, so no harness
+replaces a `passed` record with a `failed` or `unexecuted` one. The writer
+(`Tests/embedded/evidence-record.mjs`) keeps the passed record and puts the new
+record in `$AXOLOTY_SCRATCH/withheld-evidence/` (default `.axoloty/`), and says
+so on stderr. A `failed` or `unexecuted` record still replaces another
+`failed` or `unexecuted` one, and a `passed` record replaces any record. The run
+still exits nonzero. A passed record that is stale for new firmware
+does not certify it: an `artifact: release` check needs a record that names the
+exact image being released ([releases](releases.md)).
+
 ## Unexecuted is a legal state
 
 ```json
