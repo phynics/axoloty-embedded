@@ -108,6 +108,7 @@ jobs:
           --require build:heap-trace-status
           --require build:heap-trace-calibration
           --require build:rom-console
+          --require build:network-cleanup
           --require build:runtime-identity
           --require build:shared-flags
           --require build:mqtt-host-seam

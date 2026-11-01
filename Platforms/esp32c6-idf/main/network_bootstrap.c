@@ -35,6 +35,13 @@ __attribute__((weak)) void axoloty_transport_network_cleanup(void) {}
 #define WIFI_BIT (1U << 0)
 #define IP_BIT (1U << 1)
 #define WIFI_FAIL_BIT (1U << 2)
+#define WIFI_STOPPED_BIT (1U << 3)
+
+// How long cleanup waits for the Wi-Fi driver to report that it disconnected and
+// stopped. esp_wifi_disconnect() and esp_wifi_stop() are requests to the driver
+// task; esp_wifi_deinit() waits five seconds for that task and logs
+// "wifi:timeout when WiFi un-init" when it is still busy (#129).
+#define NETWORK_CLEANUP_WAIT_MS 2000U
 
 static EventGroupHandle_t network_events;
 static esp_netif_t *network_netif;
@@ -45,6 +52,7 @@ static int network_wifi_initialized;
 static int network_wifi_started;
 static int network_wifi_handler_registered;
 static int network_ip_handler_registered;
+static AxolotyAtomicInt network_cleaning_up;
 static uint32_t network_overall_start;
 static unsigned int network_overall_deadline_ms;
 
@@ -69,7 +77,12 @@ static void network_ip_event(void *arg, esp_event_base_t base, int32_t id, void 
 
 static void network_wifi_event(void *arg, esp_event_base_t base, int32_t id, void *data) {
     (void)arg; (void)base; (void)data;
-    if (id == WIFI_EVENT_STA_START) esp_wifi_connect();
+    if (id == WIFI_EVENT_STA_STOP) {
+        xEventGroupSetBits(network_events, WIFI_STOPPED_BIT);
+    } else if (axoloty_atomic_int_load(&network_cleaning_up)) {
+        // Teardown asked for this: report the disconnect and never reconnect.
+        if (id == WIFI_EVENT_STA_DISCONNECTED) xEventGroupSetBits(network_events, WIFI_FAIL_BIT);
+    } else if (id == WIFI_EVENT_STA_START) esp_wifi_connect();
     else if (id == WIFI_EVENT_STA_DISCONNECTED) {
         if (axoloty_atomic_int_load(&network_forced_wifi_disconnect)) {
             xEventGroupSetBits(network_events, WIFI_FAIL_BIT);
@@ -97,6 +110,7 @@ unsigned int axoloty_network_prepare(unsigned int overall_deadline_ms) {
     network_ip_handler_registered = 0;
     axoloty_atomic_uint_store(&network_wifi_retry_count, 0);
     axoloty_atomic_int_store(&network_forced_wifi_disconnect, 0);
+    axoloty_atomic_int_store(&network_cleaning_up, 0);
     if (!axoloty_transport_network_prepare()) return 0;
 
     esp_err_t err = nvs_flash_init();
@@ -204,14 +218,29 @@ unsigned int axoloty_network_cleanup(void) {
 #if !AXOLOTY_NETWORK_CONFIGURED
     return 0;
 #else
+    // Keep the Wi-Fi event handler registered until the driver has reported that
+    // it stopped, and wait for those reports before deinitializing it: the
+    // driver finishes a disconnect and a stop asynchronously, and deinitializing
+    // while it is busy costs the driver's five-second timeout (#129).
+    axoloty_atomic_int_store(&network_cleaning_up, 1);
+    if (network_events) xEventGroupClearBits(network_events, WIFI_FAIL_BIT | WIFI_STOPPED_BIT);
+    wifi_ap_record_t associated;
+    const int was_associated = network_wifi_started && network_events &&
+        esp_wifi_sta_get_ap_info(&associated) == ESP_OK;
+    esp_err_t disconnect = !network_wifi_started || esp_wifi_disconnect() == ESP_OK ? ESP_OK : ESP_FAIL;
+    if (was_associated && disconnect == ESP_OK) {
+        xEventGroupWaitBits(network_events, WIFI_FAIL_BIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(NETWORK_CLEANUP_WAIT_MS));
+    }
+    esp_err_t stop = !network_wifi_started || esp_wifi_stop() == ESP_OK ? ESP_OK : ESP_FAIL;
+    if (network_wifi_started && network_events && stop == ESP_OK) {
+        xEventGroupWaitBits(network_events, WIFI_STOPPED_BIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(NETWORK_CLEANUP_WAIT_MS));
+    }
     if (network_wifi_handler_registered) {
         esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, network_wifi_event);
     }
     if (network_ip_handler_registered) {
         esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, network_ip_event);
     }
-    esp_err_t disconnect = !network_wifi_started || esp_wifi_disconnect() == ESP_OK ? ESP_OK : ESP_FAIL;
-    esp_err_t stop = !network_wifi_started || esp_wifi_stop() == ESP_OK ? ESP_OK : ESP_FAIL;
     esp_err_t deinit = !network_wifi_initialized || esp_wifi_deinit() == ESP_OK ? ESP_OK : ESP_FAIL;
     if (network_netif) esp_netif_destroy_default_wifi(network_netif);
     network_netif = NULL;
@@ -225,7 +254,14 @@ unsigned int axoloty_network_cleanup(void) {
     network_ip_handler_registered = 0;
     axoloty_atomic_uint_store(&network_wifi_retry_count, 0);
     axoloty_atomic_int_store(&network_forced_wifi_disconnect, 0);
+    axoloty_atomic_int_store(&network_cleaning_up, 0);
     axoloty_transport_network_cleanup();
+    if (disconnect != ESP_OK || stop != ESP_OK || deinit != ESP_OK) {
+        // The application ignores this result and starts a new session, which
+        // initializes the driver again; a fixed line keeps the failure visible.
+        ESP_LOGW("axoloty_network", "cleanup incomplete: disconnect=%d stop=%d deinit=%d",
+                 (int)disconnect, (int)stop, (int)deinit);
+    }
     return disconnect == ESP_OK && stop == ESP_OK && deinit == ESP_OK;
 #endif
 }

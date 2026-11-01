@@ -192,6 +192,9 @@ if wanted build; then
     check_script rom-console \
         'no host C compiler is available for the ROM console check' \
         Tests/embedded/run-rom-console-test.sh
+    check_script network-cleanup \
+        'no host C compiler is available for the network cleanup check' \
+        Tests/embedded/run-network-cleanup-test.sh
     check_script heap-trace-status \
         'clang or swiftc is unavailable for the heap trace status fixtures' \
         Tests/embedded/run-heap-trace-status-test.sh
