@@ -77,6 +77,19 @@ Those fields are what make the claim checkable by someone who was not there.
 `tier` defaults to `device` when absent, because a device claim is the stricter
 one and should never be the accidental default.
 
+## The monitor deadline
+
+`flash.sh` reads the serial stream until the device prints its completion record,
+then stops, and gives up after `EMBEDDED_DEADLINE` seconds (default 240). The
+result records `monitor.end` (`completed`, `deadline`, or `failed`) and the
+seconds the run used. A stream cut off by the deadline fails with
+`monitor deadline of N s expired before the device finished: missing ...`, which
+is a different statement from a failure the device reported. A passed network
+device record carries `monitorDeadlineSeconds` and `monitorElapsedSeconds`, so a
+run that needed most of its deadline can be seen as such. The measured needs on
+2026-11-01 were 59 s (Zenoh network test) and 125 s (MQTT network test, which
+runs the on-device benchmark before its summary).
+
 ## Firmware resource comparisons
 
 A build record may include `firmwareSizeBytes`, `previousFirmwareSizeBytes`,
@@ -92,6 +105,29 @@ free/minimum heap or stack high-water marks from the image size.
 MAC (for example `ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:4d:8c:e8`).
 A path such as `/dev/ttyACM0` renumbers and identifies nothing; it belongs in
 the run log, not in the claim.
+
+## What a later run does to a tracked record
+
+A record under `docs/evidence/` is the last result that passed. Every harness
+writes through `Tests/embedded/evidence-record.mjs`, which applies one rule per
+status:
+
+| A run that is | does this to an existing record |
+|---|---|
+| `passed` | replaces it, and removes `<name>.failed.json` beside it |
+| `unexecuted` | nothing: it says nothing about any image. It is withheld to `$AXOLOTY_SCRATCH/withheld-evidence/` (default `.axoloty/`) under a name that carries the time, so no attempt erases another |
+| `failed` | keeps a `passed` record and is written beside it as `<name>.failed.json`; it replaces a `failed` or `unexecuted` record |
+
+The failure beside a pass is not a note: the release manifest generator reads
+every record of a check, and a `failed` record blocks the check until a run
+passes (which removes it) or an operator removes the file after reading it. A
+check that passed for image A and failed for image B therefore cannot certify
+either. The run still exits nonzero.
+
+A passed record is not tied to the firmware commit by itself: an
+`artifact: release` check needs a record that names the exact image being
+released ([releases](releases.md)), and a variant check is rerun by the
+requalification before a release.
 
 ## Unexecuted is a legal state
 

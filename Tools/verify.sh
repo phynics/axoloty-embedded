@@ -192,6 +192,9 @@ if wanted build; then
     check_script rom-console \
         'no host C compiler is available for the ROM console check' \
         Tests/embedded/run-rom-console-test.sh
+    check_script application-entry-report \
+        'no host C compiler is available for the application entry report check' \
+        Tests/embedded/run-application-entry-report-test.sh
     check_script heap-trace-status \
         'clang or swiftc is unavailable for the heap trace status fixtures' \
         Tests/embedded/run-heap-trace-status-test.sh
@@ -217,6 +220,9 @@ if wanted build; then
         'node is not available for the unsupported-status validator check' \
         env AXOLOTY_CORPUS_MANIFEST="$repo_root/Applications/device-smoke-agent/fixtures/manifest.json" \
             node Tests/embedded/test-unsupported-validator.mjs
+    check_script sample-encoding \
+        'node is not available for the sample encoding check' \
+        node Tests/embedded/test-sample-encoding.mjs
     check_script sensor-node-validator \
         'node is not available for the sensor node validator check' \
         node Tests/embedded/test-sensor-node-validator.mjs
@@ -233,7 +239,7 @@ if wanted build; then
     # and the evidence writer on log lines in zenohd's shape, no router needed.
     check_script recovery-evidence \
         'node is not available for the recovery evidence checks' \
-        sh -c 'node Tests/embedded/test-router-session-analyzer.mjs && node Tests/embedded/test-recovery-record.mjs'
+        sh -c 'node Tests/embedded/test-router-session-analyzer.mjs && node Tests/embedded/test-recovery-record.mjs && node Tests/embedded/test-evidence-record.mjs'
     check_script zenoh-host-seam \
         'swiftc or a host C compiler is not available for the Zenoh seam check' \
         Tests/embedded/run-zenoh-host-test.sh

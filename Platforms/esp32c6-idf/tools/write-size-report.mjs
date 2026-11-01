@@ -150,7 +150,9 @@ export function buildReport({ sizeText, sdkconfigText, networkState, imageBytes,
   if (!["name", "application", "platform", "transport"].every(key => typeof profile[key] === "string" && profile[key].trim())) throw new Error("profile identity is incomplete");
   if (!policy || policy.schema !== "axoloty.app-static-storage-policy.v1" || policy.profile !== profile.name || !["enforced", "not-configured", "not-applicable"].includes(policy.status) || (policy.status === "not-applicable" && policy.reason !== "configured C-only carrier qualification image")) throw new Error("invalid static storage policy");
   if (profile.budgets !== undefined && (profile.budgets === null || typeof profile.budgets !== "object" || Array.isArray(profile.budgets))) throw new Error("invalid budgets object");
-  if (profile.budgets && (Object.keys(profile.budgets).some(key => !["basis", "build", "runtime"].includes(key)) || (profile.budgets.basis !== undefined && (typeof profile.budgets.basis !== "string" || !profile.budgets.basis.trim())))) throw new Error("invalid budgets object");
+  if (profile.budgets && (Object.keys(profile.budgets).some(key => !["basis", "build", "runtime", "networkStack"].includes(key)) || (profile.budgets.basis !== undefined && (typeof profile.budgets.basis !== "string" || !profile.budgets.basis.trim())))) throw new Error("invalid budgets object");
+  const networkStack = profile.budgets?.networkStack;
+  if (networkStack !== undefined && typeof networkStack !== "boolean") throw new Error("invalid budgets object");
   const runtime = profile.budgets?.runtime;
   if (runtime !== undefined && (runtime === null || typeof runtime !== "object" || Array.isArray(runtime) || !Object.keys(runtime).length || Object.entries(runtime).some(([key, value]) => !RUNTIME_METRICS.includes(key) || !Number.isSafeInteger(value) || value <= 0))) throw new Error("invalid runtime budgets");
   const build = profile.budgets?.build;
@@ -183,6 +185,20 @@ export function buildReport({ sizeText, sdkconfigText, networkState, imageBytes,
       image,
       budgets: null,
       enforcement: { status: "not-applicable", reason: policy.reason ?? "the image is a configured qualification variant" },
+    };
+  }
+  // The build budgets of a smoke profile describe the image without a network
+  // stack. The network, agent and interop device runs build a variant that
+  // links Wi-Fi and TCP/IP, which cannot meet them: report it, do not gate it.
+  if (budgets && networkStack === false && networkState !== "unconfigured") {
+    return {
+      schemaVersion: 1,
+      kind: "build-size",
+      ...identity,
+      metrics,
+      image,
+      budgets: null,
+      enforcement: { status: "not-applicable", reason: "network-configured variant of an image whose budgets exclude the network stack" },
     };
   }
   if (!budgets) {

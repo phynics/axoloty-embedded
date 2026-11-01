@@ -131,7 +131,14 @@ in `qualification.requiredChecks` names a `check`, an `artifact`, `records`, and
   embeds network configuration or a role. The record must name that image's
   checksum and the locked Core revision. Nothing ties a variant image to the
   firmware commit being released, so rerun variant checks after a firmware
-  change that can affect them.
+  change that can affect them. A variant check that is rerun and fails is not
+  forgotten: the failure is kept beside the earlier pass and blocks the
+  certificate ([evidence](evidence.md)). A variant check that is simply not
+  rerun after a firmware change is accepted: a variant image is a different
+  build of the same sources, a record proves its own image, and a requalification
+  reruns every required check on the release commit. Binding variants to the
+  release commit would need a firmware source digest in each device record,
+  because the evidence commits themselves move `HEAD`.
 - `records` is the number of passed records the check needs, for example one per
   role.
 - `units` is the number of distinct boards those records must name.

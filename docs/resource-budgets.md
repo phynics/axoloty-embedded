@@ -62,6 +62,19 @@ resetting the budgets with new evidence.
 
 ## What is not covered
 
+- **The network-configured variant of a smoke profile.** The smoke build
+  budgets describe the image without a network stack, and a profile says so with
+  `budgets.networkStack: false`. `run-network-test.sh`, the agent test, and the
+  other device runs build the same profile with real network configuration,
+  which links Wi-Fi and TCP/IP and is larger (the Zenoh image is 1.1 MB against a
+  738 KB budget). The report records that image with `enforcement.status`
+  `not-applicable` and gates nothing; it is evidence for a device run, never a
+  release artifact. `Tools/validate-release-manifest.py` accepts that report only
+  on an unqualified manifest, for a profile whose budgets declare
+  `networkStack: false`, and for an image whose configuration is network-configured
+  (the plain image is still gated); a published or `--require-qualified` manifest
+  cannot carry it. The sensor-node profiles budget the networked image and are
+  gated in both states.
 - **Configured qualification variants.** The C-only carrier scenario image is
   larger and is reported but not gated, following the static-storage policy
   receipt (`not-applicable`). This is a Zenoh qualification variant, not a
@@ -256,9 +269,10 @@ declares 128 and 512 in `Applications/sensor-node/app.json`.
   events, is dropped at its first event, counted once
   (`axoloty_mqtt_oversized_frame_count`) and logged at WARN. The session and the
   frames behind it are unaffected. For Zenoh, a frame beyond the composed bounds
-  is dropped in the sample guard and counted; the carrier reports it as its
-  one-shot error, which ends the application session, and the node advertises
-  again.
+  is dropped in the sample guard before it is queued and counted
+  (`framesOversized`); the facade reports it once, the carrier counts it and keeps
+  polling, and the session, the subscriptions and the frames behind it are
+  unaffected. A peer that sends oversized frames cannot force a reconnect.
 - The metrics line carries `readingLastUs`, `readingMaxUs`, `frameLastUs` and
   `frameMaxUs`. They are reported, never budgeted.
 - `Tests/embedded/run-largest-frame.sh` proves on a board that the carrier moves
@@ -266,8 +280,10 @@ declares 128 and 512 in `Applications/sensor-node/app.json`.
   byte more of either without losing the next frame. Records:
   `docs/evidence/<profile>-sensor-node-largest-frame.json`. MQTT: both oversize
   frames dropped and counted (2), no session end. Zenoh: the two oversize frames are not
-  delivered; each ends the session (2 session ends), the node advertises again
-  (2 Advertises) and then answers a short Discover.
+  delivered, the session does not end, and the node answers a short Discover
+  afterwards. (The records dated before this change show 2 session ends and 2
+  Advertises for Zenoh; they describe the previous behaviour until the
+  sensor-node evidence is rerun.)
 
 ### Before and after
 

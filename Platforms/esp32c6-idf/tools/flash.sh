@@ -32,7 +32,12 @@ device=${AXOLOTY_DEVICE_PORT:-${EMBEDDED_DEVICE:-}}
 serial_log="$evidence_dir/swift-smoke-log.txt"
 smoke_result="$evidence_dir/swift-smoke-result.json"
 corpus_manifest="${AXOLOTY_CORPUS_MANIFEST:-}"
-deadline=${EMBEDDED_DEADLINE:-120}
+# The monitor ends at the completion record, so the deadline only bounds a run
+# that never finishes. Measured on 2026-11-01 from the monitor start to the
+# completion record: Zenoh network test 59 s, MQTT network test 125 s (its JSON
+# image runs the on-device benchmark before the summary). 240 s leaves the
+# slower run about 1.9 times its need.
+deadline=${EMBEDDED_DEADLINE:-240}
 
 # A direct invocation that names no profile and no explicit workspace would
 # fall back to the legacy shared proof root, which can hold any profile's
@@ -129,18 +134,52 @@ fi
 
 echo "== monitor (deadline ${deadline}s, smoke protocol) =="
 set +e
+monitor_end=failed
+monitor_started=$(date +%s)
 if command -v script >/dev/null 2>&1; then
     # The monitor requires a TTY on stdin. `script` supplies a bounded
     # pseudo-terminal while keeping the captured stream file-oriented for the
     # JSONL validator.
+    : > "$serial_log"
     timeout --foreground "$deadline" script -q -e -c \
         "exec idf.py -C '$build_project_dir' -B '$build_dir' -p '$device' monitor" \
-        /dev/null > "$serial_log" 2>&1
+        /dev/null > "$serial_log" 2>&1 &
+    monitor_pid=$!
+    # Stop as soon as the device prints its completion record: the validator
+    # reads nothing after it, and waiting out the deadline hides how long a run
+    # needs. Print the second each stage first appears, so the time budget of a
+    # run is read from the log and not guessed.
+    seen_boot=0; seen_ip=0; seen_disconnect=0; seen_summary=0
+    while kill -0 "$monitor_pid" 2>/dev/null; do
+        now=$(( $(date +%s) - monitor_started ))
+        if [ "$seen_boot" = 0 ] && grep -q '"caseId":"boot"' "$serial_log" 2>/dev/null; then seen_boot=1; echo "== monitor +${now}s: boot record"; fi
+        if [ "$seen_ip" = 0 ] && grep -q '"caseId":"network:ip"' "$serial_log" 2>/dev/null; then seen_ip=1; echo "== monitor +${now}s: network:ip"; fi
+        if [ "$seen_disconnect" = 0 ] && grep -q '"caseId":"network:disconnect"' "$serial_log" 2>/dev/null; then seen_disconnect=1; echo "== monitor +${now}s: network:disconnect"; fi
+        if [ "$seen_summary" = 0 ] && grep -q '"caseId":"summary"' "$serial_log" 2>/dev/null; then seen_summary=1; echo "== monitor +${now}s: summary record"; fi
+        # The smoke protocol ends with its completion record; the C-only carrier
+        # scenario stream ends with its summary step.
+        if grep -Eq '("caseId":"completion"|"scenario":"axoloty-zenoh-carrier","step":"summary").*\}[[:space:]]*$' "$serial_log" 2>/dev/null; then
+            echo "== monitor +${now}s: final record; stopping the monitor"
+            monitor_end=completed
+            # The record's last fields can still be in flight; let the line land.
+            sleep 2
+            kill "$monitor_pid" 2>/dev/null
+            break
+        fi
+        sleep 1
+    done
+    wait "$monitor_pid" 2>/dev/null
     monitor_status=$?
+    if [ "$monitor_end" = completed ]; then
+        monitor_status=0
+    elif [ "$monitor_status" -eq 124 ]; then
+        monitor_end=deadline
+    fi
 else
     echo "error: the pinned image lacks the 'script' pseudo-terminal helper" >&2
     monitor_status=127
 fi
+monitor_elapsed=$(( $(date +%s) - monitor_started ))
 set -e
 # The selected transport's wire profile decides the smoke protocol: v2 drives
 # the JSON vectors, v3 the CBOR vectors.
@@ -150,7 +189,8 @@ if [ -n "${AXOLOTY_TRANSPORT_DIR:-}" ] && [ -f "$AXOLOTY_TRANSPORT_DIR/transport
         "$AXOLOTY_TRANSPORT_DIR/transport.json")
 fi
 set +e
-AXOLOTY_WIRE_PROFILE="$wire_profile" AXOLOTY_CORPUS_MANIFEST="$corpus_manifest" \
+EMBEDDED_MONITOR_END="$monitor_end" EMBEDDED_MONITOR_ELAPSED="$monitor_elapsed" \
+    AXOLOTY_WIRE_PROFILE="$wire_profile" AXOLOTY_CORPUS_MANIFEST="$corpus_manifest" \
     node "$script_dir/validate-smoke.mjs" "$serial_log" "$smoke_result" "$device" "$deadline"
 validation_status=$?
 set -e
@@ -162,7 +202,13 @@ if [ "$monitor_status" -ne 0 ] && [ "$monitor_status" -ne 124 ]; then
     echo "error: ESP-IDF monitor failed with status $monitor_status" >&2
     exit 1
 fi
-node "$script_dir/write-go-proof.mjs" \
-    "$evidence_dir/build-provenance.json" "$smoke_result" \
-    "$evidence_dir/device-manifest.json" "$evidence_dir/go-proof.json" "$artifact"
+# A caller that validates a different protocol than the shared smoke (the C-only
+# carrier scenario) writes its own record and sets EMBEDDED_SKIP_GO_PROOF=1.
+# The GO proof names the shared smoke identity, so writing it for another
+# protocol would fail on that mismatch and print an error for a run that passed.
+if [ "${EMBEDDED_SKIP_GO_PROOF:-0}" != 1 ]; then
+    node "$script_dir/write-go-proof.mjs" \
+        "$evidence_dir/build-provenance.json" "$smoke_result" \
+        "$evidence_dir/device-manifest.json" "$evidence_dir/go-proof.json" "$artifact"
+fi
 echo "Firmware flash and smoke validation passed: $device"

@@ -7,6 +7,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { writeEvidenceRecord } from "./evidence-record.mjs";
 
 /** Returns the record an unexecuted run supports; throws when a field is absent. */
 export function unexecutedEvidenceRecord({ profile, check, coreRevision, reason, recordedAt }) {
@@ -25,13 +26,12 @@ export function unexecutedEvidenceRecord({ profile, check, coreRevision, reason,
   };
 }
 
-/** Writes a record atomically and returns its path. */
+/**
+ * Writes a record, unless it would replace a passed record (see evidence-record.mjs).
+ * Returns the path the record went to.
+ */
 export function writeUnexecutedEvidence(record, outputPath) {
-  const temporary = `${outputPath}.tmp-${process.pid}`;
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(temporary, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o644 });
-  fs.renameSync(temporary, outputPath);
-  return outputPath;
+  return writeEvidenceRecord(record, outputPath).path;
 }
 
 function runCLI() {
@@ -44,8 +44,8 @@ function runCLI() {
     console.error("usage: write-unexecuted-evidence.mjs <output> (PROFILE_NAME, CHECK_NAME, REASON required)");
     process.exit(64);
   }
-  writeUnexecutedEvidence(unexecutedEvidenceRecord({ profile, check, coreRevision, reason }), outputPath);
-  console.log(`unexecuted evidence written: ${outputPath}`);
+  const written = writeUnexecutedEvidence(unexecutedEvidenceRecord({ profile, check, coreRevision, reason }), outputPath);
+  if (written === outputPath) console.log(`unexecuted evidence written: ${outputPath}`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) runCLI();

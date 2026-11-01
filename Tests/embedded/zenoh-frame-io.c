@@ -5,7 +5,9 @@
 //   zenoh-frame-io <endpoint> <subscribe-key-expression>
 //
 // Prints `ready` once the session is open and the subscriber declared, then one
-// `rx <key> <payload-hex>` line per sample. Reads `put <key> <payload-hex>` and
+// `rx <key> <encoding> <payload-hex>` line per sample. The encoding is the label
+// the sender put on the sample, with spaces written as `_`; an unlabeled sample
+// reads `zenoh/bytes`. Reads `put <key> <payload-hex>` and
 // `quit` from standard input. It publishes whatever bytes it is given, which is
 // the point: the runtime API a host peer uses never emits a frame it does not
 // consider legal.
@@ -23,11 +25,23 @@ static void print_sample(z_loaned_sample_t *sample, void *context) {
     z_view_string_t key_view;
     z_keyexpr_as_view_string(z_sample_keyexpr(sample), &key_view);
     const z_loaned_string_t *key = z_view_string_loan(&key_view);
+    z_owned_string_t encoding;
+    z_encoding_to_string(z_sample_encoding(sample), &encoding);
+    char label[128];
+    const z_loaned_string_t *encoding_view = z_string_loan(&encoding);
+    size_t label_length = z_string_len(encoding_view);
+    if (label_length >= sizeof(label)) label_length = sizeof(label) - 1;
+    for (size_t index = 0; index < label_length; ++index) {
+        char character = z_string_data(encoding_view)[index];
+        label[index] = (character == ' ' || character == '\t' || character == '\n') ? '_' : character;
+    }
+    label[label_length] = '\0';
+    z_string_drop(z_string_move(&encoding));
     z_owned_slice_t bytes;
     if (z_bytes_to_slice(z_sample_payload(sample), &bytes) != Z_OK) return;
     const uint8_t *data = z_slice_data(z_slice_loan(&bytes));
     size_t length = z_slice_len(z_slice_loan(&bytes));
-    printf("rx %.*s ", (int)z_string_len(key), z_string_data(key));
+    printf("rx %.*s %s ", (int)z_string_len(key), z_string_data(key), label[0] != '\0' ? label : "-");
     for (size_t index = 0; index < length; ++index) printf("%02x", data[index]);
     printf("\n");
     fflush(stdout);

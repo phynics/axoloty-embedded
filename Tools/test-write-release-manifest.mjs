@@ -6,6 +6,7 @@
 // never the ESP-IDF SDK version pinned for the MQTT backend.
 
 import assert from "node:assert/strict";
+import { writeEvidenceRecord } from "../Tests/embedded/evidence-record.mjs";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -167,6 +168,26 @@ try {
   expectBlocked(/exchange ran on 1 of 2/, "two records from one board satisfied a two-unit check");
   passed("exchange", "-b", "unit-b", "d".repeat(64));
   assert.equal(qualification().status, "qualified", "a complete evidence set was not qualified");
+
+  // A variant check that passed for image A, then failed for image B, must not
+  // qualify: the writer keeps A's passed record and carries B's failure beside it
+  // (#117), and the generator reads that failure as a failed record for the check.
+  const interopRecord = path.join(evidenceDir, "esp32c6-mqtt-interop-a.json");
+  const writeThrough = (status, firmwareSHA256) => {
+    const originalError = console.error;
+    console.error = () => {};
+    try {
+      writeEvidenceRecord({ profile: "esp32c6-mqtt", check: "interop", tier: "device", status, device: "unit-a", firmwareSHA256, coreRevision: CORE_SHA, ...(status === "unexecuted" ? { reason: "fixture" } : {}) }, interopRecord, { withheldDir: path.join(workspace, "withheld") });
+    } finally { console.error = originalError; }
+  };
+  writeThrough("failed", "8".repeat(64));
+  assert.ok(fs.existsSync(path.join(evidenceDir, "esp32c6-mqtt-interop-a.failed.json")), "the failure was not carried beside the pass");
+  assert.equal(JSON.parse(fs.readFileSync(interopRecord, "utf8")).status, "passed", "the writer dropped the earlier pass");
+  expectBlocked(/interop has a record that did not pass/, "a variant check that failed on a newer image still qualified on the older pass");
+  writeThrough("unexecuted", "8".repeat(64));
+  expectBlocked(/interop has a record that did not pass/, "an unexecuted attempt cleared a recorded failure");
+  writeThrough("passed", "8".repeat(64));
+  assert.equal(qualification().status, "qualified", "a later pass did not clear the failure");
 
   passed("smoke", "", "unit-a", "e".repeat(64));
   expectBlocked(/smoke has a record that did not pass/, "a release check accepted another image");

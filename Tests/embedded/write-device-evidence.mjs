@@ -5,6 +5,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { writeEvidenceRecord } from "./evidence-record.mjs";
 
 /** Returns the evidence record a passed proof supports; throws otherwise. */
 export function deviceEvidenceRecord(proof, device, { profile, check, cases }) {
@@ -31,16 +32,18 @@ export function deviceEvidenceRecord(proof, device, { profile, check, cases }) {
     coreRevision: proof.coreSha,
     protocol: `${passed} ${cases}`,
     result: `${passed}/${passed} passed` + (unsupported > 0 ? `, ${unsupported} declared unsupported` : ""),
+    // The monitor deadline the run had and how long it needed (#116), so a
+    // result near its deadline can be read as such.
+    ...(Number.isFinite(proof.smoke?.monitor?.deadlineSeconds)
+      ? { monitorDeadlineSeconds: proof.smoke.monitor.deadlineSeconds } : {}),
+    ...(Number.isFinite(proof.smoke?.monitor?.elapsedSeconds)
+      ? { monitorElapsedSeconds: proof.smoke.monitor.elapsedSeconds } : {}),
   };
 }
 
-/** Writes a record atomically and returns its path. */
+/** Writes a record, unless it would replace a passed record, and returns its path. */
 export function writeDeviceEvidence(record, outputPath) {
-  const temporary = `${outputPath}.tmp-${process.pid}`;
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(temporary, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o644 });
-  fs.renameSync(temporary, outputPath);
-  return outputPath;
+  return writeEvidenceRecord(record, outputPath).path;
 }
 
 /**
