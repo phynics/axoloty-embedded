@@ -74,6 +74,11 @@ resetting the budgets with new evidence.
   main-stack remainder come from a device run and are not measured at build
   time. The smoke profiles declare none. Only the sensor-node profiles gate them.
 - **Stack bounds.** The report does not bound stack use.
+- **Performance.** No budget here constrains wire parse or codec time. The
+  production configuration's effect on it, measured on the smoke corpus, is in
+  [esp32c6-production-parse-time.md](evidence/esp32c6-production-parse-time.md).
+  The smoke application does not run under the unmodified production
+  configuration, and `sensor-node` has no timing corpus.
 
 ## Releases must carry a report
 
