@@ -17,7 +17,7 @@
       "dramBssBytes": 39936
     },
     "runtime": {
-      "minimumFreeHeapBytes": 236544,
+      "minimumFreeHeapBytes": 249856,
       "stackRemainingBytes": 6144
     }
   },
