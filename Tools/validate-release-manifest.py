@@ -230,7 +230,7 @@ def validate_size_report(report, manifest, profile):
     declared = profile.get("budgets", {}) if isinstance(profile, dict) else {}
     declared_build = declared.get("build") if isinstance(declared, dict) else None
     if isinstance(profile, dict) and "budgets" in profile:
-        check(isinstance(declared, dict) and set(declared) <= {"basis", "build", "runtime"} and ("basis" not in declared or is_nonempty_string(declared["basis"])), "profile budgets are invalid")
+        check(isinstance(declared, dict) and set(declared) <= {"basis", "build", "runtime", "networkStack"} and ("basis" not in declared or is_nonempty_string(declared["basis"])) and ("networkStack" not in declared or type(declared["networkStack"]) is bool), "profile budgets are invalid")
     declared_runtime = declared.get("runtime") if isinstance(declared, dict) else None
     if isinstance(declared, dict) and "runtime" in declared:
         check(isinstance(declared_runtime, dict) and bool(declared_runtime) and set(declared_runtime) <= set(RUNTIME_METRICS) and all(safe_integer(v, 1) for v in declared_runtime.values()), "profile runtime budgets are invalid")
