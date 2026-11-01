@@ -28,4 +28,20 @@ grep -F "unknown carrier capability name: missing.required.capability" "$tmp/inv
     echo "FAIL: invalid capability was rejected for an unexpected reason" >&2
     exit 1
 }
-echo "profile composition: MQTT and Zenoh pass; invalid required capability is rejected"
+python3 - "$repo_root/Profiles/esp32c6-mqtt/profile.json" "$tmp/misspelled.json" <<'PY'
+import json, pathlib, sys
+value = json.loads(pathlib.Path(sys.argv[1]).read_text())
+value["budgest"] = value.pop("budgets")
+pathlib.Path(sys.argv[2]).write_text(json.dumps(value))
+PY
+if python3 "$repo_root/Tools/validate-composition.py" --repo-root "$repo_root" \
+    --profile "$tmp/misspelled.json" >"$tmp/misspelled.log" 2>&1; then
+    echo "FAIL: misspelled profile key was accepted" >&2
+    exit 1
+fi
+grep -F "unknown top-level key: budgest" "$tmp/misspelled.log" >/dev/null || {
+    cat "$tmp/misspelled.log" >&2
+    echo "FAIL: misspelled profile key was rejected for an unexpected reason" >&2
+    exit 1
+}
+echo "profile composition: MQTT and Zenoh pass; invalid required capability and misspelled profile key are rejected"

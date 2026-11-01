@@ -19,6 +19,12 @@ from capability_catalog import CARRIER, PLATFORM
 # carries exactly one; the platform prepares and links only that profile.
 WIRE_PROFILES = {"coaty3JSON", "axoloty1CBOR"}
 
+PROFILE_KEYS = {
+    "schemaVersion", "name", "application", "platform", "transport", "board",
+    "configuration", "core", "budgets", "qualification",
+}
+
+
 class CompositionError(Exception):
     """A profile or axis manifest violates the composition contract."""
 
@@ -81,6 +87,9 @@ def validate(repo_root: Path, profile_path: Path) -> tuple[set[str], set[str], d
     profile = read_json(profile_path)
     if profile.get("schemaVersion", 1) != 1:
         raise CompositionError(f"unsupported profile schema in {profile_path}")
+    unknown_keys = sorted(set(profile) - PROFILE_KEYS)
+    if unknown_keys:
+        raise CompositionError(f"{profile_path} has unknown top-level key: {', '.join(unknown_keys)}")
     for field in ("application", "platform", "transport"):
         if not isinstance(profile.get(field), str) or not profile[field]:
             raise CompositionError(f"{profile_path} must select exactly one {field}")

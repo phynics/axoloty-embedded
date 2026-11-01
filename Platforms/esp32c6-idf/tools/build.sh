@@ -284,7 +284,7 @@ cp "$artifact" "$evidence_dir/axoloty-swift.bin"
 # but not gated, matching the static-storage policy receipt.
 node "$script_dir/write-size-report.mjs" "$build_dir/axoloty-swift.elf" "$artifact" \
     "$platform_dir/partitions.csv" "$AXOLOTY_PROFILE_DIR/profile.json" \
-    "$evidence_dir/static-storage-policy.json" "$build_dir/size.json"
+    "$evidence_dir/static-storage-policy.json" "$report" "$build_dir/size.json"
 
 node "$script_dir/write-provenance.mjs" \
     "$report" "$artifact" "$evidence_dir/build-provenance.json" \

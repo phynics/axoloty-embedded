@@ -47,6 +47,10 @@ const profile = {
   },
 };
 
+// A second profile can omit optional end-marker, IRAM data and no-init rows.
+const mqttSize = ZENOH_SIZE_A.replace(".iram0.data                 4   1082208524\n", "").replace(".noinit                     3   1082218737\n", "").replace("495056", "500000");
+assert.equal(computeMetrics(parseSizeA(mqttSize), 100).flashTextBytes, 500000);
+
 // Section parsing keeps every section line and ignores headers and totals.
 const sections = parseSizeA(ZENOH_SIZE_A);
 assert.equal(sections.get(".iram0.text"), 78092);
@@ -68,18 +72,33 @@ assert.equal(computeMetrics(new Map(), 0).staticRamBytes, 0);
 assert.equal(appPartitionBytes(PARTITIONS), 0x1f0000);
 assert.throws(() => appPartitionBytes("nvs, data, nvs, 0x9000, 0x6000,\n"), /no factory application partition/);
 
+const args = { imageSha256: "a".repeat(64), coreRevision: "b".repeat(40) };
+const policy = { schema: "axoloty.app-static-storage-policy.v1", profile: profile.name, status: "enforced" };
+for (const bad of ["not a section table", ZENOH_SIZE_A.replace(/\.dram0.bss[^\n]*\n/, ""), ZENOH_SIZE_A.replace(/Total[^\n]*\n/, ""), ZENOH_SIZE_A.replace("Total ", ".flash.text 1 0\nTotal "), ZENOH_SIZE_A.replace("Total ", ".bad nope 0\nTotal "), ZENOH_SIZE_A.replace("Total ", ".bad 9007199254740992 0\nTotal "), ZENOH_SIZE_A.replace("6535379", "9007199254740992")]) {
+  assert.throws(() => parseSizeA(bad));
+}
+for (const bad of [{ imageByte: 1 }, {}, { imageBytes: true }, { imageBytes: "5" }, { imageBytes: 0 }, null, []]) {
+  const invalid = structuredClone(profile); invalid.budgets.build = bad;
+  assert.throws(() => buildReport({ ...args, sizeText: ZENOH_SIZE_A, imageBytes: 100, partitionBytes: 200, profile: invalid, policy }));
+}
+for (const budgets of [{ basis: "test", buid: { imageBytes: 1 } }, { basis: null }, { basis: "" }, { basis: 1 }]) {
+  assert.throws(() => buildReport({ ...args, sizeText: ZENOH_SIZE_A, imageBytes: 100, partitionBytes: 200, profile: { ...profile, budgets }, policy }));
+}
+assert.throws(() => buildReport({ ...args, sizeText: ZENOH_SIZE_A, imageBytes: 100, partitionBytes: 200, profile, policy: { ...policy, status: "not-applicable" } }));
+assert.throws(() => buildReport({ ...args, sizeText: ZENOH_SIZE_A, imageBytes: 100, partitionBytes: 200, profile: { ...profile, transport: "mqtt-espidf" }, policy: { ...policy, status: "not-applicable", reason: "configured C-only carrier qualification image" } }));
+
 // Within budget.
-let report = buildReport({ sizeText: ZENOH_SIZE_A, imageBytes: 670560, partitionBytes: 0x1f0000, profile, policy: { status: "enforced" } });
+let report = buildReport({ ...args, sizeText: ZENOH_SIZE_A, imageBytes: 670560, partitionBytes: 0x1f0000, profile, policy });
 assert.equal(report.enforcement.status, "passed");
 assert.equal(report.enforcement.results.length, 4);
 assert.equal(report.image.partitionHeadroomBytes, 0x1f0000 - 670560);
 assert.equal(report.profile, "esp32c6-zenoh");
-assert.equal(report.coreRevision, profile.core.revision);
+assert.equal(report.coreRevision, args.coreRevision);
 
 // One metric over budget fails the whole report and names the metric.
 const tight = structuredClone(profile);
 tight.budgets.build.dramBssBytes = 69000;
-report = buildReport({ sizeText: ZENOH_SIZE_A, imageBytes: 670560, partitionBytes: 0x1f0000, profile: tight, policy: { status: "enforced" } });
+report = buildReport({ ...args, sizeText: ZENOH_SIZE_A, imageBytes: 670560, partitionBytes: 0x1f0000, profile: tight, policy });
 assert.equal(report.enforcement.status, "failed");
 assert.deepEqual(report.enforcement.results.filter(result => !result.passed).map(result => result.metric), ["dramBssBytes"]);
 assert.ok(report.enforcement.results.find(result => result.metric === "dramBssBytes").headroomBytes < 0);
@@ -90,7 +109,7 @@ exact.budgets.build.imageBytes = 670560;
 assert.equal(verdicts(metrics, exact.budgets.build).find(result => result.metric === "imageBytes").passed, true);
 
 // A configured qualification variant is reported, not gated.
-report = buildReport({ sizeText: ZENOH_SIZE_A, imageBytes: 952960, partitionBytes: 0x1f0000, profile: tight, policy: { status: "not-applicable", reason: "configured C-only carrier qualification image" } });
+report = buildReport({ ...args, sizeText: ZENOH_SIZE_A, imageBytes: 952960, partitionBytes: 0x1f0000, profile: tight, policy: { ...policy, status: "not-applicable", reason: "configured C-only carrier qualification image" } });
 assert.equal(report.enforcement.status, "not-applicable");
 assert.equal(report.budgets, null);
 assert.equal(report.metrics.imageBytes, 952960);
@@ -98,7 +117,7 @@ assert.equal(report.metrics.imageBytes, 952960);
 // A profile without budgets says so and never claims a pass.
 const unbudgeted = structuredClone(profile);
 delete unbudgeted.budgets;
-report = buildReport({ sizeText: ZENOH_SIZE_A, imageBytes: 670560, partitionBytes: 0x1f0000, profile: unbudgeted, policy: { status: "enforced" } });
+report = buildReport({ ...args, sizeText: ZENOH_SIZE_A, imageBytes: 670560, partitionBytes: 0x1f0000, profile: unbudgeted, policy });
 assert.equal(report.enforcement.status, "not-configured");
 
 console.log("write-size-report: all cases passed");
