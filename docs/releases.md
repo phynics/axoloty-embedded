@@ -16,7 +16,7 @@ set of per-profile certificates — not a repository-wide compatibility claim.
 <Axoloty base version>-embedded.<cycle revision>
 ```
 
-The embedded version for the ESP32-C6 + MQTT work is `0.8.0-embedded.1`.
+The current embedded version is the one in `VERSION`. Historical example: the first ESP32-C6 + MQTT cycle was `0.8.0-embedded.1`.
 
 - **Base version.** The base is the locked Axoloty release version, `core.version`
   in [`axoloty-core.lock.json`](../axoloty-core.lock.json). The embedded release
