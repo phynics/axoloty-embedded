@@ -3,9 +3,9 @@
   "core": {
     "identity": "phynics/axoloty",
     "url": "https://github.com/phynics/axoloty.git",
-    "version": "0.10.0",
-    "tag": "v0.10.0",
-    "revision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
+    "version": "1.0.1",
+    "tag": "v1.0.1",
+    "revision": "78f485fcfdc0c8490c75066725bcd27100262128",
     "revisionFormat": "git-commit-sha1",
     "consumerContractPath": "docs/embedded-consumer-contract.json"
   }

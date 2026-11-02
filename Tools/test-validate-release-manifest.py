@@ -426,12 +426,18 @@ with tempfile.TemporaryDirectory() as temporary:
     old_manifest = repo / "releases" / "esp32c6-mqtt" / ("%s-embedded.2.json" % LOCK["version"])
     old_document = copy.deepcopy(original)
     old_document["embedded"]["version"] = "0.10.0-embedded.2"
+    # The grandfathered certificates were issued at Core 0.10.0, and the VERSION
+    # base must equal the lock version, so the fixture lock names that release.
+    old_document["axoloty"]["version"] = "0.10.0"
+    old_document["axoloty"]["tag"] = "v0.10.0"
+    write_json(repo / "axoloty-core.lock.json", {"schemaVersion": 1, "core": {**LOCK, "version": "0.10.0", "tag": "v0.10.0"}})
     old_repo_version = (repo / "VERSION").read_text()
     (repo / "VERSION").write_text("0.10.0-embedded.2\n")
     write_json(old_manifest, old_document)
     old_result = run(repo, old_manifest, "--require-qualified")
     require(old_result, 0, "a grandfathered pre-report certificate was rejected")
     (repo / "VERSION").write_text(old_repo_version)
+    write_json(repo / "axoloty-core.lock.json", {"schemaVersion": 1, "core": LOCK})
     old_manifest.unlink()
     budget_profile.pop("budgets")
     write_json(budget_profile_path, budget_profile)

@@ -5,7 +5,7 @@
   "transport": "zenoh-pico",
   "board": "ESP32-C6-DevKitC-1",
   "core": {
-    "revision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9"
+    "revision": "78f485fcfdc0c8490c75066725bcd27100262128"
   },
   "budgets": {
     "basis": "Smoke harness image, not the production application. Measured on 0.10.0-embedded.2 (Core v0.10.0, 2026-10-31) plus 10 percent, rounded up to the next KiB. See docs/resource-budgets.md.",
