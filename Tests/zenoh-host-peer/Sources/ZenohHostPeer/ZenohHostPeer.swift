@@ -149,10 +149,21 @@ struct ZenohHostPeer {
         try signalReadiness(environment)
         trace("sensor-observer ready")
 
-        let advertise = try await next(streams[0], label: "sensor Advertise")
-        try expect(advertise.context.sourceID == sensorAgentID, "sensor Advertise sourceID")
-        try expectSensor(advertise.value)
-        trace("sensor Advertise received")
+        // An observer started as the carrier returns races the node's own
+        // reconnect: an Advertise sent before it subscribed is gone, and a Discover
+        // sent before the node subscribed is never answered. A reading arrives
+        // whichever came first and shows the node is serving. The serial log shows
+        // the re-advertise.
+        if environment["WIRE_SENSOR_AWAIT_READING"] == "1" {
+            let reading = try await next(streams[2], label: "sensor first reading")
+            try expect(reading.context.sourceID == sensorAgentID, "sensor first reading sourceID")
+            trace("sensor first reading received")
+        } else {
+            let advertise = try await next(streams[0], label: "sensor Advertise")
+            try expect(advertise.context.sourceID == sensorAgentID, "sensor Advertise sourceID")
+            try expectSensor(advertise.value)
+            trace("sensor Advertise received")
+        }
 
         let receipt = await runtime.request(.discover(
             correlationID: correlationID,

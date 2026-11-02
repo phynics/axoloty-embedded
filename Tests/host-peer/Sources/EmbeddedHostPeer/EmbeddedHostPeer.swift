@@ -223,15 +223,31 @@ struct EmbeddedHostPeer {
             try signalReadiness(environment)
             trace("sensor-observer ready")
 
-            guard let advertiseStream else { throw HostPeerError.missingStream("Advertise") }
-            let advertise = try await nextHostValue(
-                advertiseStream.makeAsyncIterator(), label: "sensor Advertise", runtime: runtime
-            )
-            guard advertise.context.sourceID == sensorAgentID else {
-                throw HostPeerError.mismatch("sensor Advertise sourceID")
+            // An observer started as the carrier returns races the node's own
+            // reconnect: an Advertise sent before it subscribed is gone, and a
+            // Discover sent before the node subscribed is never answered. A reading
+            // arrives whichever came first and shows the node is serving. The
+            // serial log shows the re-advertise.
+            if environment["WIRE_SENSOR_AWAIT_READING"] == "1" {
+                guard let readingStream else { throw HostPeerError.missingStream("Channel") }
+                let reading = try await nextHostValue(
+                    readingStream.makeAsyncIterator(), label: "sensor first reading", runtime: runtime
+                )
+                guard reading.context.sourceID == sensorAgentID else {
+                    throw HostPeerError.mismatch("sensor first reading sourceID")
+                }
+                trace("sensor first reading received")
+            } else {
+                guard let advertiseStream else { throw HostPeerError.missingStream("Advertise") }
+                let advertise = try await nextHostValue(
+                    advertiseStream.makeAsyncIterator(), label: "sensor Advertise", runtime: runtime
+                )
+                guard advertise.context.sourceID == sensorAgentID else {
+                    throw HostPeerError.mismatch("sensor Advertise sourceID")
+                }
+                _ = try expectSensor(advertise.value)
+                trace("sensor Advertise received")
             }
-            _ = try expectSensor(advertise.value)
-            trace("sensor Advertise received")
 
             let receipt = await runtime.request(.discover(
                 correlationID: correlationID,

@@ -62,9 +62,9 @@ function runOutageCommand(command) {
   const result = spawnSync("sh", ["-c", command], { stdio: "inherit", timeout: 120_000 });
   if (result.status !== 0) throw new Error(`outage command failed: ${result.status ?? result.signal ?? result.error?.message}`);
 }
-function spawnPeer(readyFile) {
+function spawnPeer(readyFile, extraEnvironment = {}) {
   const child = spawn(peerPath, [], { env: {
-    ...process.env, WIRE_EMBEDDED_HOST_DIRECTION: "sensor-observer", WIRE_READY_FILE: readyFile,
+    ...process.env, ...extraEnvironment, WIRE_EMBEDDED_HOST_DIRECTION: "sensor-observer", WIRE_READY_FILE: readyFile,
     WIRE_BROKER_HOST: process.env.AXOLOTY_MQTT_HOST,
     WIRE_BROKER_PORT: process.env.AXOLOTY_MQTT_PORT ?? "1883",
     WIRE_ZENOH_ENDPOINT: `tcp/${process.env.AXOLOTY_ZENOH_HOST}:${process.env.AXOLOTY_ZENOH_PORT ?? "7447"}`,
@@ -138,7 +138,10 @@ try {
         // Discover and see readings from the node that came back.
         const lateReady = path.join(root, `sensor-observer-recovery-${cycle + 1}.ready`);
         fs.rmSync(lateReady, { force: true });
-        const late = spawnPeer(lateReady);
+        // It may start before or after the node has advertised again, so it waits
+        // for a reading instead of that Advertise. The re-advertise itself is judged
+        // from the serial log by recoveredEnough and the validator.
+        const late = spawnPeer(lateReady, { WIRE_SENSOR_AWAIT_READING: "1" });
         recoveryPeers.push(late.child);
         recoveryExits[cycle] = null;
         late.exited.then(value => { recoveryExits[cycle] = value; });
