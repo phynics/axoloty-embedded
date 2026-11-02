@@ -8,11 +8,11 @@
     "revision": "78f485fcfdc0c8490c75066725bcd27100262128"
   },
   "budgets": {
-    "basis": "Smoke harness image, not the production application. Measured on 0.10.0-embedded.2 (Core v0.10.0, 2026-10-31) plus 10 percent, rounded up to the next KiB. See docs/resource-budgets.md.",
+    "basis": "Smoke harness image, not the production application. Measured at firmware revision 71cd8fb (Core v1.0.1, 2026-11-02) plus 10 percent, rounded up to the next KiB. See docs/resource-budgets.md.",
     "networkStack": false,
     "build": {
-      "imageBytes": 738304,
-      "flashTextBytes": 544768,
+      "imageBytes": 742400,
+      "flashTextBytes": 548864,
       "staticRamBytes": 174080,
       "dramBssBytes": 76800
     }

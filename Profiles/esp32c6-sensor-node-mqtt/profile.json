@@ -9,9 +9,9 @@
     "revision": "78f485fcfdc0c8490c75066725bcd27100262128"
   },
   "budgets": {
-    "basis": "production reference application sensor-node, build configuration production, measured with the network stack linked (sizing-only placeholder header) on Core 087bd9bb1bfb at firmware revision 76a423d (2026-11-02); build budgets are measured plus 10 percent rounded up to the next KiB, runtime floors are the lowest of the normal and recovery runs minus 10 percent rounded down to the next KiB",
+    "basis": "production reference application sensor-node, build configuration production, measured with the network stack linked (sizing-only placeholder header) on Core 78f485fcfdc0 at firmware revision 71cd8fb (2026-11-02); build budgets are measured plus 10 percent rounded up to the next KiB, runtime floors are the lowest of the normal and recovery runs minus 10 percent rounded down to the next KiB",
     "build": {
-      "imageBytes": 924672,
+      "imageBytes": 925696,
       "flashTextBytes": 716800,
       "staticRamBytes": 155648,
       "dramBssBytes": 39936
