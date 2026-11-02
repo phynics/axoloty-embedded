@@ -50,7 +50,7 @@ every sample, including the ones taken across a carrier outage.
 
 **What the numbers describe.** The `basis` string of every budgeted profile names
 what it measured. The two smoke profiles carry budgets for the *smoke harness*
-images measured on `0.10.0-embedded.2` with Core `v0.10.0`. They are regression
+images measured at firmware revision `71cd8fb` with Core `v1.0.1`. They are regression
 gates for the harness and are not production budgets: the smoke application
 carries test vectors and a benchmark corpus that a production application would
 not. The two sensor-node profiles carry the production reference application's
@@ -376,3 +376,39 @@ passed on the first attempt.
 - The development container image was missing from the local store and was
   pulled again from `ghcr.io/phynics/axoloty-embedded-dev:swift-6.4`, digest
   `sha256:95649588463be1f62c2453761c11e191ad29faf839aeaae4c58a317d5f930688`.
+
+## Core v1.0.1 reset
+
+Relocking to Core `v1.0.1` (`78f485fcfdc0c8490c75066725bcd27100262128`, issue
+[#73](https://github.com/phynics/axoloty-embedded/issues/73)) means measuring again
+and resetting the budgets under the policy above. Measured at firmware revision
+`71cd8fb` on 2026-11-02, same toolchain as before (Embedded Swift 6.4, ESP-IDF 5.4), on
+the second board (MAC 40:4c:ca:ff:fe:4d:8c:e8). Images are the placeholder (smoke: no
+network stack) builds; the runtime figures come from the credentialed sensor-node
+images, one normal run and one run with a 20 s outage each.
+
+| | Smoke MQTT | Smoke Zenoh | Sensor node MQTT | Sensor node Zenoh |
+|---|---|---|---|---|
+| Image, measured (earlier figure) | 673,296 (671,952) | 674,704 (670,560) | 840,624 (840,128) | 739,568 (737,360) |
+| Flash text, measured | 504,510 | 498,932 | 651,368 | 582,792 |
+| Static RAM, measured | 163,756 | 157,628 | 141,120 | 139,272 |
+| `.bss`, measured | 74,803 | 69,323 | 36,011 | 34,659 |
+| Image budget | 741,376 | 742,400 | 925,696 | 814,080 |
+| Flash text budget | 555,008 | 548,864 | 716,800 | 642,048 |
+| Static RAM budget | 180,224 | 174,080 | 155,648 | 153,600 |
+| `.bss` budget | 82,944 | 76,800 | 39,936 | 38,912 |
+| Minimum free heap, measured (normal, one outage) | | | 279,684, 278,288 | 275,288, 276,724 |
+| Minimum free heap floor | | | 249,856 | 246,784 |
+| Stack remaining, measured (normal, one outage) | | | 7,292, 7,292 | 7,268, 7,268 |
+| Stack remaining floor | | | 6,144 | 6,144 |
+
+The earlier figures are the ones recorded above: F6 for the smoke images, the v1 batch
+for the sensor nodes. Against them the images grew by 1.3 KB (smoke MQTT), 4.1 KB (smoke
+Zenoh), 0.5 KB (sensor MQTT) and 2.2 KB (sensor Zenoh). The growth spans the Core
+`v0.10.0` to `v1.0.1` move and the firmware changes in between, and it is not broken down
+by change. Static RAM and `.bss` budgets are unchanged for every profile because the
+measured values still round to the same KiB. The Zenoh heap floor rises from 244,736
+to 246,784 B (lowest measured 275,288 B, minus 10 percent, rounded down to a KiB); the
+MQTT heap floor and both stack floors come out unchanged. The sensor-node evidence is
+rerun at the commit that carries these budgets, and the per-profile table above is
+updated from that rerun.
