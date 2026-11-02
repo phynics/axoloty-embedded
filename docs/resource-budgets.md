@@ -144,34 +144,33 @@ more than this difference.
 
 ### Per-profile table
 
-Core revision `087bd9bb1bfb563d0347799245ea4dd43e509bc9` for every row.
+Core revision `78f485fcfdc0c8490c75066725bcd27100262128` (`v1.0.1`) for every row.
 Sizes in bytes. Measured on one ESP32-C6, Embedded Swift 6.4, ESP-IDF 5.4. The sizes and the
-runtime figures below come from the second board (MAC 40:4c:ca:ff:fe:4d:8c:e8),
-built and run at firmware revision `76a423d` (the head of the v1 batch of firmware
-fixes: #129, #131, #133 and the evidence tooling), on 2026-11-02. The first board
-(MAC 40:4c:ca:ff:fe:4e:52:dc) produced the figures of an earlier version of this
-page and is not named by any record.
+runtime figures below come from the second board (MAC 40:4c:ca:ff:fe:4d:8c:e8), built and
+run at firmware revision `633984f` (main after #149, the commit that all the `1.0.1-embedded.1`
+evidence names), on 2026-11-02. The first board (MAC 40:4c:ca:ff:fe:4e:52:dc) ran the
+other checks of the same requalification and is named by their records.
 
 | | Smoke `esp32c6-mqtt` | Smoke `esp32c6-zenoh` | Sensor node MQTT | Sensor node Zenoh |
 |---|---|---|---|---|
 | Network stack linked | no | no | yes | yes |
 | Configuration | default | default | `production` | `production` |
 | sdkconfig SHA-256 | not recorded in the budget | not recorded in the budget | `3e14e6acd8df3ff2a35dd6d13aeba1a687787f388a71d0b85765e787e82378bc` | same |
-| Image (build budget) | 739,328 | 738,304 | 924,672 | 812,032 |
-| Flash text (build budget) | 553,984 | 544,768 | 716,800 | 638,976 |
+| Image (build budget) | 741,376 | 742,400 | 925,696 | 814,080 |
+| Flash text (build budget) | 555,008 | 548,864 | 716,800 | 642,048 |
 | Static RAM (build budget) | 180,224 | 174,080 | 155,648 | 153,600 |
 | `.bss` (build budget) | 82,944 | 76,800 | 39,936 | 38,912 |
-| Image, measured (placeholder) | | | 840,128 | 737,360 |
-| Flash text, measured (placeholder) | | | 650,894 | 580,610 |
+| Image, measured (placeholder) | | | 840,624 | 739,568 |
+| Flash text, measured (placeholder) | | | 651,368 | 582,792 |
 | Static RAM, measured | | | 141,120 | 139,272 |
 | `.bss`, measured | | | 36,011 | 34,659 |
-| Minimum free heap, measured (normal, one outage) | | | 279,668, 277,876 | 272,784, 273,904 |
-| Minimum free heap floor | | | 249,856 | 244,736 |
-| Main stack remaining, measured (normal, one outage) | | | 7,292, 7,292 of 36,864 | 7,684, 7,684 of 36,864 |
+| Minimum free heap, measured (normal, one outage) | | | 279,980, 278,288 | 277,120, 274,332 |
+| Minimum free heap floor | | | 249,856 | 246,784 |
+| Main stack remaining, measured (normal, one outage) | | | 7,292, 7,292 of 36,864 | 7,268, 7,268 of 36,864 |
 | Main stack remaining floor | | | 6,144 | 6,144 |
-| Recovery from a 20 s carrier outage | | | session ended 5.3 s after the stop; advertised again 2.1 s after the carrier returned | session ended 1.9 s after the stop; advertised again 0.8 s after the carrier returned |
-| Six outages in one boot: slowest re-advertise; free heap after the first and the sixth | | | 2.6 s; 283,244 and 283,204 | 3.3 s; 280,652 and 280,052 |
-| Firmware SHA-256 (credentialed image) | | | `e787ef8a4f573ec41445237ed9484df269346af9ceb7951b36f7f14354952200` | `ce78e648a8ffdedd8d735d2ba3a6c915d42e207d0ff1b881bf3444dea2024bca` |
+| Recovery from a 20 s carrier outage | | | session ended 5.2 s after the stop; advertised again 2.2 s after the carrier returned | session ended 1.9 s after the stop; advertised again 0.8 s after the carrier returned |
+| Six outages in one boot: slowest re-advertise; free heap after the first and the sixth | | | 2.7 s; 283,260 and 283,168 | 2.8 s; 280,516 and 279,868 |
+| Firmware SHA-256 (credentialed image) | | | `662106fa90b730502fddb66b196e5788d9dad9bc8cb98dbb89dc7e2e040e4ac3` | `ed677dffa96f581a7933e072cb9ebfdcd0ed94ad13175a6108b3359adc330ad3` |
 
 The smoke columns are build budgets set from the smoke images (see above), not
 measurements of the production application. The sensor-node columns repeat the
@@ -409,6 +408,13 @@ Zenoh), 0.5 KB (sensor MQTT) and 2.2 KB (sensor Zenoh). The growth spans the Cor
 by change. Static RAM and `.bss` budgets are unchanged for every profile because the
 measured values still round to the same KiB. The Zenoh heap floor rises from 244,736
 to 246,784 B (lowest measured 275,288 B, minus 10 percent, rounded down to a KiB); the
-MQTT heap floor and both stack floors come out unchanged. The sensor-node evidence is
-rerun at the commit that carries these budgets, and the per-profile table above is
-updated from that rerun.
+MQTT heap floor and both stack floors come out unchanged. The sensor-node evidence
+was rerun at `633984f`, the commit that carries these budgets: normal, one outage, six
+outages and largest frame for both profiles, 8 of 8 passed against the new budgets and
+floors, and the per-profile table above carries those figures. Re-measuring the heap
+floors from the `633984f` runs (lowest of the normal and one-outage runs: MQTT 278,288 B,
+Zenoh 274,332 B) gives the same floors as above. The first Zenoh normal run of the rerun
+failed before the board ran firmware (the host observer could not open a Zenoh session)
+and the same run passed on the next attempt; both are listed in the
+description of the requalification pull request for
+[#73](https://github.com/phynics/axoloty-embedded/issues/73).

@@ -3,7 +3,114 @@
   "profile": "esp32c6-sensor-node-mqtt",
   "check": "sensor-node-recovery-cycles",
   "tier": "device",
-  "status": "unexecuted",
+  "status": "passed",
   "recordedAt": "2026-11-02",
-  "reason": "The lock moved from Core v0.10.0 (087bd9bb1bfb) to Core v1.0.1 (78f485fcfdc0c8490c75066725bcd27100262128); this check has not been rerun against the new lock. The previous passing record is in git history."
+  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8",
+  "firmwareSHA256": "662106fa90b730502fddb66b196e5788d9dad9bc8cb98dbb89dc7e2e040e4ac3",
+  "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+  "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+  "protocol": "14 metrics samples across 6 carrier outages in one boot, with host-observed Advertise, Resolve and readings before the first and after each",
+  "result": "14/14 passed",
+  "runtimeResourceMetrics": {
+    "mode": "recovery",
+    "samples": 14,
+    "readings": 70,
+    "resolves": 7,
+    "minimumFreeHeapBytes": 278288,
+    "stackRemainingBytes": 7292,
+    "stackSizeBytes": 36864,
+    "readingLastUs": 3631,
+    "readingMaxUs": 5120,
+    "frameLastUs": 3994,
+    "frameMaxUs": 4001,
+    "recovery": {
+      "cycles": 6,
+      "maximumReadvertisedAfterMs": 2676,
+      "freeHeapAfterEachCycleBytes": [
+        283260,
+        283224,
+        283224,
+        283188,
+        283168,
+        283168
+      ],
+      "outages": [
+        {
+          "outageMs": 20412,
+          "sessionEndedAfterMs": 5267,
+          "sessionEndedStages": [
+            "serving"
+          ],
+          "readvertisedAfterMs": 2004,
+          "freeHeapAfterBytes": 283260,
+          "minimumFreeHeapBytes": 278288,
+          "stackRemainingBytes": 7292
+        },
+        {
+          "outageMs": 20818,
+          "sessionEndedAfterMs": 5364,
+          "sessionEndedStages": [
+            "serving"
+          ],
+          "readvertisedAfterMs": 2208,
+          "freeHeapAfterBytes": 283224,
+          "minimumFreeHeapBytes": 278288,
+          "stackRemainingBytes": 7292
+        },
+        {
+          "outageMs": 20414,
+          "sessionEndedAfterMs": 5253,
+          "sessionEndedStages": [
+            "serving"
+          ],
+          "readvertisedAfterMs": 2490,
+          "freeHeapAfterBytes": 283224,
+          "minimumFreeHeapBytes": 278288,
+          "stackRemainingBytes": 7292
+        },
+        {
+          "outageMs": 20816,
+          "sessionEndedAfterMs": 5354,
+          "sessionEndedStages": [
+            "serving"
+          ],
+          "readvertisedAfterMs": 2179,
+          "freeHeapAfterBytes": 283188,
+          "minimumFreeHeapBytes": 278288,
+          "stackRemainingBytes": 7292
+        },
+        {
+          "outageMs": 20209,
+          "sessionEndedAfterMs": 5245,
+          "sessionEndedStages": [
+            "serving"
+          ],
+          "readvertisedAfterMs": 2676,
+          "freeHeapAfterBytes": 283168,
+          "minimumFreeHeapBytes": 278288,
+          "stackRemainingBytes": 7292
+        },
+        {
+          "outageMs": 20410,
+          "sessionEndedAfterMs": 5240,
+          "sessionEndedStages": [
+            "serving"
+          ],
+          "readvertisedAfterMs": 2467,
+          "freeHeapAfterBytes": 283168,
+          "minimumFreeHeapBytes": 278288,
+          "stackRemainingBytes": 7292
+        }
+      ],
+      "sessions": 6
+    },
+    "deviceBoots": 1
+  },
+  "configuration": {
+    "name": "production",
+    "sdkconfigSha256": "3e14e6acd8df3ff2a35dd6d13aeba1a687787f388a71d0b85765e787e82378bc",
+    "networkConfigured": true,
+    "networkPlaceholder": false
+  },
+  "firmwareImageBytes": 840688
 }

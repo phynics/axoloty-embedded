@@ -317,9 +317,8 @@ release.
   now above the facade, so both profiles declare `68e46c76` and no longer need
   `AXOLOTY_PREVIEW_CORE_REVISION`. The C-only carrier scenario has now run on a
   board at that revision (see above), but that is transport-level evidence, not
-  a protocol qualification: the Swift-protocol device checks (`embedded-zenoh-smoke`
-  over Zenoh, the two-board agent exchange, and board-to-host interop) are still
-  blocked on the CBOR wire profile and are tracked in
+  a protocol qualification: the Swift-protocol device checks (the serial smoke, the two-board agent
+  exchange, and board-to-host interop) were blocked on the CBOR wire profile and are tracked in
   [#51](https://github.com/phynics/axoloty-embedded/issues/51) and
   [#56](https://github.com/phynics/axoloty-embedded/issues/56). The profile holds
   no release certificate.

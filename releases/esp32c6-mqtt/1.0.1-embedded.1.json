@@ -1,0 +1,305 @@
+{
+  "schemaVersion": 2,
+  "mode": "release",
+  "profile": "esp32c6-mqtt",
+  "application": "device-smoke-agent",
+  "platform": "esp32c6-idf",
+  "board": "ESP32-C6-DevKitC-1",
+  "transport": {
+    "name": "mqtt-espidf",
+    "backend": "esp-idf/mqtt",
+    "component": "idf",
+    "version": "5.4.0",
+    "revision": null,
+    "versionSource": "Platforms/esp32c6-idf/dependencies.lock"
+  },
+  "compatibility": {
+    "scope": "profile",
+    "status": "qualified",
+    "description": "Profile esp32c6-mqtt is qualified against Axoloty 1.0.1 (78f485fcfdc0) on ESP32-C6-DevKitC-1."
+  },
+  "axoloty": {
+    "version": "1.0.1",
+    "tag": "v1.0.1",
+    "sha": "78f485fcfdc0c8490c75066725bcd27100262128",
+    "dirty": false,
+    "contractSha256": "8c94b7edf5dede29592121decc5aba2f2e66e68cd540195c327e78165bcd9014"
+  },
+  "embedded": {
+    "version": "1.0.1-embedded.1",
+    "sha": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+    "dirty": false
+  },
+  "toolchain": {
+    "swift": "Swift version 6.4 (swift-6.4-RELEASE)\nTarget: x86_64-unknown-linux-gnu",
+    "sdk": "ESP-IDF v5.4",
+    "target": "esp32c6"
+  },
+  "configurationFingerprint": "844e00d5c028f723cb2166fbdcece31f453e2ddc0a98cc5b97241457a890ef1c",
+  "image": {
+    "path": "axoloty-swift.bin",
+    "sha256": "faef77664343de7bf5710a7fec4d5d81f186f1084b3e96064f966c4a081bd018",
+    "byteCount": 673296
+  },
+  "resources": {
+    "available": true,
+    "report": {
+      "schemaVersion": 1,
+      "kind": "build-size",
+      "profile": "esp32c6-mqtt",
+      "application": "device-smoke-agent",
+      "platform": "esp32c6-idf",
+      "transport": "mqtt-espidf",
+      "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+      "configuration": {
+        "name": "default",
+        "sdkconfigSha256": "c0ceb580cd73de26a3e11cf67a5a85d17489b1887aa3dbe37c838e61cadb9ad9",
+        "networkConfigured": false
+      },
+      "metrics": {
+        "imageBytes": 673296,
+        "flashTextBytes": 504510,
+        "flashRodataBytes": 79736,
+        "iramTextBytes": 78148,
+        "initializedDataBytes": 10805,
+        "dramBssBytes": 74803,
+        "staticRamBytes": 163756
+      },
+      "image": {
+        "bytes": 673296,
+        "sha256": "faef77664343de7bf5710a7fec4d5d81f186f1084b3e96064f966c4a081bd018",
+        "appPartitionBytes": 2031616,
+        "partitionHeadroomBytes": 1358320
+      },
+      "budgets": {
+        "basis": "Smoke harness image, not the production application. Measured at firmware revision 71cd8fb (Core v1.0.1, 2026-11-02) plus 10 percent, rounded up to the next KiB. See docs/resource-budgets.md.",
+        "build": {
+          "imageBytes": 741376,
+          "flashTextBytes": 555008,
+          "staticRamBytes": 180224,
+          "dramBssBytes": 82944
+        }
+      },
+      "enforcement": {
+        "status": "passed",
+        "results": [
+          {
+            "metric": "imageBytes",
+            "measured": 673296,
+            "budget": 741376,
+            "headroomBytes": 68080,
+            "passed": true
+          },
+          {
+            "metric": "flashTextBytes",
+            "measured": 504510,
+            "budget": 555008,
+            "headroomBytes": 50498,
+            "passed": true
+          },
+          {
+            "metric": "staticRamBytes",
+            "measured": 163756,
+            "budget": 180224,
+            "headroomBytes": 16468,
+            "passed": true
+          },
+          {
+            "metric": "dramBssBytes",
+            "measured": 74803,
+            "budget": 82944,
+            "headroomBytes": 8141,
+            "passed": true
+          }
+        ]
+      }
+    }
+  },
+  "qualification": {
+    "status": "qualified",
+    "requiredChecks": [
+      {
+        "check": "embedded-swift-smoke-v2",
+        "artifact": "release",
+        "records": 1,
+        "units": 1
+      },
+      {
+        "check": "network-test",
+        "artifact": "variant",
+        "records": 1,
+        "units": 1
+      },
+      {
+        "check": "agent-test",
+        "artifact": "variant",
+        "records": 2,
+        "units": 2
+      },
+      {
+        "check": "host-interop",
+        "artifact": "variant",
+        "records": 2,
+        "units": 1
+      },
+      {
+        "check": "coatyjs-interop",
+        "artifact": "variant",
+        "records": 2,
+        "units": 1
+      },
+      {
+        "check": "broker-restart",
+        "artifact": "variant",
+        "records": 2,
+        "units": 2
+      },
+      {
+        "check": "last-will",
+        "artifact": "variant",
+        "records": 1,
+        "units": 1
+      }
+    ],
+    "outstanding": [],
+    "evidence": [
+      {
+        "path": "docs/evidence/esp32c6-mqtt-agent-test-a.json",
+        "check": "agent-test",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "622fa63adc18a04b2314a9ef2544885b740e6db5e716fbb8de4cffaf7eddac21",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8"
+      },
+      {
+        "path": "docs/evidence/esp32c6-mqtt-agent-test-b.json",
+        "check": "agent-test",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "0be79ea933c4fab51d63ca06835c623f5851395a2ad8c552521c973e62741a5d",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc"
+      },
+      {
+        "path": "docs/evidence/esp32c6-mqtt-broker-restart-a.json",
+        "check": "broker-restart",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "490137dc55f2c4b381aa882f3ef5112dc56cfc773bee67251f85e3daaad2d7ea",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8"
+      },
+      {
+        "path": "docs/evidence/esp32c6-mqtt-broker-restart-b.json",
+        "check": "broker-restart",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "48033d1e7be5a41b4362c89c56c645c9119087ec6fc40484d03d4742305f7016",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc"
+      },
+      {
+        "path": "docs/evidence/esp32c6-mqtt-carrier-diagnostics-regression.json",
+        "check": "carrier-diagnostics-regression",
+        "tier": "build",
+        "status": "unexecuted",
+        "reason": "The lock moved from Core v0.9.0 (f8c201f717e8) to Core v0.10.0 (087bd9bb1bfb563d0347799245ea4dd43e509bc9); this check has not been rerun against the new lock. The previous passing record is in git history."
+      },
+      {
+        "path": "docs/evidence/esp32c6-mqtt-coatyjs-interop-a.json",
+        "check": "coatyjs-interop",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "622fa63adc18a04b2314a9ef2544885b740e6db5e716fbb8de4cffaf7eddac21",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc"
+      },
+      {
+        "path": "docs/evidence/esp32c6-mqtt-coatyjs-interop-b.json",
+        "check": "coatyjs-interop",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "0be79ea933c4fab51d63ca06835c623f5851395a2ad8c552521c973e62741a5d",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc"
+      },
+      {
+        "path": "docs/evidence/esp32c6-mqtt-embedded-swift-smoke-v2.json",
+        "check": "embedded-swift-smoke-v2",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "faef77664343de7bf5710a7fec4d5d81f186f1084b3e96064f966c4a081bd018",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8"
+      },
+      {
+        "path": "docs/evidence/esp32c6-mqtt-firmware-build.json",
+        "check": "firmware-build",
+        "tier": "build",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "faef77664343de7bf5710a7fec4d5d81f186f1084b3e96064f966c4a081bd018",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": null
+      },
+      {
+        "path": "docs/evidence/esp32c6-mqtt-host-interop-a.json",
+        "check": "host-interop",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "622fa63adc18a04b2314a9ef2544885b740e6db5e716fbb8de4cffaf7eddac21",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc"
+      },
+      {
+        "path": "docs/evidence/esp32c6-mqtt-host-interop-b.json",
+        "check": "host-interop",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "0be79ea933c4fab51d63ca06835c623f5851395a2ad8c552521c973e62741a5d",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc"
+      },
+      {
+        "path": "docs/evidence/esp32c6-mqtt-last-will-b.json",
+        "check": "last-will",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "6758a98b8017660f5fe6a8f2e21105398e91ef1ae3f636eeafe8b2030c08706f",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc"
+      },
+      {
+        "path": "docs/evidence/esp32c6-mqtt-network-test.json",
+        "check": "network-test",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "52acba48fbad31a43b32be2410b729d8dff8abd2fff3b7a37340d4c56cbdac7b",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc"
+      },
+      {
+        "path": "docs/evidence/esp32c6-mqtt-reproducible-build.json",
+        "check": "reproducible-build",
+        "tier": "build",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "faef77664343de7bf5710a7fec4d5d81f186f1084b3e96064f966c4a081bd018",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": null
+      }
+    ]
+  }
+}

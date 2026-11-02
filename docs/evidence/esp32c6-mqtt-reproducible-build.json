@@ -1,9 +1,20 @@
 {
   "schemaVersion": 1,
   "profile": "esp32c6-mqtt",
-  "check": "reproducible-build",
   "tier": "build",
-  "status": "unexecuted",
+  "status": "passed",
   "recordedAt": "2026-11-02",
-  "reason": "The lock moved from Core v0.10.0 (087bd9bb1bfb) to Core v1.0.1 (78f485fcfdc0c8490c75066725bcd27100262128); this check has not been rerun against the new lock. The previous passing record is in git history."
+  "check": "reproducible-build",
+  "result": "Two clean builds of the esp32c6-mqtt profile, each from its own proof root, produced a byte-identical axoloty-swift.bin (SHA-256 faef77664343de7bf5710a7fec4d5d81f186f1084b3e96064f966c4a081bd018), per Tests/embedded/check-reproducible-build.sh. This is a reproducibility claim about firmware source revision 633984ffbeace88d877d4f3f06f2d07c8fed96d2 only.",
+  "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+  "firmwareSHA256": "faef77664343de7bf5710a7fec4d5d81f186f1084b3e96064f966c4a081bd018",
+  "firmwareSizeBytes": 673296,
+  "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+  "toolchain": "axoloty-embedded-dev image sha256:95649588463be1f62c2453761c11e191ad29faf839aeaae4c58a317d5f930688 \u2014 Swift version 6.4 (swift-6.4-RELEASE), ESP-IDF v5.4, target esp32c6",
+  "dockerfileSHA256": "34c2b624b658ca77e06444cc23025d387fd9c84f624928aa6b0ed7a7036469e4",
+  "coreContractSHA256": "8c94b7edf5dede29592121decc5aba2f2e66e68cd540195c327e78165bcd9014",
+  "configurationFingerprint": "844e00d5c028f723cb2166fbdcece31f453e2ddc0a98cc5b97241457a890ef1c",
+  "provenanceRunId": "reproducible-1",
+  "rebuilds": 2,
+  "allBuildsIdentical": true
 }
