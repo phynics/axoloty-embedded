@@ -3,7 +3,12 @@
   "profile": "esp32c6-zenoh",
   "check": "agent-test",
   "tier": "device",
-  "status": "unexecuted",
+  "status": "passed",
   "recordedAt": "2026-11-02",
-  "reason": "The lock moved from Core v0.10.0 (087bd9bb1bfb) to Core v1.0.1 (78f485fcfdc0c8490c75066725bcd27100262128); this check has not been rerun against the new lock. The previous passing record is in git history."
+  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8",
+  "firmwareSHA256": "c9beca7fddb6081e05cb8ae52c9ec875da010f6636b7341136df565f2a5b925f",
+  "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+  "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+  "protocol": "10 deterministic axoloty/1 CBOR exchange cases over serial JSON Lines",
+  "result": "10/10 passed"
 }

@@ -1,9 +1,0 @@
-{
-  "schemaVersion": 1,
-  "profile": "esp32c6-zenoh",
-  "check": "carrier-diagnostics-build",
-  "tier": "build",
-  "status": "unexecuted",
-  "recordedAt": "2026-10-29",
-  "reason": "The lock moved from Core v0.9.0 (f8c201f717e8) to Core v0.10.0 (087bd9bb1bfb563d0347799245ea4dd43e509bc9); this check has not been rerun against the new lock. The previous passing record is in git history."
-}

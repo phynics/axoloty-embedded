@@ -3,7 +3,132 @@
   "profile": "esp32c6-sensor-node-zenoh",
   "check": "sensor-node-recovery-cycles",
   "tier": "device",
-  "status": "unexecuted",
+  "status": "passed",
   "recordedAt": "2026-11-02",
-  "reason": "The lock moved from Core v0.10.0 (087bd9bb1bfb) to Core v1.0.1 (78f485fcfdc0c8490c75066725bcd27100262128); this check has not been rerun against the new lock. The previous passing record is in git history."
+  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8",
+  "firmwareSHA256": "ed677dffa96f581a7933e072cb9ebfdcd0ed94ad13175a6108b3359adc330ad3",
+  "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+  "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+  "protocol": "14 metrics samples across 6 carrier outages in one boot, with host-observed Advertise, Resolve and readings before the first and after each",
+  "result": "14/14 passed",
+  "runtimeResourceMetrics": {
+    "mode": "recovery",
+    "samples": 14,
+    "readings": 70,
+    "resolves": 7,
+    "minimumFreeHeapBytes": 270100,
+    "stackRemainingBytes": 7128,
+    "stackSizeBytes": 36864,
+    "readingLastUs": 3604,
+    "readingMaxUs": 3942,
+    "frameLastUs": 3994,
+    "frameMaxUs": 4008,
+    "recovery": {
+      "cycles": 6,
+      "maximumReadvertisedAfterMs": 2820,
+      "freeHeapAfterEachCycleBytes": [
+        280516,
+        280344,
+        280200,
+        280004,
+        279928,
+        279868
+      ],
+      "outages": [
+        {
+          "outageMs": 20609,
+          "sessionEndedAfterMs": 1980,
+          "sessionEndedStages": [
+            "serving",
+            "connect",
+            "connect",
+            "connect"
+          ],
+          "readvertisedAfterMs": 823,
+          "freeHeapAfterBytes": 280516,
+          "minimumFreeHeapBytes": 270100,
+          "stackRemainingBytes": 7128
+        },
+        {
+          "outageMs": 20613,
+          "sessionEndedAfterMs": 3909,
+          "sessionEndedStages": [
+            "serving",
+            "connect",
+            "connect",
+            "connect"
+          ],
+          "readvertisedAfterMs": 2709,
+          "freeHeapAfterBytes": 280344,
+          "minimumFreeHeapBytes": 270100,
+          "stackRemainingBytes": 7128
+        },
+        {
+          "outageMs": 20613,
+          "sessionEndedAfterMs": 2034,
+          "sessionEndedStages": [
+            "serving",
+            "connect",
+            "connect",
+            "connect"
+          ],
+          "readvertisedAfterMs": 846,
+          "freeHeapAfterBytes": 280200,
+          "minimumFreeHeapBytes": 270100,
+          "stackRemainingBytes": 7128
+        },
+        {
+          "outageMs": 20812,
+          "sessionEndedAfterMs": 3957,
+          "sessionEndedStages": [
+            "serving",
+            "connect",
+            "connect",
+            "connect"
+          ],
+          "readvertisedAfterMs": 2594,
+          "freeHeapAfterBytes": 280004,
+          "minimumFreeHeapBytes": 270100,
+          "stackRemainingBytes": 7128
+        },
+        {
+          "outageMs": 20612,
+          "sessionEndedAfterMs": 2003,
+          "sessionEndedStages": [
+            "serving",
+            "connect",
+            "connect",
+            "connect"
+          ],
+          "readvertisedAfterMs": 817,
+          "freeHeapAfterBytes": 279928,
+          "minimumFreeHeapBytes": 270100,
+          "stackRemainingBytes": 7128
+        },
+        {
+          "outageMs": 20611,
+          "sessionEndedAfterMs": 4012,
+          "sessionEndedStages": [
+            "serving",
+            "connect",
+            "connect",
+            "connect"
+          ],
+          "readvertisedAfterMs": 2820,
+          "freeHeapAfterBytes": 279868,
+          "minimumFreeHeapBytes": 270100,
+          "stackRemainingBytes": 7128
+        }
+      ],
+      "sessions": 24
+    },
+    "deviceBoots": 1
+  },
+  "configuration": {
+    "name": "production",
+    "sdkconfigSha256": "3e14e6acd8df3ff2a35dd6d13aeba1a687787f388a71d0b85765e787e82378bc",
+    "networkConfigured": true,
+    "networkPlaceholder": false
+  },
+  "firmwareImageBytes": 739632
 }

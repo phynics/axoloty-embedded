@@ -215,3 +215,20 @@ history is not preserved across the split:
 
 An imported record keeps the status it originally had. Importing does not
 re-prove anything.
+
+## Retired records
+
+A record whose check no harness produces any more, and that another check
+supersedes, is deleted rather than rewritten, with the reason kept here. The git
+history holds the old text.
+
+- `esp32c6-zenoh`: `carrier-diagnostics-build`, `carrier-diagnostics-device`,
+  `embedded-zenoh-smoke` and `zenoh-pico-compile` were hand-written
+  `unexecuted` records that no script writes. None was a required check. The
+  firmware build and link, the serial smoke (`embedded-swift-smoke-v3`) and the
+  device checks (`network-test`, `agent-test`, `host-interop`,
+  `c-only-carrier-scenario`, `router-restart`, `wifi-recovery`) supersede them, and
+  `firmware-build` and `reproducible-build` are written from the clean builds of the
+  released image. Retired under
+  [#118](https://github.com/phynics/axoloty-embedded/issues/118) at
+  `1.0.1-embedded.1`.

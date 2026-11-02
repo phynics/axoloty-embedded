@@ -1,9 +1,18 @@
 {
   "schemaVersion": 1,
   "profile": "esp32c6-zenoh",
-  "check": "firmware-build",
   "tier": "build",
-  "status": "unexecuted",
+  "status": "passed",
   "recordedAt": "2026-11-02",
-  "reason": "The lock moved from Core v0.10.0 (087bd9bb1bfb) to Core v1.0.1 (78f485fcfdc0c8490c75066725bcd27100262128); this check has not been rerun against the new lock. The previous passing record is in git history."
+  "check": "firmware-build",
+  "result": "ESP-IDF image built and linked for the esp32c6-zenoh profile from firmware source revision 633984ffbeace88d877d4f3f06f2d07c8fed96d2 against locked Core 78f485fcfdc0c8490c75066725bcd27100262128. Build provenance reports firmware dirty=false, Core dirty=false and sourceCopied=false. Device qualification is recorded by the other checks of this profile.",
+  "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+  "firmwareSHA256": "8b6b82512a65c1d69d2ec41cfbfa675a8853cd3693c8b74096554613f938777b",
+  "firmwareSizeBytes": 674704,
+  "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+  "toolchain": "axoloty-embedded-dev image sha256:95649588463be1f62c2453761c11e191ad29faf839aeaae4c58a317d5f930688 \u2014 Swift version 6.4 (swift-6.4-RELEASE), ESP-IDF v5.4, target esp32c6",
+  "dockerfileSHA256": "34c2b624b658ca77e06444cc23025d387fd9c84f624928aa6b0ed7a7036469e4",
+  "coreContractSHA256": "8c94b7edf5dede29592121decc5aba2f2e66e68cd540195c327e78165bcd9014",
+  "configurationFingerprint": "1070d307314742717d3f37adddd27d93d884d55e8dbeaf912332e6b73a5801ba",
+  "provenanceRunId": "reproducible-1"
 }

@@ -3,7 +3,45 @@
   "profile": "esp32c6-sensor-node-zenoh",
   "check": "sensor-node-recovery",
   "tier": "device",
-  "status": "unexecuted",
+  "status": "passed",
   "recordedAt": "2026-11-02",
-  "reason": "The lock moved from Core v0.10.0 (087bd9bb1bfb) to Core v1.0.1 (78f485fcfdc0c8490c75066725bcd27100262128); this check has not been rerun against the new lock. The previous passing record is in git history."
+  "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8",
+  "firmwareSHA256": "ed677dffa96f581a7933e072cb9ebfdcd0ed94ad13175a6108b3359adc330ad3",
+  "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+  "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+  "protocol": "4 metrics samples across 1 carrier outage in one boot, with host-observed Advertise, Resolve and readings before the first and after each",
+  "result": "4/4 passed",
+  "runtimeResourceMetrics": {
+    "mode": "recovery",
+    "samples": 4,
+    "readings": 20,
+    "resolves": 2,
+    "minimumFreeHeapBytes": 274332,
+    "stackRemainingBytes": 7268,
+    "stackSizeBytes": 36864,
+    "readingLastUs": 3599,
+    "readingMaxUs": 3765,
+    "frameLastUs": 3993,
+    "frameMaxUs": 3993,
+    "recovery": {
+      "outageMs": 20613,
+      "sessionEndedAfterMs": 1933,
+      "sessionEndedStages": [
+        "serving",
+        "connect",
+        "connect",
+        "connect"
+      ],
+      "readvertisedAfterMs": 772,
+      "sessions": 4
+    },
+    "deviceBoots": 1
+  },
+  "configuration": {
+    "name": "production",
+    "sdkconfigSha256": "3e14e6acd8df3ff2a35dd6d13aeba1a687787f388a71d0b85765e787e82378bc",
+    "networkConfigured": true,
+    "networkPlaceholder": false
+  },
+  "firmwareImageBytes": 739632
 }

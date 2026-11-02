@@ -1,0 +1,278 @@
+{
+  "schemaVersion": 2,
+  "mode": "release",
+  "profile": "esp32c6-zenoh",
+  "application": "device-smoke-agent",
+  "platform": "esp32c6-idf",
+  "board": "ESP32-C6-DevKitC-1",
+  "transport": {
+    "name": "zenoh-pico",
+    "backend": "eclipse-zenoh/zenoh-pico",
+    "component": "eclipse-zenoh/zenoh-pico",
+    "version": "1.10.0",
+    "revision": "96006957fddef401c20c8c2d813c2a630b666974",
+    "versionSource": "Platforms/esp32c6-idf/dependencies/zenoh-pico.lock.json"
+  },
+  "compatibility": {
+    "scope": "profile",
+    "status": "qualified",
+    "description": "Profile esp32c6-zenoh is qualified against Axoloty 1.0.1 (78f485fcfdc0) on ESP32-C6-DevKitC-1."
+  },
+  "axoloty": {
+    "version": "1.0.1",
+    "tag": "v1.0.1",
+    "sha": "78f485fcfdc0c8490c75066725bcd27100262128",
+    "dirty": false,
+    "contractSha256": "8c94b7edf5dede29592121decc5aba2f2e66e68cd540195c327e78165bcd9014"
+  },
+  "embedded": {
+    "version": "1.0.1-embedded.1",
+    "sha": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+    "dirty": false
+  },
+  "toolchain": {
+    "swift": "Swift version 6.4 (swift-6.4-RELEASE)\nTarget: x86_64-unknown-linux-gnu",
+    "sdk": "ESP-IDF v5.4",
+    "target": "esp32c6"
+  },
+  "configurationFingerprint": "1070d307314742717d3f37adddd27d93d884d55e8dbeaf912332e6b73a5801ba",
+  "image": {
+    "path": "axoloty-swift.bin",
+    "sha256": "8b6b82512a65c1d69d2ec41cfbfa675a8853cd3693c8b74096554613f938777b",
+    "byteCount": 674704
+  },
+  "resources": {
+    "available": true,
+    "report": {
+      "schemaVersion": 1,
+      "kind": "build-size",
+      "profile": "esp32c6-zenoh",
+      "application": "device-smoke-agent",
+      "platform": "esp32c6-idf",
+      "transport": "zenoh-pico",
+      "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+      "configuration": {
+        "name": "default",
+        "sdkconfigSha256": "c0ceb580cd73de26a3e11cf67a5a85d17489b1887aa3dbe37c838e61cadb9ad9",
+        "networkConfigured": false
+      },
+      "metrics": {
+        "imageBytes": 674704,
+        "flashTextBytes": 498932,
+        "flashRodataBytes": 87368,
+        "iramTextBytes": 78092,
+        "initializedDataBytes": 10213,
+        "dramBssBytes": 69323,
+        "staticRamBytes": 157628
+      },
+      "image": {
+        "bytes": 674704,
+        "sha256": "8b6b82512a65c1d69d2ec41cfbfa675a8853cd3693c8b74096554613f938777b",
+        "appPartitionBytes": 2031616,
+        "partitionHeadroomBytes": 1356912
+      },
+      "budgets": {
+        "basis": "Smoke harness image, not the production application. Measured at firmware revision 71cd8fb (Core v1.0.1, 2026-11-02) plus 10 percent, rounded up to the next KiB. See docs/resource-budgets.md.",
+        "build": {
+          "imageBytes": 742400,
+          "flashTextBytes": 548864,
+          "staticRamBytes": 174080,
+          "dramBssBytes": 76800
+        }
+      },
+      "enforcement": {
+        "status": "passed",
+        "results": [
+          {
+            "metric": "imageBytes",
+            "measured": 674704,
+            "budget": 742400,
+            "headroomBytes": 67696,
+            "passed": true
+          },
+          {
+            "metric": "flashTextBytes",
+            "measured": 498932,
+            "budget": 548864,
+            "headroomBytes": 49932,
+            "passed": true
+          },
+          {
+            "metric": "staticRamBytes",
+            "measured": 157628,
+            "budget": 174080,
+            "headroomBytes": 16452,
+            "passed": true
+          },
+          {
+            "metric": "dramBssBytes",
+            "measured": 69323,
+            "budget": 76800,
+            "headroomBytes": 7477,
+            "passed": true
+          }
+        ]
+      }
+    }
+  },
+  "qualification": {
+    "status": "qualified",
+    "requiredChecks": [
+      {
+        "check": "embedded-swift-smoke-v3",
+        "artifact": "release",
+        "records": 1,
+        "units": 1
+      },
+      {
+        "check": "network-test",
+        "artifact": "variant",
+        "records": 1,
+        "units": 1
+      },
+      {
+        "check": "agent-test",
+        "artifact": "variant",
+        "records": 2,
+        "units": 2
+      },
+      {
+        "check": "c-only-carrier-scenario",
+        "artifact": "variant",
+        "records": 1,
+        "units": 1
+      },
+      {
+        "check": "host-interop",
+        "artifact": "variant",
+        "records": 2,
+        "units": 1
+      },
+      {
+        "check": "router-restart",
+        "artifact": "variant",
+        "records": 1,
+        "units": 1
+      },
+      {
+        "check": "wifi-recovery",
+        "artifact": "variant",
+        "records": 1,
+        "units": 1
+      }
+    ],
+    "outstanding": [],
+    "evidence": [
+      {
+        "path": "docs/evidence/esp32c6-zenoh-agent-test-a.json",
+        "check": "agent-test",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "c9beca7fddb6081e05cb8ae52c9ec875da010f6636b7341136df565f2a5b925f",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8"
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-agent-test-b.json",
+        "check": "agent-test",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "1e435d5f848611f4d67b770197931a155482eb124f0aa72e048d351f88fe1f84",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4e:52:dc"
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-c-only-carrier-scenario.json",
+        "check": "c-only-carrier-scenario",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "d52707b0b09e4553b885dddea2586c0ad8cc8c53e34ffc69bdaaf60fb741aebd",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8"
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-embedded-swift-smoke-v3.json",
+        "check": "embedded-swift-smoke-v3",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "8b6b82512a65c1d69d2ec41cfbfa675a8853cd3693c8b74096554613f938777b",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8"
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-firmware-build.json",
+        "check": "firmware-build",
+        "tier": "build",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "8b6b82512a65c1d69d2ec41cfbfa675a8853cd3693c8b74096554613f938777b",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": null
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-host-interop-a.json",
+        "check": "host-interop",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "1d9272352f96f56f9ddd5da57e2cbc6f7c632f95f83b87bc569faa1a81b2614f",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8"
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-host-interop-b.json",
+        "check": "host-interop",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "9b3def45dedb136b8af8402c41fe660e82051127b64b51b3adb2dc7d1910a851",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8"
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-network-test.json",
+        "check": "network-test",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "2d3e586be783352c501a21341eea284a2bd74e0af818152fafb4ea40e4f8baff",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8"
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-reproducible-build.json",
+        "check": "reproducible-build",
+        "tier": "build",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "8b6b82512a65c1d69d2ec41cfbfa675a8853cd3693c8b74096554613f938777b",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": null
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-router-restart.json",
+        "check": "router-restart",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "9b3def45dedb136b8af8402c41fe660e82051127b64b51b3adb2dc7d1910a851",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8"
+      },
+      {
+        "path": "docs/evidence/esp32c6-zenoh-wifi-recovery.json",
+        "check": "wifi-recovery",
+        "tier": "device",
+        "status": "passed",
+        "coreRevision": "78f485fcfdc0c8490c75066725bcd27100262128",
+        "firmwareSHA256": "9b3def45dedb136b8af8402c41fe660e82051127b64b51b3adb2dc7d1910a851",
+        "firmwareRevision": "633984ffbeace88d877d4f3f06f2d07c8fed96d2",
+        "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8"
+      }
+    ]
+  }
+}
