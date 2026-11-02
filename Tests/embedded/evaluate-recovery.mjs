@@ -60,6 +60,7 @@ export function recoveryRecord({ scenario, runLog, routerLog, runStatus, hostRec
     ...base,
     device: hostRecord.device,
     firmwareSHA256: hostRecord.firmwareSHA256,
+    firmwareRevision: hostRecord.firmwareRevision,
     coreRevision: hostRecord.coreRevision,
     protocol: SCENARIOS[scenario].protocol,
   };

@@ -52,7 +52,7 @@ fs.rmSync(dir, { recursive: true, force: true });
 
 // The evidence record carries the deadline and the time the run needed.
 const proof = {
-  result: "passed", firmwareSha256: "a".repeat(64), coreSha: "b".repeat(40),
+  result: "passed", firmwareSha256: "a".repeat(64), firmwareRevision: "c".repeat(40), coreSha: "b".repeat(40),
   smoke: { validation: { passed: true, counts: { passed: 3 } }, monitor: { end: "completed", deadlineSeconds: 240, elapsedSeconds: 97 } },
 };
 const record = deviceEvidenceRecord(proof, { device: "unit" }, { profile: "p", check: "c", cases: "cases" });

@@ -202,6 +202,7 @@ function writeEvidence() {
     result: "passed",
     smoke: { validation },
     firmwareSha256: provenance.artifact.sha256,
+    firmwareRevision: provenance.firmware?.revision,
     coreSha: provenance.core.sha,
   };
   const cases = mode === "recovery"

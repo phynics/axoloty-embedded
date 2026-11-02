@@ -25,6 +25,7 @@ docs/evidence/<profile>-<check>.json
   "recordedAt": "2026-09-17",
   "device": "ESP32-C6-DevKitC-1 v1.2",
   "firmwareSHA256": "<64 lowercase hex characters of the flashed artifact>",
+  "firmwareRevision": "<the 40-character commit SHA in the build provenance>",
   "coreRevision": "<the 40-character Axoloty commit SHA that was built>",
   "protocol": "312 deterministic cases over serial JSON Lines",
   "result": "312/312 passed"
@@ -52,7 +53,7 @@ firmware image; a device run must name the board and the protocol it drove.
 |---|---|
 | `build` | `firmwareSHA256`, `firmwareRevision`, `coreRevision`, `result`, `toolchain` |
 | `component` | `component`, `artifactSHA256`, `coreRevision`, `result`, `toolchain` |
-| `device` | `firmwareSHA256`, `coreRevision`, `result`, `device`, `protocol` |
+| `device` | `firmwareSHA256`, `coreRevision`, `result`, `device`, `protocol`; a run written by the current harnesses also names `firmwareRevision` |
 
 A `build` record names the firmware source revision it built
 (`firmwareRevision`). Nothing in the image carries that revision, so a
@@ -124,10 +125,23 @@ passes (which removes it) or an operator removes the file after reading it. A
 check that passed for image A and failed for image B therefore cannot certify
 either. The run still exits nonzero.
 
-A passed record is not tied to the firmware commit by itself: an
-`artifact: release` check needs a record that names the exact image being
-released ([releases](releases.md)), and a variant check is rerun by the
-requalification before a release.
+## A record names the firmware it ran
+
+Every device run writes `firmwareRevision`, the commit in the build's
+`build-provenance.json` `firmware.revision`, beside `firmwareSHA256`. A writer
+refuses to record a pass without it. A checksum says which image ran; the revision
+says which firmware it came from, and a variant image's checksum can say nothing
+else, because the image embeds network configuration or a role.
+
+An `artifact: release` check needs a record naming the exact image being released.
+An `artifact: variant` check needs a record whose `firmwareRevision` equals the
+certificate's `embedded.sha`. A pass from older firmware, or one that names no
+revision, does not qualify: the generator and the validator both say which revision
+to rerun at ([releases](releases.md#requalifying)).
+
+The validator reads `docs/evidence/` itself. A manifest must cite each record as
+it is, must cite every record of a required check and every failed record, and the
+required checks are judged from the records, not from what the manifest says.
 
 ## Unexecuted is a legal state
 

@@ -5,6 +5,7 @@
 
 import copy
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -86,8 +87,11 @@ def manifest_document(lock, profile, transport):
                 "path": "docs/evidence/%s-smoke.json" % profile,
                 "check": "smoke",
                 "status": "passed",
+                "tier": "device",
                 "coreRevision": lock["revision"],
                 "firmwareSHA256": IMAGE_SHA,
+                "firmwareRevision": FIRMWARE_SHA,
+                "device": "ESP32-C6 fixture",
             }],
         },
     }
@@ -127,6 +131,7 @@ def fixture(repo, profile, transport):
         "recordedAt": "2026-09-22",
         "device": "ESP32-C6 fixture",
         "firmwareSHA256": IMAGE_SHA,
+        "firmwareRevision": FIRMWARE_SHA,
         "coreRevision": lock["revision"],
         "protocol": "fixture",
         "result": "passed",
@@ -249,7 +254,6 @@ with tempfile.TemporaryDirectory() as temporary:
         subprocess.run(generate, check=True, capture_output=True)
         require(run(repo, generated, "--require-qualified"), 0, "writer to manifest validation failed")
         # A preview uses the prepared revision, even when the profile names the lock.
-        import os
         preview_sha = "f" * 40
         profile_doc["core"] = {"revision": LOCK["revision"]}
         write_json(profile_path, profile_doc)
@@ -271,6 +275,8 @@ with tempfile.TemporaryDirectory() as temporary:
         write_json(prep_path, preparation)
         subprocess.run(["node", str(writer), str(binary), str(binary), str(partition), str(profile_path), str(policy_path), str(prep_path), str(sdkconfig_path), "configured", str(output), str(size_tool)], check=True, capture_output=True)
         valid_report = json.loads(output.read_text())
+        original["schemaVersion"] = 2
+        original["qualification"]["requiredChecks"] = profile_doc["qualification"]["requiredChecks"]
         with_report = copy.deepcopy(original)
         with_report["resources"] = {"available": True, "report": valid_report}
         write_json(manifest, with_report)
@@ -464,7 +470,6 @@ with tempfile.TemporaryDirectory() as temporary:
     document = json.loads(manifest.read_text(encoding="utf-8"))
     schema_two = copy.deepcopy(document)
     schema_two["schemaVersion"] = 2
-    schema_two["qualification"]["evidence"][0].update({"tier": "device", "device": "unit-a"})
     schema_two["qualification"]["requiredChecks"] = [{"check": "smoke", "artifact": "release", "records": 1, "units": 1}]
     write_json(manifest, schema_two)
     require(run(repo, manifest, "--require-qualified"), 0, "a complete schema 2 manifest was rejected")
@@ -523,5 +528,203 @@ with tempfile.TemporaryDirectory() as temporary:
         (lambda d: d["transport"].__setitem__("versionSource", "Platforms/esp32c6-idf/dependencies.lock"),
          "Zenoh manifest cited the SDK dependency manifest"),
     ], "Zenoh")
+
+    # --- docs/evidence decides, and a requalification can satisfy the rules. ---
+    # A dry run of what #73 will do, for both certified profiles with their real
+    # required checks: every record is written by the real evidence writer from one
+    # firmware revision, the real generator computes the manifest, and the
+    # validator accepts it. Then each way of keeping an old pass alive is refused.
+    if shutil.which("node"):
+        import hashlib
+        WRITER = ROOT / "Tests/embedded/write-device-evidence.mjs"
+        RECORD_WRITER = ROOT / "Tests/embedded/evidence-record.mjs"
+        GENERATOR = ROOT / "Platforms/esp32c6-idf/tools/write-release-manifest.mjs"
+        REVISION = "c" * 40
+        OLD_REVISION = "d" * 40
+
+        def write_record(repo, profile, check, name, status, image, revision, device):
+            """Writes one record through the real writers, as a device runner would."""
+            script = """
+const { deviceEvidenceRecord } = await import(process.env.DRY_WRITER);
+const { writeEvidenceRecord } = await import(process.env.DRY_RECORD_WRITER);
+const { output, profile, check, status, image, revision, device, core } = JSON.parse(process.env.DRY_SPEC);
+const proof = { result: "passed", smoke: { validation: { passed: true, counts: { passed: 1 } } },
+                firmwareSha256: image, firmwareRevision: revision, coreSha: core };
+const record = deviceEvidenceRecord(proof, { device }, { profile, check, cases: "fixture cases" });
+record.status = status;
+writeEvidenceRecord(record, output, { withheldDir: output + ".withheld" });
+"""
+            output = repo / "docs" / "evidence" / ("%s-%s-%s.json" % (profile, check, name))
+            output.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run(["node", "--input-type=module", "-e", script], env={**os.environ,
+                "DRY_WRITER": str(WRITER), "DRY_RECORD_WRITER": str(RECORD_WRITER), "DRY_SPEC": json.dumps({
+                    "output": str(output), "profile": profile, "check": check, "status": status, "image": image,
+                    "revision": revision, "device": device, "core": LOCK["revision"]})},
+                check=True, capture_output=True, text=True)
+            return output
+
+        for profile, transport in (("esp32c6-mqtt", "mqtt-espidf"), ("esp32c6-zenoh", "zenoh-pico")):
+            dry = base / ("dry-run-" + profile)
+            published = fixture(dry, profile, transport)
+            published.unlink()
+            shutil.rmtree(dry / "docs" / "evidence")
+            required_checks = json.loads((ROOT / "Profiles" / profile / "profile.json").read_text(encoding="utf-8"))["qualification"]["requiredChecks"]
+            profile_path = dry / "Profiles" / profile / "profile.json"
+            dry_profile = json.loads(profile_path.read_text(encoding="utf-8"))
+            dry_profile["qualification"] = {"requiredChecks": required_checks}
+            write_json(profile_path, dry_profile)
+            artifact = base / (profile + ".bin")
+            artifact.write_bytes(profile.encode())
+            image = hashlib.sha256(profile.encode()).hexdigest()
+            preparation_path = base / (profile + "-preparation.json")
+            write_json(preparation_path, {"schemaVersion": 1, "status": "prepared", "core": {"sha": LOCK["revision"], "dirty": False}, "contractSHA256": "c" * 64})
+            provenance_path = base / (profile + "-provenance.json")
+            write_json(provenance_path, {"schemaVersion": 1, "status": "passed", "core": {"sha": LOCK["revision"], "dirty": False},
+                                         "firmware": {"revision": REVISION, "dirty": False},
+                                         "artifact": {"path": str(artifact), "sha256": image, "byteCount": len(profile)},
+                                         "toolchain": {"swift": "fixture", "espIdf": "fixture", "target": "esp32c6"}})
+            candidate = base / (profile + "-candidate.json")
+            environment = {key: value for key, value in os.environ.items() if key != "AXOLOTY_PREVIEW_CORE_REVISION"}
+
+            def generate_candidate():
+                subprocess.run(["node", str(GENERATOR), str(dry), str(profile_path), str(dry / "axoloty-core.lock.json"), str(dry / "VERSION"),
+                                str(preparation_path), str(provenance_path), str(candidate)], check=True, capture_output=True, env=environment)
+                return json.loads(candidate.read_text(encoding="utf-8"))
+
+            variants = []
+            for required in required_checks:
+                for index in range(required["records"]):
+                    record_image = image if required["artifact"] == "release" else hashlib.sha256(("%s%d" % (required["check"], index)).encode()).hexdigest()
+                    device = "unit-%d" % (index % required["units"])
+                    path = write_record(dry, profile, required["check"], str(index), "passed", record_image, REVISION, device)
+                    if required["artifact"] == "variant":
+                        variants.append((required["check"], str(index), record_image, device, path))
+            qualified = generate_candidate()
+            if qualified["qualification"]["status"] != "qualified":
+                raise SystemExit("%s dry run: the generator did not qualify: %s" % (profile, qualified["qualification"]["outstanding"]))
+            if qualified["embedded"]["sha"] != REVISION:
+                raise SystemExit("%s dry run: the certificate does not name the build's revision" % profile)
+            require(run(dry, candidate, "--require-qualified"), 0, "%s dry run: the validator refused the generated certificate" % profile)
+            published.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(candidate, published)
+            require(run(dry, published, "--require-qualified"), 0, "%s dry run: the published certificate did not validate" % profile)
+
+            check, name, variant_image, device, variant_path = variants[0]
+            fresh = variant_path.read_text(encoding="utf-8")
+
+            def expect_refused(document, message, reason):
+                write_json(published, document)
+                result = run(dry, published, "--require-qualified")
+                require(result, 1, "%s: %s" % (profile, message))
+                if reason not in result.stderr:
+                    raise SystemExit("%s: %s: expected %r in:\n%s" % (profile, message, reason, result.stderr))
+                write_json(published, qualified)
+
+            # A failure beside the pass that the manifest leaves out (#134 follow-up).
+            sidecar = write_record(dry, profile, check, name, "failed", variant_image, REVISION, device)
+            sidecar = variant_path.with_name(variant_path.stem + ".failed.json")
+            if not sidecar.exists():
+                raise SystemExit("%s: the writer did not carry the failure beside the pass" % profile)
+            expect_refused(qualified, "a manifest omitting a failure sidecar validated", "is a failed record of this profile and the manifest does not cite it")
+            # Citing the sidecar does not help: the check has a failed record.
+            citing = copy.deepcopy(qualified)
+            citing["qualification"]["evidence"].append({
+                "path": "docs/evidence/" + sidecar.name, "check": check, "tier": "device", "status": "failed",
+                "coreRevision": LOCK["revision"], "firmwareSHA256": variant_image, "firmwareRevision": REVISION, "device": device})
+            expect_refused(citing, "a manifest citing a failure sidecar validated", "has a record that did not pass for this build")
+            # Restating the failure as a pass is caught against the record.
+            restated = copy.deepcopy(citing)
+            restated["qualification"]["evidence"][-1]["status"] = "passed"
+            expect_refused(restated, "a manifest restating a failure as a pass validated", "cites status 'passed', but the record says 'failed'")
+            sidecar.unlink()
+            # A record the manifest leaves out, and one it invents.
+            required_only = copy.deepcopy(qualified)
+            required_only["qualification"]["evidence"] = [e for e in required_only["qualification"]["evidence"] if e["path"] != "docs/evidence/" + variant_path.name]
+            expect_refused(required_only, "a manifest omitting a required record validated", "the manifest does not cite it")
+            invented = copy.deepcopy(qualified)
+            invented["qualification"]["evidence"].append(dict(invented["qualification"]["evidence"][0], path="docs/evidence/%s-absent.json" % profile))
+            expect_refused(invented, "a manifest citing an absent record validated", "is not a record of this profile")
+            # A cited value that is not what the record says.
+            altered = copy.deepcopy(qualified)
+            altered["qualification"]["evidence"][0]["device"] = "another unit"
+            expect_refused(altered, "a manifest misquoting a record validated", "cites device")
+            # A smaller check list, or the older schema that had none.
+            fewer = copy.deepcopy(qualified)
+            fewer["qualification"]["requiredChecks"] = fewer["qualification"]["requiredChecks"][:1]
+            expect_refused(fewer, "a manifest dropping required checks validated", "does not match the profile")
+            older = copy.deepcopy(qualified)
+            older["schemaVersion"] = 1
+            expect_refused(older, "a schema 1 manifest skipped the required checks", "must be schema 2")
+
+            # The never-rerun case: a variant pass from older firmware, with the
+            # right Core and a valid checksum. The generator and the validator both
+            # refuse, and the message says what to do.
+            old_pass = json.loads(fresh)
+            old_pass["firmwareRevision"] = OLD_REVISION
+            write_json(variant_path, old_pass)
+            blocked = generate_candidate()
+            if blocked["qualification"]["status"] != "unqualified" or not any("rerun it at this revision" in item for item in blocked["qualification"]["outstanding"]):
+                raise SystemExit("%s: the generator qualified a variant from older firmware" % profile)
+            stale = copy.deepcopy(qualified)
+            for entry in stale["qualification"]["evidence"]:
+                if entry["path"] == "docs/evidence/" + variant_path.name:
+                    entry["firmwareRevision"] = OLD_REVISION
+            expect_refused(stale, "a variant pass from older firmware validated", "rerun it at this revision")
+            # A record that names no revision at all cannot qualify either.
+            legacy = json.loads(fresh)
+            legacy.pop("firmwareRevision")
+            write_json(variant_path, legacy)
+            for entry in stale["qualification"]["evidence"]:
+                if entry["path"] == "docs/evidence/" + variant_path.name:
+                    entry["firmwareRevision"] = None
+            expect_refused(stale, "a variant pass with no firmware revision validated", "rerun it at this revision")
+            # Rerunning it at this revision restores the certificate.
+            variant_path.write_text(fresh, encoding="utf-8")
+            require(run(dry, published, "--require-qualified"), 0, "%s: rerunning the variant did not restore the certificate" % profile)
+
+            # The next requalification: a rerun from newer firmware makes the
+            # published certificate stale, and its revocation record retires it, as a
+            # lock move requires. Without that step the certificate fails validation.
+            rerun = json.loads(fresh)
+            rerun["firmwareRevision"] = OLD_REVISION
+            rerun["firmwareSHA256"] = "e" * 64
+            write_json(variant_path, rerun)
+            stale_result = run(dry, published, "--require-qualified", "--allow-revoked")
+            require(stale_result, 1, "%s: a certificate whose record was rerun stayed valid" % profile)
+            if "needs a revocation record marking it superseded" not in stale_result.stderr:
+                raise SystemExit("%s: the stale certificate did not say what to do:\n%s" % (profile, stale_result.stderr))
+            write_json(dry / "releases" / "revocations" / profile / published.name, {
+                "schemaVersion": 1, "status": "revoked",
+                "manifestPath": "releases/%s/%s" % (profile, published.name),
+                "reason": "Superseded by the requalification.",
+            })
+            require(run(dry, published, "--require-qualified", "--allow-revoked"), 0, "%s: the superseded certificate did not leave through its revocation" % profile)
+
+    # The writer refuses to record a device run it cannot name a revision for.
+    if shutil.which("node"):
+        refused = subprocess.run(["node", "--input-type=module", "-e", """
+const { deviceEvidenceRecord } = await import(process.env.DRY_WRITER);
+deviceEvidenceRecord({ result: "passed", smoke: { validation: { passed: true, counts: {} } }, firmwareSha256: "a", coreSha: "b" }, { device: "u" }, { profile: "p", check: "c", cases: "x" });
+"""], env={**os.environ, "DRY_WRITER": str(ROOT / "Tests/embedded/write-device-evidence.mjs")}, capture_output=True, text=True)
+        if refused.returncode == 0 or "without the firmware revision" not in refused.stderr:
+            raise SystemExit("the evidence writer accepted a proof with no firmware revision")
+
+    # The exemption is exact: the two current certificates validate in this
+    # repository, and the same document naming another commit does not.
+    for key, commit in {"esp32c6-mqtt/0.10.0-embedded.2": "0b4bc08406f25b1a4cb61423cc955a2690c54a1c",
+                        "esp32c6-zenoh/0.10.0-embedded.2": "e6543e140b226001765c925de4e566c3e29cb5e0"}.items():
+        real = ROOT / "releases" / (key + ".json")
+        if not real.exists():
+            continue
+        result = run(ROOT, real, "--require-qualified", "--allow-revoked")
+        require(result, 0, "%s no longer validates" % key)
+        if result.stdout.startswith("ok"):
+            forged = json.loads(real.read_text(encoding="utf-8"))
+            if forged["embedded"]["sha"] != commit:
+                raise SystemExit("%s names another commit than the exemption" % key)
+            forged["embedded"]["sha"] = "e" * 40
+            forged_path = base / key.replace("/", "-")
+            write_json(forged_path, forged)
+            require(run(ROOT, forged_path, "--require-qualified"), 1, "%s stayed exempt under another commit" % key)
 
 print("release-manifest validator checks passed")

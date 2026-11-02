@@ -217,6 +217,7 @@ if (fs.existsSync(evidenceDir)) {
     if (record.status === "passed" || record.status === "failed") {
       entry.coreRevision = record.coreRevision ?? null;
       entry.firmwareSHA256 = record.firmwareSHA256 ?? null;
+      entry.firmwareRevision = record.firmwareRevision ?? null;
       entry.device = record.device ?? null;
     } else {
       entry.reason = record.reason ?? null;
@@ -246,12 +247,16 @@ for (const required of requiredChecks) {
     entry.coreRevision === preparation.core.sha &&
     (required.artifact === "release"
       ? entry.firmwareSHA256 === provenance.artifact.sha256
-      : /^[0-9a-f]{64}$/.test(entry.firmwareSHA256 ?? "")));
+      : /^[0-9a-f]{64}$/.test(entry.firmwareSHA256 ?? "") && entry.firmwareRevision === provenance.firmware.revision));
   const units = new Set(accepted.map(entry => entry.device).filter(Boolean)).size;
   if (records.length === 0) {
     outstanding.push(`${required.check} has no record`);
   } else if (accepted.length !== records.length) {
-    outstanding.push(`${required.check} has a record that did not pass for this build`);
+    const stale = required.artifact === "variant" && records.find(entry => entry.status === "passed" &&
+      entry.coreRevision === preparation.core.sha && entry.firmwareRevision !== provenance.firmware.revision);
+    outstanding.push(stale
+      ? `${required.check} has a record from firmware revision ${stale.firmwareRevision}, not this build's ${provenance.firmware.revision}; rerun it at this revision`
+      : `${required.check} has a record that did not pass for this build`);
   } else if (accepted.length < required.records) {
     outstanding.push(`${required.check} has ${accepted.length} of ${required.records} required records`);
   } else if (units < required.units) {

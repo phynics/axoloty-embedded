@@ -163,6 +163,7 @@ function writeEvidence() {
     result: "passed",
     smoke: { validation: { passed: true, counts: { passed: results.length } } },
     firmwareSha256: provenance.artifact.sha256,
+    firmwareRevision: provenance.firmware?.revision,
     coreSha: provenance.core.sha,
   };
   const record = deviceEvidenceRecord(proof, deviceManifest, {

@@ -8,8 +8,9 @@
 #   * the lock decides the Axoloty revision for a release;
 #   * VERSION decides the embedded version;
 #   * the profile decides the application, platform, transport, and board;
-#   * docs/evidence decides qualification, and a qualified manifest must cite a
-#     passed device record whose artifact and Core revision match this build.
+#   * docs/evidence decides qualification: the validator reads the records itself,
+#     a qualified manifest must cite them as they are, and every required check
+#     must be satisfied by them for this image, Core revision and firmware revision.
 #
 # Stdlib only, so it runs in the toolchain-free `repo` tier. The same validator
 # runs on every tracked manifest and on the manifest a release path is about to
@@ -46,6 +47,17 @@ SIZE_REPORT_GRANDFATHERED = frozenset({
     "esp32c6-zenoh/0.10.0-embedded.1",
     "esp32c6-zenoh/0.10.0-embedded.2",
 })
+
+# Certificates issued before evidence records named a firmware revision. They stay
+# valid through this closed map of exact `<profile>/<version>` to the firmware
+# commit each one names, and only for the revision comparison: the discovery of
+# their records still applies. Never add a new release here: every later
+# certificate must be qualified by variant records from its own revision. A
+# certificate that is superseded leaves through its revocation record instead.
+FIRMWARE_REVISION_GRANDFATHERED = {
+    "esp32c6-mqtt/0.10.0-embedded.2": "0b4bc08406f25b1a4cb61423cc955a2690c54a1c",
+    "esp32c6-zenoh/0.10.0-embedded.2": "e6543e140b226001765c925de4e566c3e29cb5e0",
+}
 
 
 def load(path):
@@ -319,13 +331,84 @@ def validate_evidence(record, path):
         revision = str(record.get("coreRevision", ""))
         if revision and not HEX40.fullmatch(revision):
             problems.append("%s: coreRevision must be a full commit SHA" % path)
+        firmware_revision = str(record.get("firmwareRevision", ""))
+        if firmware_revision and not HEX40.fullmatch(firmware_revision):
+            problems.append("%s: firmwareRevision must be a full commit SHA" % path)
     elif status == "unexecuted" and not record.get("reason"):
         problems.append("%s: an unexecuted record must state a reason" % path)
     return problems
 
 
-def required_check_problems(required_checks, entries, core_sha, image_sha):
-    """Return why the cited evidence does not satisfy the required checks."""
+def discover_evidence(repo_root, profile_name):
+    """Return every docs/evidence record of a profile, in the shape the generator cites."""
+    evidence_dir = os.path.join(repo_root, "docs", "evidence")
+    discovered = []
+    if not os.path.isdir(evidence_dir):
+        return discovered
+    for name in sorted(os.listdir(evidence_dir)):
+        if not name.endswith(".json"):
+            continue
+        record = load(os.path.join(evidence_dir, name))
+        if not isinstance(record, dict) or record.get("profile") != profile_name:
+            continue
+        entry = {"path": "docs/evidence/" + name, "check": record.get("check"),
+                 "tier": record.get("tier"), "status": record.get("status")}
+        if record.get("status") in {"passed", "failed"}:
+            entry.update(coreRevision=record.get("coreRevision"), firmwareSHA256=record.get("firmwareSHA256"),
+                         firmwareRevision=record.get("firmwareRevision"), device=record.get("device"))
+        else:
+            entry["reason"] = record.get("reason")
+        discovered.append(entry)
+    return discovered
+
+
+def cited_evidence_problems(cited, discovered, required_checks, compare_revision):
+    """Compare what a manifest cites with the records docs/evidence actually holds.
+
+    A manifest is a claim about those records, so it cannot be the source of them:
+    a list that leaves out `<name>.failed.json`, or restates a failed record as
+    passed, must not qualify anything.
+    """
+    problems = []
+    actual = {entry["path"]: entry for entry in discovered}
+    cited_paths = set()
+    for entry in cited:
+        if not isinstance(entry, dict):
+            continue
+        path = entry.get("path")
+        cited_paths.add(path)
+        record = actual.get(path)
+        if record is None:
+            # The path may be missing, or belong to another profile.
+            problems.append("evidence %r is not a record of this profile in docs/evidence" % (path,))
+            continue
+        for field in ("check", "tier", "status", "coreRevision", "firmwareSHA256", "firmwareRevision", "device", "reason"):
+            if field == "firmwareRevision" and not compare_revision:
+                continue
+            if entry.get(field) != record.get(field):
+                problems.append("evidence %s cites %s %r, but the record says %r; "
+                                "a certificate whose records were rerun needs a revocation record marking it superseded"
+                                % (path, field, entry.get(field), record.get(field)))
+    required = {item.get("check") for item in required_checks if isinstance(item, dict)} \
+        if isinstance(required_checks, list) else set()
+    for record in discovered:
+        if record["path"] in cited_paths:
+            continue
+        if record.get("status") == "failed":
+            problems.append("evidence %s is a failed record of this profile and the manifest does not cite it" % record["path"])
+        elif record.get("check") in required:
+            problems.append("evidence %s is a record of required check %s and the manifest does not cite it"
+                            % (record["path"], record.get("check")))
+    return problems
+
+
+def required_check_problems(required_checks, entries, core_sha, image_sha, firmware_revision=None):
+    """Return why the evidence does not satisfy the required checks.
+
+    `firmware_revision` is the commit the certificate names. A variant runs on its
+    own image, so its checksum cannot prove which firmware it came from; its
+    revision does. None means the certificate predates the rule.
+    """
     if not isinstance(required_checks, list) or not required_checks:
         return ["qualification.requiredChecks must name at least one check"]
     problems = []
@@ -345,12 +428,20 @@ def required_check_problems(required_checks, entries, core_sha, image_sha):
                     and entry.get("status") == "passed"
                     and entry.get("coreRevision") == core_sha
                     and (entry.get("firmwareSHA256") == image_sha if artifact == "release"
-                         else HEX64.fullmatch(str(entry.get("firmwareSHA256", ""))))]
+                         else (HEX64.fullmatch(str(entry.get("firmwareSHA256", "")))
+                               and (firmware_revision is None or entry.get("firmwareRevision") == firmware_revision)))]
         observed = {entry.get("device") for entry in accepted if is_nonempty_string(entry.get("device"))}
         if not records:
             problems.append("required check %s has no record" % check)
         elif len(accepted) != len(records):
-            problems.append("required check %s has a record that did not pass for this build" % check)
+            stale = [entry for entry in records if artifact == "variant" and firmware_revision is not None
+                     and entry.get("status") == "passed" and entry.get("coreRevision") == core_sha
+                     and entry.get("firmwareRevision") != firmware_revision]
+            if stale:
+                problems.append("required check %s has a record from firmware revision %s, not this certificate's %s; rerun it at this revision"
+                                % (check, stale[0].get("firmwareRevision"), firmware_revision))
+            else:
+                problems.append("required check %s has a record that did not pass for this build" % check)
         elif len(accepted) < record_count:
             problems.append("required check %s has %d of %d required records" % (check, len(accepted), record_count))
         elif len(observed) < units:
@@ -581,10 +672,24 @@ def validate(repo_root, manifest_path, require_qualified, allow_revoked):
             matching += 1
     if status == "qualified" and matching == 0:
         problems.append("a qualified manifest needs a passed evidence record for this Core revision and image checksum")
-    if manifest.get("schemaVersion") == 2:
-        outstanding = required_check_problems(qualification.get("requiredChecks"), entries, axoloty_sha, image_sha)
-        if status == "qualified":
-            problems.extend(outstanding)
+    if status == "qualified":
+        # docs/evidence decides, not the manifest's own account of it. The
+        # manifest's check list must also be the profile's, or a manifest could
+        # qualify itself by naming fewer checks or an older schema.
+        release_key = "%s/%s" % (profile_name, embedded.get("version"))
+        grandfathered = FIRMWARE_REVISION_GRANDFATHERED.get(release_key) == embedded.get("sha")
+        firmware_revision = None if grandfathered else embedded.get("sha")
+        required_checks = qualification.get("requiredChecks")
+        declared_checks = (profile.get("qualification") or {}).get("requiredChecks") if isinstance(profile, dict) else None
+        if declared_checks is not None:
+            if manifest.get("schemaVersion") != 2:
+                problems.append("a qualified manifest of a profile with required checks must be schema 2")
+            elif required_checks != declared_checks:
+                problems.append("qualification.requiredChecks does not match the profile")
+        discovered = discover_evidence(repo_root, profile_name) if is_nonempty_string(profile_name) else []
+        problems.extend(cited_evidence_problems(entries, discovered, required_checks, not grandfathered))
+        if manifest.get("schemaVersion") == 2:
+            problems.extend(required_check_problems(required_checks, discovered, axoloty_sha, image_sha, firmware_revision))
     if require_qualified and status != "qualified":
         problems.append("this manifest is not qualified; a published release must be")
     if revocation is not None and not allow_revoked:
