@@ -147,7 +147,10 @@ manifest.
 Evidence commits move `HEAD`, and the revision comparison is exact. So one profile
 is requalified from one commit:
 
-1. Commit everything the release needs first: `VERSION`, the lock, budgets.
+1. Commit everything the release needs first: `VERSION`, the lock, budgets, and a
+   revocation record marking the profile's current certificate superseded. Without
+   it the first rerun record makes that certificate fail validation, and the next
+   build's invariants stop the requalification.
 2. From that clean commit, run every required check for the profile. Leave the
    records uncommitted under `docs/evidence/`; the build's dirty check excludes that
    directory because it is output, not firmware input.

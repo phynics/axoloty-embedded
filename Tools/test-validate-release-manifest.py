@@ -682,6 +682,24 @@ writeEvidenceRecord(record, output, { withheldDir: output + ".withheld" });
             variant_path.write_text(fresh, encoding="utf-8")
             require(run(dry, published, "--require-qualified"), 0, "%s: rerunning the variant did not restore the certificate" % profile)
 
+            # The next requalification: a rerun from newer firmware makes the
+            # published certificate stale, and its revocation record retires it, as a
+            # lock move requires. Without that step the certificate fails validation.
+            rerun = json.loads(fresh)
+            rerun["firmwareRevision"] = OLD_REVISION
+            rerun["firmwareSHA256"] = "e" * 64
+            write_json(variant_path, rerun)
+            stale_result = run(dry, published, "--require-qualified", "--allow-revoked")
+            require(stale_result, 1, "%s: a certificate whose record was rerun stayed valid" % profile)
+            if "needs a revocation record marking it superseded" not in stale_result.stderr:
+                raise SystemExit("%s: the stale certificate did not say what to do:\n%s" % (profile, stale_result.stderr))
+            write_json(dry / "releases" / "revocations" / profile / published.name, {
+                "schemaVersion": 1, "status": "revoked",
+                "manifestPath": "releases/%s/%s" % (profile, published.name),
+                "reason": "Superseded by the requalification.",
+            })
+            require(run(dry, published, "--require-qualified", "--allow-revoked"), 0, "%s: the superseded certificate did not leave through its revocation" % profile)
+
     # The writer refuses to record a device run it cannot name a revision for.
     if shutil.which("node"):
         refused = subprocess.run(["node", "--input-type=module", "-e", """

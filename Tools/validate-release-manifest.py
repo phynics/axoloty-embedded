@@ -386,7 +386,8 @@ def cited_evidence_problems(cited, discovered, required_checks, compare_revision
             if field == "firmwareRevision" and not compare_revision:
                 continue
             if entry.get(field) != record.get(field):
-                problems.append("evidence %s cites %s %r, but the record says %r"
+                problems.append("evidence %s cites %s %r, but the record says %r; "
+                                "a certificate whose records were rerun needs a revocation record marking it superseded"
                                 % (path, field, entry.get(field), record.get(field)))
     required = {item.get("check") for item in required_checks if isinstance(item, dict)} \
         if isinstance(required_checks, list) else set()
