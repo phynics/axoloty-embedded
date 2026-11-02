@@ -418,3 +418,40 @@ failed before the board ran firmware (the host observer could not open a Zenoh s
 and the same run passed on the next attempt; both are listed in the
 description of the requalification pull request for
 [#73](https://github.com/phynics/axoloty-embedded/issues/73).
+
+## The `esp32c6-mqtt` smoke image baseline
+
+Closes the data request of [#120](https://github.com/phynics/axoloty-embedded/issues/120).
+`esp32c6-mqtt` still speaks `coaty/3` JSON, so the smoke image is the image the issue
+describes. The figures are for the released smoke image, not the production application,
+and they are smoke-harness figures, not budgets.
+
+| | |
+|---|---|
+| Firmware revision | `633984ffbeace88d877d4f3f06f2d07c8fed96d2` |
+| Core revision | `78f485fcfdc0c8490c75066725bcd27100262128` (`v1.0.1`) |
+| Image SHA-256 | `faef77664343de7bf5710a7fec4d5d81f186f1084b3e96064f966c4a081bd018` |
+| Board | 40:4c:ca:ff:fe:4d:8c:e8 |
+| Smoke result | 312/312 passed (`docs/evidence/esp32c6-mqtt-embedded-swift-smoke-v2.json`) |
+| Image | 673,296 B |
+| Flash text | 504,510 B |
+| Flash read-only data | 79,736 B |
+| Static RAM (instruction RAM, initialized data, zeroed data) | 163,756 B |
+| `.bss` | 74,803 B |
+| Free internal heap at completion | 228,204 B |
+| Minimum free internal heap | 226,148 B |
+| Largest free internal block | 200,704 B |
+| Main stack remaining (minimum, `uxTaskGetStackHighWaterMark`) | 3,140 B of 131,072 B |
+
+The build figures are the `resources` report in
+`releases/esp32c6-mqtt/1.0.1-embedded.1.json`. The runtime figures are the `metrics` of the
+`completion` record of the smoke run on 2026-11-02, read from its serial log (kept in the
+run's scratch directory, not tracked). The record, verbatim:
+
+```json
+{"schemaVersion":2,"runId":"embedded-swift-smoke-v2","sequence":314,"caseId":"completion","operation":"complete","stage":"completion","status":"completed","checksum":3364883532,"counts":{"passed":312,"failed":0},"finalChecksum":3364883532,"metrics":{"freeInternalHeap":228204,"minimumFreeInternalHeap":226148,"largestInternalBlock":200704,"mainStackHighWater":3140,"mainStackSize":131072,"resetReason":11,"hotPathAllocations":0,"topicParseP50ns":9687,"topicParseP95ns":9687,"readerP50ns":117230,"readerP95ns":117230,"dtoDecodeP50ns":142554,"dtoDecodeP95ns":142555,"dtoEncodeP50ns":184924,"dtoEncodeP95ns":184943,"combinedP50ns":166544,"combinedP95ns":166565,"borrowedP50ns":10298,"borrowedP95ns":10298}}
+```
+
+The smoke application runs with the 128 KiB main stack of `sdkconfig.defaults`; the
+production configuration uses 36 KiB. The parse timings are in
+[esp32c6-wire-parse-time.md](evidence/esp32c6-wire-parse-time.md).
