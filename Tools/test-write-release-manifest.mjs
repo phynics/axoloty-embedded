@@ -144,7 +144,7 @@ try {
   const evidenceDir = path.join(workspace, "docs", "evidence");
   const passed = (check, suffix, device, firmwareSHA256) => writeJson(
     path.join(evidenceDir, `esp32c6-mqtt-${check}${suffix}.json`),
-    { profile: "esp32c6-mqtt", check, tier: "device", status: "passed", device, firmwareSHA256, coreRevision: CORE_SHA });
+    { profile: "esp32c6-mqtt", check, tier: "device", status: "passed", device, firmwareSHA256, firmwareRevision: FIRMWARE_SHA, coreRevision: CORE_SHA });
   const qualification = () => {
     const output = path.join(workspace, "out", "gate.json");
     generate(workspace, gateProfile, output);
@@ -177,7 +177,7 @@ try {
     const originalError = console.error;
     console.error = () => {};
     try {
-      writeEvidenceRecord({ profile: "esp32c6-mqtt", check: "interop", tier: "device", status, device: "unit-a", firmwareSHA256, coreRevision: CORE_SHA, ...(status === "unexecuted" ? { reason: "fixture" } : {}) }, interopRecord, { withheldDir: path.join(workspace, "withheld") });
+      writeEvidenceRecord({ profile: "esp32c6-mqtt", check: "interop", tier: "device", status, device: "unit-a", firmwareSHA256, firmwareRevision: FIRMWARE_SHA, coreRevision: CORE_SHA, ...(status === "unexecuted" ? { reason: "fixture" } : {}) }, interopRecord, { withheldDir: path.join(workspace, "withheld") });
     } finally { console.error = originalError; }
   };
   writeThrough("failed", "8".repeat(64));
@@ -188,6 +188,19 @@ try {
   expectBlocked(/interop has a record that did not pass/, "an unexecuted attempt cleared a recorded failure");
   writeThrough("passed", "8".repeat(64));
   assert.equal(qualification().status, "qualified", "a later pass did not clear the failure");
+
+  // A variant pass from another firmware revision cannot certify this one, even
+  // with the right Core and a well-formed checksum: the never-rerun case.
+  const staleRecord = path.join(evidenceDir, "esp32c6-mqtt-exchange-b.json");
+  const freshExchange = fs.readFileSync(staleRecord, "utf8");
+  writeJson(staleRecord, { ...JSON.parse(freshExchange), firmwareRevision: "9".repeat(40) });
+  expectBlocked(/exchange has a record from firmware revision 9{40}, not this build's b{40}; rerun it at this revision/, "a variant pass from older firmware qualified");
+  const legacy = JSON.parse(freshExchange);
+  delete legacy.firmwareRevision;
+  writeJson(staleRecord, legacy);
+  expectBlocked(/exchange has a record from firmware revision null/, "a variant pass with no firmware revision qualified");
+  fs.writeFileSync(staleRecord, freshExchange);
+  assert.equal(qualification().status, "qualified", "restoring the variant record did not re-qualify");
 
   passed("smoke", "", "unit-a", "e".repeat(64));
   expectBlocked(/smoke has a record that did not pass/, "a release check accepted another image");

@@ -207,6 +207,7 @@ const record = {
   recordedAt: new Date().toISOString().slice(0, 10),
   device: unit,
   firmwareSHA256: provenance?.artifact?.sha256 ?? provenance?.firmwareSha256,
+  firmwareRevision: provenance?.firmware?.revision,
   coreRevision: provenance?.core?.sha ?? process.env.CORE_REVISION,
   protocol: "13-step C-only carrier scenario over serial JSON Lines",
   result: `${passed} passed, ${unavailable} unavailable, ${failed} failed`,

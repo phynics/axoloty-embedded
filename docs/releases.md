@@ -129,23 +129,42 @@ in `qualification.requiredChecks` names a `check`, an `artifact`, `records`, and
 - `artifact: release` means the record must name the exact image being released.
 - `artifact: variant` means the check ran on its own image, because that image
   embeds network configuration or a role. The record must name that image's
-  checksum and the locked Core revision. Nothing ties a variant image to the
-  firmware commit being released, so rerun variant checks after a firmware
-  change that can affect them. A variant check that is rerun and fails is not
-  forgotten: the failure is kept beside the earlier pass and blocks the
-  certificate ([evidence](evidence.md)). A variant check that is simply not
-  rerun after a firmware change is accepted: a variant image is a different
-  build of the same sources, a record proves its own image, and a requalification
-  reruns every required check on the release commit. Binding variants to the
-  release commit would need a firmware source digest in each device record,
-  because the evidence commits themselves move `HEAD`.
+  checksum, the locked Core revision, and a `firmwareRevision` equal to the
+  certificate's `embedded.sha`. A variant check that was not rerun on this firmware
+  blocks the certificate, as does one that was rerun and failed (the failure is kept
+  beside the earlier pass; see [evidence](evidence.md)).
 - `records` is the number of passed records the check needs, for example one per
   role.
 - `units` is the number of distinct boards those records must name.
 
 A required check with no record, or with any record that is failed, unexecuted,
-or from another Core revision, blocks the certificate. `Tools/release.sh`
-refuses to publish an unqualified manifest.
+from another Core revision, or (for a variant) from another firmware revision,
+blocks the certificate. `Tools/release.sh` refuses to publish an unqualified
+manifest.
+
+### Requalifying
+
+Evidence commits move `HEAD`, and the revision comparison is exact. So one profile
+is requalified from one commit:
+
+1. Commit everything the release needs first: `VERSION`, the lock, budgets.
+2. From that clean commit, run every required check for the profile. Leave the
+   records uncommitted under `docs/evidence/`; the build's dirty check excludes that
+   directory because it is output, not firmware input.
+3. Run `Tools/release.sh`, which builds, runs the release check and publishes the
+   manifest at the same commit.
+4. Commit the records and the manifest together. The manifest's `embedded.sha` is
+   the commit they all name, not the commit that adds them.
+
+A commit between steps 2 and 3 fails closed: the generator reports each record as
+from another firmware revision, and the checks must be rerun at the new commit.
+
+A published certificate is checked against the live records on every checkout. A
+rerun that changes a record it cites invalidates it until a revocation record marks
+it superseded, which is the same step a lock move already requires. The certificates
+issued before records named a revision, `esp32c6-mqtt/0.10.0-embedded.2` and
+`esp32c6-zenoh/0.10.0-embedded.2`, are exempt from the revision comparison only, by
+a closed map of exact versions and commits in the validator.
 
 The `board` field is the declared target board. The qualification evidence
 names the unit that was actually used. A certificate carries both.
@@ -259,9 +278,11 @@ against authoritative sources instead of trusting it:
 - the backend source the manifest cites decides `transport.backend`,
   `transport.component`, `transport.version`, and `transport.revision`, so a
   profile cannot record the SDK version as its transport backend version;
-- `docs/evidence/` decides qualification, and a `qualified` manifest must cite a
-  `passed` record whose `coreRevision` and `firmwareSHA256` match this exact
-  Core revision and artifact;
+- `docs/evidence/` decides qualification. The validator reads the profile's records
+  itself: a `qualified` manifest must cite them as they are and leave out no failed
+  record and no record of a required check, its check list must be the profile's,
+  and every required check is judged from the records for this exact Core revision,
+  artifact and, for a variant, firmware revision;
 - a `preview` manifest must be off-lock, must not assert an Axoloty version, and
   cannot be qualified.
 
