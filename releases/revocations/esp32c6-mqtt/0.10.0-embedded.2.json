@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "status": "revoked",
+  "manifestPath": "releases/esp32c6-mqtt/0.10.0-embedded.2.json",
+  "reason": "Superseded, not found invalid. It certified Core v0.10.0 (087bd9bb1bfb) and the lock moved to Core v1.0.1 (78f485fcfdc0c8490c75066725bcd27100262128) under issue #73, so its certified Core revision no longer matches the lock and its evidence records were reset. The replacement is the 1.0.1-embedded.1 certificate once the profile is requalified at the new lock."
+}
