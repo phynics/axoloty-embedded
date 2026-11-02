@@ -4,9 +4,10 @@
   "check": "sensor-node-recovery-cycles",
   "tier": "device",
   "status": "passed",
-  "recordedAt": "2026-11-01",
+  "recordedAt": "2026-11-02",
   "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8",
-  "firmwareSHA256": "0ea3173a24c6593aa1aa3854c73a1568233103a6254681da5b968afb7d49e291",
+  "firmwareSHA256": "e787ef8a4f573ec41445237ed9484df269346af9ceb7951b36f7f14354952200",
+  "firmwareRevision": "76a423dee72c2159f8aad3031f4bbf2b2acf10cd",
   "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
   "protocol": "14 metrics samples across 6 carrier outages in one boot, with host-observed Advertise, Resolve and readings before the first and after each",
   "result": "14/14 passed",
@@ -15,90 +16,90 @@
     "samples": 14,
     "readings": 70,
     "resolves": 7,
-    "minimumFreeHeapBytes": 278304,
-    "stackRemainingBytes": 7308,
+    "minimumFreeHeapBytes": 277940,
+    "stackRemainingBytes": 7292,
     "stackSizeBytes": 36864,
-    "readingLastUs": 3534,
-    "readingMaxUs": 5156,
-    "frameLastUs": 3470,
-    "frameMaxUs": 3490,
+    "readingLastUs": 3509,
+    "readingMaxUs": 5232,
+    "frameLastUs": 3870,
+    "frameMaxUs": 3960,
     "recovery": {
       "cycles": 6,
-      "maximumReadvertisedAfterMs": 2495,
+      "maximumReadvertisedAfterMs": 2562,
       "freeHeapAfterEachCycleBytes": [
-        283272,
-        282728,
-        283244,
         283244,
         283224,
-        283184
+        283228,
+        283188,
+        283188,
+        283204
       ],
       "outages": [
         {
-          "outageMs": 20410,
-          "sessionEndedAfterMs": 5290,
+          "outageMs": 21129,
+          "sessionEndedAfterMs": 5308,
           "sessionEndedStages": [
             "serving"
           ],
-          "readvertisedAfterMs": 2019,
-          "freeHeapAfterBytes": 283272,
-          "minimumFreeHeapBytes": 278304,
-          "stackRemainingBytes": 7308
+          "readvertisedAfterMs": 1318,
+          "freeHeapAfterBytes": 283244,
+          "minimumFreeHeapBytes": 277940,
+          "stackRemainingBytes": 7292
+        },
+        {
+          "outageMs": 20815,
+          "sessionEndedAfterMs": 5277,
+          "sessionEndedStages": [
+            "serving"
+          ],
+          "readvertisedAfterMs": 2121,
+          "freeHeapAfterBytes": 283224,
+          "minimumFreeHeapBytes": 277940,
+          "stackRemainingBytes": 7292
+        },
+        {
+          "outageMs": 21114,
+          "sessionEndedAfterMs": 5273,
+          "sessionEndedStages": [
+            "serving"
+          ],
+          "readvertisedAfterMs": 1319,
+          "freeHeapAfterBytes": 283228,
+          "minimumFreeHeapBytes": 277940,
+          "stackRemainingBytes": 7292
+        },
+        {
+          "outageMs": 20413,
+          "sessionEndedAfterMs": 5274,
+          "sessionEndedStages": [
+            "serving"
+          ],
+          "readvertisedAfterMs": 2001,
+          "freeHeapAfterBytes": 283188,
+          "minimumFreeHeapBytes": 277940,
+          "stackRemainingBytes": 7292
         },
         {
           "outageMs": 20409,
-          "sessionEndedAfterMs": 5344,
+          "sessionEndedAfterMs": 5138,
           "sessionEndedStages": [
             "serving"
           ],
-          "readvertisedAfterMs": 2063,
-          "freeHeapAfterBytes": 282728,
-          "minimumFreeHeapBytes": 278304,
-          "stackRemainingBytes": 7308
-        },
-        {
-          "outageMs": 20408,
-          "sessionEndedAfterMs": 5290,
-          "sessionEndedStages": [
-            "serving"
-          ],
-          "readvertisedAfterMs": 2034,
-          "freeHeapAfterBytes": 283244,
-          "minimumFreeHeapBytes": 278304,
-          "stackRemainingBytes": 7308
+          "readvertisedAfterMs": 2371,
+          "freeHeapAfterBytes": 283188,
+          "minimumFreeHeapBytes": 277940,
+          "stackRemainingBytes": 7292
         },
         {
           "outageMs": 20411,
-          "sessionEndedAfterMs": 5246,
+          "sessionEndedAfterMs": 5352,
           "sessionEndedStages": [
             "serving"
           ],
-          "readvertisedAfterMs": 1965,
-          "freeHeapAfterBytes": 283244,
-          "minimumFreeHeapBytes": 278304,
-          "stackRemainingBytes": 7308
-        },
-        {
-          "outageMs": 20610,
-          "sessionEndedAfterMs": 5318,
-          "sessionEndedStages": [
-            "serving"
-          ],
-          "readvertisedAfterMs": 2346,
-          "freeHeapAfterBytes": 283224,
-          "minimumFreeHeapBytes": 278304,
-          "stackRemainingBytes": 7308
-        },
-        {
-          "outageMs": 20411,
-          "sessionEndedAfterMs": 5269,
-          "sessionEndedStages": [
-            "serving"
-          ],
-          "readvertisedAfterMs": 2495,
-          "freeHeapAfterBytes": 283184,
-          "minimumFreeHeapBytes": 278304,
-          "stackRemainingBytes": 7308
+          "readvertisedAfterMs": 2562,
+          "freeHeapAfterBytes": 283204,
+          "minimumFreeHeapBytes": 277940,
+          "stackRemainingBytes": 7292
         }
       ],
       "sessions": 6
@@ -111,5 +112,5 @@
     "networkConfigured": true,
     "networkPlaceholder": false
   },
-  "firmwareImageBytes": 837760
+  "firmwareImageBytes": 840192
 }
