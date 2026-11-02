@@ -136,8 +136,8 @@ The placeholder and the real-credential image differ in constants only:
 
 | Profile | Placeholder image | Real-credential image | Difference |
 |---|---|---|---|
-| `esp32c6-sensor-node-mqtt` | 837,696 B | 837,760 B | 64 B |
-| `esp32c6-sensor-node-zenoh` | 734,944 B | 734,992 B | 48 B |
+| `esp32c6-sensor-node-mqtt` | 840,128 B | 840,192 B | 64 B |
+| `esp32c6-sensor-node-zenoh` | 737,360 B | 737,408 B | 48 B |
 
 Static RAM and `.bss` are identical. The budgets below leave 10 percent, far
 more than this difference.
@@ -147,30 +147,31 @@ more than this difference.
 Core revision `087bd9bb1bfb563d0347799245ea4dd43e509bc9` for every row.
 Sizes in bytes. Measured on one ESP32-C6, Embedded Swift 6.4, ESP-IDF 5.4. The sizes and the
 runtime figures below come from the second board (MAC 40:4c:ca:ff:fe:4d:8c:e8),
-built and run at firmware revision `49f4fccc9d381264f4c88bad7e22c361c443e32d`.
-The first board (MAC 40:4c:ca:ff:fe:4e:52:dc) produced the figures in the
-earlier version of this page and is no longer named by any record.
+built and run at firmware revision `76a423d` (the head of the v1 batch of firmware
+fixes: #129, #131, #133 and the evidence tooling), on 2026-11-02. The first board
+(MAC 40:4c:ca:ff:fe:4e:52:dc) produced the figures of an earlier version of this
+page and is not named by any record.
 
 | | Smoke `esp32c6-mqtt` | Smoke `esp32c6-zenoh` | Sensor node MQTT | Sensor node Zenoh |
 |---|---|---|---|---|
 | Network stack linked | no | no | yes | yes |
 | Configuration | default | default | `production` | `production` |
 | sdkconfig SHA-256 | not recorded in the budget | not recorded in the budget | `3e14e6acd8df3ff2a35dd6d13aeba1a687787f388a71d0b85765e787e82378bc` | same |
-| Image (build budget) | 739,328 | 738,304 | 921,600 | 808,960 |
-| Flash text (build budget) | 553,984 | 544,768 | 714,752 | 636,928 |
+| Image (build budget) | 739,328 | 738,304 | 924,672 | 812,032 |
+| Flash text (build budget) | 553,984 | 544,768 | 716,800 | 638,976 |
 | Static RAM (build budget) | 180,224 | 174,080 | 155,648 | 153,600 |
 | `.bss` (build budget) | 82,944 | 76,800 | 39,936 | 38,912 |
-| Image, measured (placeholder) | | | 837,696 | 734,944 |
-| Flash text, measured (placeholder) | | | 648,956 | 578,690 |
-| Static RAM, measured | | | 141,112 | 139,264 |
-| `.bss`, measured | | | 36,003 | 34,651 |
-| Minimum free heap, measured (normal, one outage) | | | 277,956, 278,304 | 276,672, 275,824 |
-| Minimum free heap floor | | | 249,856 | 240,640 |
-| Main stack remaining, measured (normal, one outage) | | | 7,308, 7,308 of 36,864 | 7,700, 7,700 of 36,864 |
+| Image, measured (placeholder) | | | 840,128 | 737,360 |
+| Flash text, measured (placeholder) | | | 650,894 | 580,610 |
+| Static RAM, measured | | | 141,120 | 139,272 |
+| `.bss`, measured | | | 36,011 | 34,659 |
+| Minimum free heap, measured (normal, one outage) | | | 279,668, 277,876 | 272,784, 273,904 |
+| Minimum free heap floor | | | 249,856 | 244,736 |
+| Main stack remaining, measured (normal, one outage) | | | 7,292, 7,292 of 36,864 | 7,684, 7,684 of 36,864 |
 | Main stack remaining floor | | | 6,144 | 6,144 |
-| Recovery from a 20 s carrier outage | | | session ended 5.3 s after the stop; advertised again 2.0 s after the carrier returned | session ended 1.9 s after the stop; advertised again 0.7 s after the carrier returned |
-| Six outages in one boot: slowest re-advertise; free heap after the first and the sixth | | | 2.5 s; 283,272 and 283,184 | 2.8 s; 280,528 and 279,900 |
-| Firmware SHA-256 (credentialed image) | | | `0ea3173a24c6593aa1aa3854c73a1568233103a6254681da5b968afb7d49e291` | `ac0d88c6f9a83c45f1055c99c48a63abe938ff5fe2cf8bb0135443310f017d2b` |
+| Recovery from a 20 s carrier outage | | | session ended 5.3 s after the stop; advertised again 2.1 s after the carrier returned | session ended 1.9 s after the stop; advertised again 0.8 s after the carrier returned |
+| Six outages in one boot: slowest re-advertise; free heap after the first and the sixth | | | 2.6 s; 283,244 and 283,204 | 3.3 s; 280,652 and 280,052 |
+| Firmware SHA-256 (credentialed image) | | | `e787ef8a4f573ec41445237ed9484df269346af9ceb7951b36f7f14354952200` | `ce78e648a8ffdedd8d735d2ba3a6c915d42e207d0ff1b881bf3444dea2024bca` |
 
 The smoke columns are build budgets set from the smoke images (see above), not
 measurements of the production application. The sensor-node columns repeat the
@@ -218,9 +219,9 @@ boot works. The evidence is in `docs/evidence/<profile>-sensor-node-recovery.jso
 the MQTT carrier. The node ended its session, advertised again after every
 outage with no device restart, and a second host observer completed a Discover
 and read three readings after each return. Free heap after each cycle stayed flat
-(MQTT 283,272 to 283,184 B; Zenoh 280,528 to 279,900 B), so no leak shows, and the
-minimum free heap (278,304 and 272,040 B) and stack remaining (7,308 and
-7,700 B) stayed above the floors. The evidence is in
+(MQTT 283,244 to 283,204 B; Zenoh 280,652 to 280,052 B), so no leak shows, and the
+minimum free heap (277,940 and 272,736 B) and stack remaining (7,292 and
+7,684 B) stayed above the floors. The evidence is in
 `docs/evidence/<profile>-sensor-node-recovery-cycles.json`. The MQTT carrier now
 also resets its will, subscriptions and reconnect baseline on disconnect.
 The run script refuses a placeholder or unconfigured image before flashing.
@@ -280,10 +281,9 @@ declares 128 and 512 in `Applications/sensor-node/app.json`.
   byte more of either without losing the next frame. Records:
   `docs/evidence/<profile>-sensor-node-largest-frame.json`. MQTT: both oversize
   frames dropped and counted (2), no session end. Zenoh: the two oversize frames are not
-  delivered, the session does not end, and the node answers a short Discover
-  afterwards. (The records dated before this change show 2 session ends and 2
-  Advertises for Zenoh; they describe the previous behaviour until the
-  sensor-node evidence is rerun.)
+  delivered, the session does not end (0 session ends, 0 Advertises during the
+  probe, one boot) and the node answers a short Discover afterwards. Both records
+  were regenerated at `76a423d`.
 
 ### Before and after
 
@@ -331,16 +331,40 @@ outage runs serve two and seven.
 
 | Profile | Reading, last / max | Frame, last / max |
 |---|---|---|
-| `esp32c6-sensor-node-mqtt` | 3,544 / 5,218 (normal run); largest max over all runs 5,218 | 3,460 / 3,460 (normal run, one sample); largest max over all runs 3,490 |
-| `esp32c6-sensor-node-zenoh` | 3,634 / 4,381 (normal run); largest max over all runs 4,893 | 4,043 / 4,043 (normal run, one sample); largest max over all runs 4,677 |
+| `esp32c6-sensor-node-mqtt` | 3,489 / 5,260 (normal run); largest max over all runs 5,260 | 3,387 / 3,387 (normal run, one sample); largest max over all runs 4,008 |
+| `esp32c6-sensor-node-zenoh` | 3,581 / 4,353 (normal run); largest max over all runs 4,353 | 4,034 / 4,034 (normal run, one sample); largest max over all runs 4,856 |
+
+## V1 batch: firmware fixes and the budget reset
+
+The v1 batch changed firmware (#129 Wi-Fi teardown order, #131 failed-entry report,
+#133 Zenoh oversize handling), so the sensor-node evidence and the budgets were
+measured again at `76a423d` under the policy above. Placeholder images, same Core
+revision (`087bd9bb1bfb`) and toolchain as F6:
+
+| | MQTT F6 | MQTT v1 | Zenoh F6 | Zenoh v1 |
+|---|---|---|---|---|
+| Image (placeholder) | 837,696 | 840,128 | 734,944 | 737,360 |
+| Flash text | 648,956 | 650,894 | 578,690 | 580,610 |
+| Static RAM | 141,112 | 141,120 | 139,264 | 139,272 |
+| `.bss` | 36,003 | 36,011 | 34,651 | 34,659 |
+
+Each image grew by about 2.4 KB (flash text about 1.9 KB); the growth is not broken
+down by change. Budgets that moved: MQTT image 921,600 to 924,672 and flash text
+714,752 to 716,800; Zenoh image 808,960 to 812,032, flash text 636,928 to 638,976
+and the minimum free heap floor 240,640 to 244,736 (the lowest measured value across
+the normal and one-outage runs, 272,784 B, minus 10 percent, rounded down to a KiB).
+Static RAM and `.bss` budgets, the MQTT heap floor and both stack floors came out
+unchanged.
+All eight runs (normal, one outage, six outages and largest-frame, both profiles)
+passed on the first attempt.
 
 ### Evidence notes
 
 - The runtime, recovery, six-outage and largest-frame records for both profiles
   come from one board, the second board (MAC 40:4c:ca:ff:fe:4d:8c:e8), built at
   the firmware commit named above, and every record carries the SHA-256 of the
-  image it ran (see the table). A first pass set the floors; a second pass at
-  the floored commit produced the records in the repository.
+  image it ran (see the table). One pass produced the records, and the budgets
+  were reset from it under the policy above. No run failed.
 - Five earlier runs failed before any of this. All five stopped at the carrier
   `connect` stage: the board joined Wi-Fi and answered ping but its TCP
   connection to the host on port 1883 timed out, and no SYN reached the host.

@@ -4,9 +4,10 @@
   "check": "sensor-node-recovery",
   "tier": "device",
   "status": "passed",
-  "recordedAt": "2026-11-01",
+  "recordedAt": "2026-11-02",
   "device": "ESP32-C6 (QFN40) (revision v0.0), MAC 40:4c:ca:ff:fe:4d:8c:e8",
-  "firmwareSHA256": "ac0d88c6f9a83c45f1055c99c48a63abe938ff5fe2cf8bb0135443310f017d2b",
+  "firmwareSHA256": "ce78e648a8ffdedd8d735d2ba3a6c915d42e207d0ff1b881bf3444dea2024bca",
+  "firmwareRevision": "76a423dee72c2159f8aad3031f4bbf2b2acf10cd",
   "coreRevision": "087bd9bb1bfb563d0347799245ea4dd43e509bc9",
   "protocol": "4 metrics samples across 1 carrier outage in one boot, with host-observed Advertise, Resolve and readings before the first and after each",
   "result": "4/4 passed",
@@ -15,23 +16,23 @@
     "samples": 4,
     "readings": 20,
     "resolves": 2,
-    "minimumFreeHeapBytes": 275824,
-    "stackRemainingBytes": 7700,
+    "minimumFreeHeapBytes": 273904,
+    "stackRemainingBytes": 7684,
     "stackSizeBytes": 36864,
-    "readingLastUs": 3618,
-    "readingMaxUs": 3702,
-    "frameLastUs": 4048,
-    "frameMaxUs": 4048,
+    "readingLastUs": 3605,
+    "readingMaxUs": 3687,
+    "frameLastUs": 3991,
+    "frameMaxUs": 3991,
     "recovery": {
-      "outageMs": 20614,
-      "sessionEndedAfterMs": 1912,
+      "outageMs": 20613,
+      "sessionEndedAfterMs": 1932,
       "sessionEndedStages": [
         "serving",
         "connect",
         "connect",
         "connect"
       ],
-      "readvertisedAfterMs": 714,
+      "readvertisedAfterMs": 773,
       "sessions": 4
     },
     "deviceBoots": 1
@@ -42,5 +43,5 @@
     "networkConfigured": true,
     "networkPlaceholder": false
   },
-  "firmwareImageBytes": 734992
+  "firmwareImageBytes": 737408
 }
