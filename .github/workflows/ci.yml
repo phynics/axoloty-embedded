@@ -111,6 +111,7 @@ jobs:
           --require build:application-entry-report
           --require build:runtime-identity
           --require build:shared-flags
+          --require build:network-cleanup
           --require build:mqtt-host-seam
           --require build:profile-isolation
           --require build:unsupported-validator
