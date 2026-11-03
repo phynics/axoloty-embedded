@@ -23,6 +23,11 @@ if [ -z "$compiler" ] || ! command -v "$compiler" >/dev/null 2>&1; then
 fi
 
 repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
+# The fixtures build against a synthetic Core in a temporary directory. The
+# helper compares AXOLOTY_SOURCE_DIR with the preparation report, so a value
+# inherited from the caller (docs/container-builds.md tells people to pass
+# -e AXOLOTY_SOURCE_DIR=/core) would disagree with the fixture's report.
+unset AXOLOTY_SOURCE_DIR
 work=$(mktemp -d "${TMPDIR:-/tmp}/axoloty-core-cmake-helper.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 

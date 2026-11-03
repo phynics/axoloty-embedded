@@ -64,6 +64,21 @@ application=$(node -e 'const p = JSON.parse(require("fs").readFileSync(process.a
 transport=$(node -e 'const p = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(p.transport);' \
     "$profile_dir/profile.json")
 export AXOLOTY_PREPARATION_REPORT="$report"
+# The staged SDK wrapper in $project_dir finds the common Core helper only
+# through the repository root, and the zenoh_pico component reads the profile
+# directory the same way. Profiles/<name>/build.sh exports both for its own
+# idf.py run; this script's idf.py run needs them too, or the requirements pass
+# fails with "Core helper is missing".
+export AXOLOTY_REPOSITORY_ROOT="$repo_root"
+export AXOLOTY_PROFILE_DIR="$profile_dir"
+# The main component's requirements pass also reads the host macro plugin from
+# the environment. The build above already produced it; this finds the same
+# path (the bootstrap is idempotent) the way platform build.sh does.
+if [ -z "${AXOLOTY_EMBEDDED_MACRO_PLUGIN:-}" ]; then
+    AXOLOTY_EMBEDDED_MACRO_PLUGIN=$(AXOLOTY_SCRATCH="$scratch" \
+        sh "$repo_root/Tools/build-embedded-macro.sh")
+fi
+export AXOLOTY_EMBEDDED_MACRO_PLUGIN
 export AXOLOTY_APPLICATION_DIR="$repo_root/Applications/$application"
 export AXOLOTY_TRANSPORT_DIR="$repo_root/Transports/$transport"
 if [ "$transport" = "zenoh-pico" ]; then
