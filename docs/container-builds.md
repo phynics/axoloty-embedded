@@ -111,6 +111,12 @@ wastes time.
 1000, and Swift and ESP-IDF both work under it. `export.sh` succeeds without a
 writable `/opt/esp`.
 
+**Podman:** where `docker` is Podman (rootless), `--user` alone is not enough.
+The user namespace maps your host uid to root inside the container, so the
+bind mounts still look foreign and Git reports `dubious ownership` for
+`/workspace`, not only `/core`. Add `--userns=keep-id` to the `docker run`
+command. The full build tier passes under this form.
+
 Pass `-e HOME=` to a writable directory, because that uid may not own `/root`.
 
 ## 4. Never reuse a scratch tree across users
