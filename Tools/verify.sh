@@ -186,6 +186,9 @@ if wanted build; then
     check_script core-cmake-helper \
         'CMake, Python, make, or a host C compiler is unavailable' \
         Tests/embedded/check-core-cmake-helper.sh
+    check_script failed-build-results \
+        'node is not available for the failed-build results check' \
+        Tests/embedded/check-failed-build-results.sh
     check_script network-config-cache \
         'a host C compiler or make is unavailable for the network configuration cache check' \
         Tests/embedded/check-network-config-cache.sh

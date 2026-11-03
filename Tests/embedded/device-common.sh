@@ -91,7 +91,10 @@ clear_run_results() {
     clear_dir=$1
     rm -f "$clear_dir/swift-smoke-log.txt" "$clear_dir/swift-smoke-result.json" \
         "$clear_dir/go-proof.json" "$clear_dir/device-manifest.json" \
-        "$clear_dir/device-info-raw.txt" "$clear_dir/flash.log"
+        "$clear_dir/device-info-raw.txt" "$clear_dir/flash.log" \
+        "$clear_dir/sensor-serial.log" "$clear_dir/sensor-host.log" \
+        "$clear_dir/sensor-result.json" \
+        "$clear_dir/frame-serial.log" "$clear_dir/frame-result.json"
 }
 
 # Writes an `unexecuted` device evidence record for a run that did not happen.

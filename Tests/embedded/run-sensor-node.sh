@@ -23,9 +23,21 @@ config="$root/axoloty_network_config.h"
 mkdir -p "$root/working-evidence"
 trap 'rm -f "$config" "$root/platform/main/axoloty_network_config.h"' EXIT
 AXOLOTY_NETWORK_PROFILE="$network" node "$script_dir/generate-network-config.mjs" "$config"
+# A failed build must not leave the previous run's `passed` result in place.
+clear_run_results "$root/working-evidence"
+case "${SENSOR_MODE:-normal}" in
+  recovery) if [ "${SENSOR_OUTAGE_CYCLES:-1}" -gt 1 ]; then check=sensor-node-recovery-cycles; else check=sensor-node-recovery; fi ;;
+  *) check=sensor-node-runtime ;;
+esac
+build_status=0
 AXOLOTY_PROOF_RUN_ID="$profile" EMBEDDED_PROOF_ROOT="$root" EMBEDDED_BUILD_DIR="$root/build" \
   EMBEDDED_EVIDENCE_DIR="$root/working-evidence" AXOLOTY_NETWORK_CONFIG_HEADER="$config" \
-  CMAKE_BUILD_PARALLEL_LEVEL=4 "$repo_root/Profiles/$profile/build.sh"
+  CMAKE_BUILD_PARALLEL_LEVEL=4 "$repo_root/Profiles/$profile/build.sh" || build_status=$?
+if [ "$build_status" -ne 0 ]; then
+  write_unexecuted_evidence "$repo_root/docs/evidence/$profile-$check.json" "$check" \
+    "the firmware build failed (exit $build_status) before the board ran; see $root/working-evidence/build.log" "$profile"
+  exit "$build_status"
+fi
 load_esptool
 write_device_manifest "$AXOLOTY_DEVICE_PORT" "$root/working-evidence"
 EXPECTED_MAC="$SENSOR_EXPECTED_MAC" node - "$root/working-evidence/device-info-raw.txt" <<'JS'
